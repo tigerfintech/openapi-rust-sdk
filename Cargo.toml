@@ -1,0 +1,40 @@
+[package]
+name = "tigeropen"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "老虎证券 OpenAPI Rust SDK"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/tigerfintech/openapi-sdks"
+homepage = "https://github.com/tigerfintech/openapi-sdks/tree/main/rust"
+documentation = "https://docs.rs/tigeropen"
+keywords = ["tiger", "openapi", "sdk", "trading", "stock"]
+categories = ["api-bindings", "finance"]
+exclude = ["tests/", "examples/", "*.properties"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+ureq = { version = "2", features = ["json", "tls"] }
+tokio = { version = "1", features = ["full"] }
+thiserror = "1"
+chrono = "0.4"
+rsa = { version = "0.9", features = ["sha1"] }
+sha1 = "0.10"
+base64 = "0.21"
+signature = "2"
+pkcs1 = { version = "0.7", features = ["pem"] }
+pkcs8 = { version = "0.10", features = ["pem"] }
+tokio-tungstenite = { version = "0.20", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+url = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+proptest = "1"
+tokio = { version = "1", features = ["full", "test-util"] }
+rand = "0.8"
+wiremock = "0.5"
