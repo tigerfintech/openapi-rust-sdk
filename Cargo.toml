@@ -27,11 +27,17 @@ base64 = "0.21"
 signature = "2"
 pkcs1 = { version = "0.7", features = ["pem"] }
 pkcs8 = { version = "0.10", features = ["pem"] }
+prost = "0.13"
 tokio-tungstenite = { version = "0.20", features = ["rustls-tls-webpki-roots"] }
+tokio-rustls = "0.24"
+rustls = "0.21"
 futures-util = "0.3"
 url = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[build-dependencies]
+prost-build = "0.13"
 
 [dev-dependencies]
 proptest = "1"

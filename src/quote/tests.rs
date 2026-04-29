@@ -25,7 +25,7 @@ fn cached_test_private_key() -> &'static str {
     })
 }
 
-/// 创建测试用的 ClientConfig
+/// Create test ClientConfig
 fn test_config(server_url: &str) -> ClientConfig {
     ClientConfig {
         tiger_id: "test_tiger_id".to_string(),
@@ -35,10 +35,10 @@ fn test_config(server_url: &str) -> ClientConfig {
         language: crate::model::enums::Language::ZhCn,
         timezone: None,
         timeout: Duration::from_secs(5),
-        sandbox_debug: false,
         token: None,
         token_refresh_duration: None,
         server_url: server_url.to_string(),
+        tiger_public_key: "".to_string(),
     }
 }
 

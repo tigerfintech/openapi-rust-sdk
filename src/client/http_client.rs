@@ -1,10 +1,10 @@
-//! HttpClient 封装 HTTP 请求、签名、重试、超时。
+//! HttpClient wraps HTTP requests, signing, retry, and timeout.
 
 use std::collections::BTreeMap;
 
 use crate::config::client_config::ClientConfig;
 use crate::error::TigerError;
-use crate::signer::{get_sign_content, sign_with_rsa};
+use crate::signer::{get_sign_content, sign_with_rsa, verify_with_rsa};
 use super::api_request::ApiRequest;
 use super::api_response::{ApiResponse, parse_api_response};
 use super::retry::RetryPolicy;
@@ -20,7 +20,7 @@ const DEFAULT_SIGN_TYPE: &str = "RSA";
 /// 默认 API 版本
 const DEFAULT_VERSION: &str = "2.0";
 
-/// HttpClient 封装 HTTP 请求、签名、重试、超时
+/// HttpClient wraps HTTP requests, signing, retry, and timeout
 pub struct HttpClient {
     config: ClientConfig,
     client: reqwest::Client,
@@ -28,7 +28,7 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    /// 创建 HttpClient 实例
+    /// Create HttpClient instance
     pub fn new(config: ClientConfig) -> Self {
         let client = reqwest::Client::builder()
             .timeout(config.timeout)
@@ -41,7 +41,7 @@ impl HttpClient {
         }
     }
 
-    /// 使用自定义 reqwest::Client 创建 HttpClient（用于测试）
+    /// Create HttpClient with a custom reqwest::Client (for testing)
     pub fn with_client(config: ClientConfig, client: reqwest::Client) -> Self {
         Self {
             config,
@@ -50,12 +50,12 @@ impl HttpClient {
         }
     }
 
-    /// 获取 User-Agent 字符串
+    /// Get User-Agent string
     pub fn user_agent() -> String {
         format!("{}{}", USER_AGENT_PREFIX, SDK_VERSION)
     }
 
-    /// 构造公共请求参数
+    /// Build common request parameters
     fn build_common_params(&self, api_method: &str, biz_content: &str) -> BTreeMap<String, String> {
         let mut params = BTreeMap::new();
         params.insert("tiger_id".to_string(), self.config.tiger_id.clone());
@@ -68,17 +68,19 @@ impl HttpClient {
         params
     }
 
-    /// 对参数进行签名
+    /// Sign the parameters
     fn sign_params(&self, params: &BTreeMap<String, String>) -> Result<String, TigerError> {
         let content = get_sign_content(params);
         sign_with_rsa(&self.config.private_key, &content)
     }
 
-    /// 执行结构化 API 请求，返回解析后的 ApiResponse
+    /// Execute a structured API request, returning a parsed ApiResponse
     pub async fn execute_request(&self, request: &ApiRequest) -> Result<ApiResponse, TigerError> {
         let mut params = self.build_common_params(&request.method, &request.biz_content);
         let sign = self.sign_params(&params)?;
         params.insert("sign".to_string(), sign);
+
+        let timestamp = params.get("timestamp").cloned().unwrap_or_default();
 
         let max_attempts = if self.retry_policy.should_retry(&request.method) {
             self.retry_policy.max_retries + 1
@@ -95,6 +97,7 @@ impl HttpClient {
 
             match self.do_http_post(&params).await {
                 Ok(body) => {
+                    self.verify_response_sign(&body, &timestamp)?;
                     return parse_api_response(&body);
                 }
                 Err(e) => {
@@ -109,16 +112,16 @@ impl HttpClient {
         Err(last_err.unwrap())
     }
 
-    /// 通用 API 调用方法
-    /// api_method: API 方法名（如 "market_state"、"place_order"）
-    /// request_json: 原始 biz_content JSON 字符串
-    /// 返回原始 response JSON 字符串，不做任何解析
+    /// Generic API call method
+    /// api_method: API method name (e.g. "market_state", "place_order")
+    /// request_json: raw biz_content JSON string
+    /// Returns raw response JSON string without any parsing
     pub async fn execute(&self, api_method: &str, request_json: &str) -> Result<String, TigerError> {
-        // 参数校验
+        // Parameter validation
         if api_method.is_empty() {
             return Err(TigerError::Config("api_method 不能为空".to_string()));
         }
-        // 校验 request_json 是否为有效 JSON
+        // Validate request_json is valid JSON
         if serde_json::from_str::<serde_json::Value>(request_json).is_err() {
             return Err(TigerError::Config("request_json 不是有效的 JSON".to_string()));
         }
@@ -126,6 +129,8 @@ impl HttpClient {
         let mut params = self.build_common_params(api_method, request_json);
         let sign = self.sign_params(&params)?;
         params.insert("sign".to_string(), sign);
+
+        let timestamp = params.get("timestamp").cloned().unwrap_or_default();
 
         let max_attempts = if self.retry_policy.should_retry(api_method) {
             self.retry_policy.max_retries + 1
@@ -142,6 +147,7 @@ impl HttpClient {
 
             match self.do_http_post(&params).await {
                 Ok(body) => {
+                    self.verify_response_sign(&body, &timestamp)?;
                     return String::from_utf8(body)
                         .map_err(|e| TigerError::Config(format!("响应体非 UTF-8: {}", e)));
                 }
@@ -157,7 +163,22 @@ impl HttpClient {
         Err(last_err.unwrap())
     }
 
-    /// 发送 HTTP POST 请求
+    /// Verify the response signature using the tiger public key.
+    /// Extracts the `sign` field from the response JSON, then verifies it
+    /// against the request timestamp using SHA1WithRSA.
+    fn verify_response_sign(&self, body: &[u8], timestamp: &str) -> Result<(), TigerError> {
+        let json: serde_json::Value = serde_json::from_slice(body)
+            .map_err(|e| TigerError::Config(format!("failed to parse response JSON for sign verification: {}", e)))?;
+
+        if let Some(sign) = json.get("sign").and_then(|s| s.as_str()) {
+            if !sign.is_empty() {
+                verify_with_rsa(&self.config.tiger_public_key, timestamp, sign)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Send HTTP POST request
     async fn do_http_post(&self, params: &BTreeMap<String, String>) -> Result<Vec<u8>, TigerError> {
         let mut request = self.client
             .post(&self.config.server_url)
