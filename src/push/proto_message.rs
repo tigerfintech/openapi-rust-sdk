@@ -283,9 +283,9 @@ mod tests {
             prop_assert!(sub_msg.connect.is_none());
             let sub = sub_msg.subscribe.as_ref().unwrap();
             prop_assert_eq!(sub.data_type, data_type);
-            prop_assert_eq!(&sub.symbols, &symbols.map(|s| s.to_string()));
-            prop_assert_eq!(&sub.account, &account.map(|s| s.to_string()));
-            prop_assert_eq!(&sub.market, &market.map(|s| s.to_string()));
+            prop_assert_eq!(&sub.symbols, &symbols.as_ref().map(|s| s.to_string()));
+            prop_assert_eq!(&sub.account, &account.as_ref().map(|s| s.to_string()));
+            prop_assert_eq!(&sub.market, &market.as_ref().map(|s| s.to_string()));
 
             // Test unsubscribe
             let unsub_msg = build_unsubscribe_message(
@@ -299,9 +299,9 @@ mod tests {
             prop_assert!(unsub_msg.connect.is_none());
             let unsub = unsub_msg.subscribe.as_ref().unwrap();
             prop_assert_eq!(unsub.data_type, data_type);
-            prop_assert_eq!(&unsub.symbols, &symbols.map(|s| s.to_string()));
-            prop_assert_eq!(&unsub.account, &account.map(|s| s.to_string()));
-            prop_assert_eq!(&unsub.market, &market.map(|s| s.to_string()));
+            prop_assert_eq!(&unsub.symbols, &symbols.as_ref().map(|s| s.to_string()));
+            prop_assert_eq!(&unsub.account, &account.as_ref().map(|s| s.to_string()));
+            prop_assert_eq!(&unsub.market, &market.as_ref().map(|s| s.to_string()));
         }
     }
 

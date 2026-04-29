@@ -22,7 +22,9 @@ fn test_config() -> tigeropen::config::ClientConfig {
         token: None,
         token_refresh_duration: None,
         server_url: "https://openapi.tigerfintech.com/gateway".into(),
+        quote_server_url: "https://openapi.tigerfintech.com/gateway".into(),
         tiger_public_key: "".into(),
+        device_id: "".into(),
     }
 }
 

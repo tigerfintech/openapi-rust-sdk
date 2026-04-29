@@ -55,16 +55,20 @@ impl HttpClient {
         format!("{}{}", USER_AGENT_PREFIX, SDK_VERSION)
     }
 
-    /// Build common request parameters
-    fn build_common_params(&self, api_method: &str, biz_content: &str) -> BTreeMap<String, String> {
+    /// Build common request parameters.
+    /// `version` allows per-request API version override; defaults to DEFAULT_VERSION.
+    fn build_common_params(&self, api_method: &str, biz_content: &str, version: Option<&str>) -> BTreeMap<String, String> {
         let mut params = BTreeMap::new();
         params.insert("tiger_id".to_string(), self.config.tiger_id.clone());
         params.insert("method".to_string(), api_method.to_string());
         params.insert("charset".to_string(), DEFAULT_CHARSET.to_string());
         params.insert("sign_type".to_string(), DEFAULT_SIGN_TYPE.to_string());
         params.insert("timestamp".to_string(), chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
-        params.insert("version".to_string(), DEFAULT_VERSION.to_string());
+        params.insert("version".to_string(), version.unwrap_or(DEFAULT_VERSION).to_string());
         params.insert("biz_content".to_string(), biz_content.to_string());
+        if !self.config.device_id.is_empty() {
+            params.insert("device_id".to_string(), self.config.device_id.clone());
+        }
         params
     }
 
@@ -76,7 +80,7 @@ impl HttpClient {
 
     /// Execute a structured API request, returning a parsed ApiResponse
     pub async fn execute_request(&self, request: &ApiRequest) -> Result<ApiResponse, TigerError> {
-        let mut params = self.build_common_params(&request.method, &request.biz_content);
+        let mut params = self.build_common_params(&request.method, &request.biz_content, request.version.as_deref());
         let sign = self.sign_params(&params)?;
         params.insert("sign".to_string(), sign);
 
@@ -126,7 +130,7 @@ impl HttpClient {
             return Err(TigerError::Config("request_json 不是有效的 JSON".to_string()));
         }
 
-        let mut params = self.build_common_params(api_method, request_json);
+        let mut params = self.build_common_params(api_method, request_json, None);
         let sign = self.sign_params(&params)?;
         params.insert("sign".to_string(), sign);
 

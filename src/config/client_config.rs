@@ -24,6 +24,7 @@ const CONFIG_FILE_NAME: &str = "tiger_openapi_config.properties";
 const ENV_TIGER_ID: &str = "TIGEROPEN_TIGER_ID";
 const ENV_PRIVATE_KEY: &str = "TIGEROPEN_PRIVATE_KEY";
 const ENV_ACCOUNT: &str = "TIGEROPEN_ACCOUNT";
+const ENV_TOKEN: &str = "TIGEROPEN_TOKEN";
 
 /// Client configuration
 #[derive(Debug, Clone)]
@@ -38,7 +39,9 @@ pub struct ClientConfig {
     pub token: Option<String>,
     pub token_refresh_duration: Option<Duration>,
     pub server_url: String,
+    pub quote_server_url: String,
     pub tiger_public_key: String,
+    pub device_id: String,
 }
 
 /// ClientConfig builder
@@ -53,8 +56,10 @@ pub struct ClientConfigBuilder {
     token: Option<String>,
     token_refresh_duration: Option<Duration>,
     server_url: Option<String>,
+    quote_server_url: Option<String>,
     enable_dynamic_domain: bool,
     tiger_public_key: Option<String>,
+    device_id: Option<String>,
 }
 
 impl ClientConfig {
@@ -78,8 +83,10 @@ impl ClientConfigBuilder {
             token: None,
             token_refresh_duration: None,
             server_url: None,
+            quote_server_url: None,
             enable_dynamic_domain: true, // enabled by default
             tiger_public_key: None,
+            device_id: None,
         }
     }
 
@@ -146,6 +153,18 @@ impl ClientConfigBuilder {
     /// Set tiger public key for response signature verification
     pub fn tiger_public_key(mut self, key: impl Into<String>) -> Self {
         self.tiger_public_key = Some(key.into());
+        self
+    }
+
+    /// Set quote server URL (separate gateway for quote requests)
+    pub fn quote_server_url(mut self, url: impl Into<String>) -> Self {
+        self.quote_server_url = Some(url.into());
+        self
+    }
+
+    /// Set device ID (MAC address). Auto-detected if not set.
+    pub fn device_id(mut self, id: impl Into<String>) -> Self {
+        self.device_id = Some(id.into());
         self
     }
 
@@ -251,24 +270,44 @@ impl ClientConfigBuilder {
                 self.account = Some(v);
             }
         }
+        if self.token.is_none() {
+            if let Ok(v) = std::env::var(ENV_TOKEN) {
+                if !v.is_empty() {
+                    self.token = Some(v);
+                }
+            }
+        }
 
         // Determine server URL: dynamic domain > default
-        let server_url = if let Some(url) = self.server_url {
-            url
+        let (server_url, quote_server_url) = if let Some(url) = self.server_url {
+            let quote_url = self.quote_server_url.unwrap_or_else(|| url.clone());
+            (url, quote_url)
         } else {
             // Try dynamic domain resolution
-            let mut resolved = String::new();
+            let mut resolved_server = String::new();
+            let mut resolved_quote = String::new();
             if self.enable_dynamic_domain {
                 let domain_conf = domain::query_domains(self.license.as_deref());
                 if let Some(url) = domain::resolve_dynamic_server_url(&domain_conf, self.license.as_deref()) {
-                    resolved = url;
+                    resolved_server = url;
+                }
+                if let Some(url) = domain::resolve_dynamic_quote_server_url(&domain_conf, self.license.as_deref()) {
+                    resolved_quote = url;
                 }
             }
-            if resolved.is_empty() {
+            let server = if resolved_server.is_empty() {
                 DEFAULT_SERVER_URL.to_string()
             } else {
-                resolved
-            }
+                resolved_server
+            };
+            let quote = if let Some(url) = self.quote_server_url {
+                url
+            } else if resolved_quote.is_empty() {
+                server.clone()
+            } else {
+                resolved_quote
+            };
+            (server, quote)
         };
 
         // Validate required fields
@@ -286,6 +325,9 @@ impl ClientConfigBuilder {
             ))
         })?;
 
+        // Auto-detect device ID from MAC address if not explicitly set
+        let device_id = self.device_id.unwrap_or_else(detect_device_id);
+
         Ok(ClientConfig {
             tiger_id,
             private_key,
@@ -297,8 +339,19 @@ impl ClientConfigBuilder {
             token: self.token,
             token_refresh_duration: self.token_refresh_duration,
             server_url,
+            quote_server_url,
             tiger_public_key: self.tiger_public_key.unwrap_or_else(|| TIGER_PUBLIC_KEY.to_string()),
+            device_id,
         })
+    }
+}
+
+/// Auto-detect device ID from MAC address.
+/// Returns the MAC address as a string (e.g. "AA:BB:CC:DD:EE:FF"), or empty string on failure.
+fn detect_device_id() -> String {
+    match mac_address::get_mac_address() {
+        Ok(Some(ma)) => ma.to_string(),
+        _ => String::new(),
     }
 }
 
@@ -316,6 +369,7 @@ mod tests {
         std::env::remove_var(ENV_TIGER_ID);
         std::env::remove_var(ENV_PRIVATE_KEY);
         std::env::remove_var(ENV_ACCOUNT);
+        std::env::remove_var(ENV_TOKEN);
     }
 
     // ========== 单元测试 ==========

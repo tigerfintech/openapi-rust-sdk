@@ -37,7 +37,9 @@ fn test_config(server_url: &str) -> ClientConfig {
         token: None,
         token_refresh_duration: None,
         server_url: server_url.to_string(),
+        quote_server_url: server_url.to_string(),
         tiger_public_key: "".to_string(),
+        device_id: "".to_string(),
     }
 }
 

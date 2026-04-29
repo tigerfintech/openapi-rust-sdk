@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 5143b8188ff201d9f44cd16d9becdc9d708ab03ea2a6eccede456b86dbe12df6 # shrinks to tiger_id = "a", private_key = "A", account = "_", timeout_secs = 1
+cc a270e8dbaff98e53607a08f98eabe76fd6edefe332693a9f4608d23aa3e13c46 # shrinks to env_tiger_id = "0", env_private_key = "0", env_account = "0", builder_tiger_id = "a", builder_private_key = "A", builder_account = "_"
