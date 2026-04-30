@@ -1,8 +1,13 @@
-//! 推送模块 - WebSocket 推送客户端
+//! Push module - TCP+TLS push client
 //!
-//! 通过 WebSocket 长连接接收实时行情和账户推送。
-//! 支持连接认证、订阅/退订、回调机制、心跳保活和自动重连。
+//! Receives real-time market data and account push notifications via
+//! a raw TCP+TLS persistent connection.
+//! Supports connection authentication, subscribe/unsubscribe, callbacks,
+//! heartbeat keep-alive, and automatic reconnection.
 
+pub mod pb;
+pub mod varint;
+pub mod proto_message;
 mod push_message;
 mod callbacks;
 mod push_client;

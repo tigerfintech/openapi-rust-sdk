@@ -141,13 +141,70 @@ impl<'a> TradeClient<'a> {
         self.execute("prime_assets", params).await
     }
 
-    /// 查询订单成交明细
+    /// Query order transaction details
     pub async fn order_transactions(&self, id: i64) -> Result<Option<Value>, TigerError> {
         let params = serde_json::json!({
             "account": self.account,
             "id": id,
         });
         self.execute("order_transactions", params).await
+    }
+
+    // === Compatibility aliases (get_ prefix) ===
+
+    /// Query single contract (compatibility alias)
+    pub async fn get_contract(&self, symbol: &str, sec_type: &str) -> Result<Option<Value>, TigerError> {
+        self.contract(symbol, sec_type).await
+    }
+
+    /// Query multiple contracts (compatibility alias)
+    pub async fn get_contracts(&self, symbols: &[&str], sec_type: &str) -> Result<Option<Value>, TigerError> {
+        self.contracts(symbols, sec_type).await
+    }
+
+    /// Query derivative contract (compatibility alias)
+    pub async fn get_quote_contract(&self, symbol: &str, sec_type: &str) -> Result<Option<Value>, TigerError> {
+        self.quote_contract(symbol, sec_type).await
+    }
+
+    /// Query all orders (compatibility alias)
+    pub async fn get_orders(&self) -> Result<Option<Value>, TigerError> {
+        self.orders().await
+    }
+
+    /// Query active orders (compatibility alias)
+    pub async fn get_active_orders(&self) -> Result<Option<Value>, TigerError> {
+        self.active_orders().await
+    }
+
+    /// Query inactive orders (compatibility alias)
+    pub async fn get_inactive_orders(&self) -> Result<Option<Value>, TigerError> {
+        self.inactive_orders().await
+    }
+
+    /// Query filled orders (compatibility alias)
+    pub async fn get_filled_orders(&self) -> Result<Option<Value>, TigerError> {
+        self.filled_orders().await
+    }
+
+    /// Query positions (compatibility alias)
+    pub async fn get_positions(&self) -> Result<Option<Value>, TigerError> {
+        self.positions().await
+    }
+
+    /// Query assets (compatibility alias)
+    pub async fn get_assets(&self) -> Result<Option<Value>, TigerError> {
+        self.assets().await
+    }
+
+    /// Query prime assets (compatibility alias)
+    pub async fn get_prime_assets(&self) -> Result<Option<Value>, TigerError> {
+        self.prime_assets().await
+    }
+
+    /// Query order transactions (compatibility alias)
+    pub async fn get_order_transactions(&self, id: i64) -> Result<Option<Value>, TigerError> {
+        self.order_transactions(id).await
     }
 }
 

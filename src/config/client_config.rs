@@ -1,7 +1,7 @@
-//! ClientConfig 客户端配置，使用 Builder 模式创建。
+//! ClientConfig builder.
 //!
-//! 优先级：环境变量 > Builder 设置（含配置文件） > 默认值。
-//! 必填字段（tiger_id、private_key）为空时返回 TigerError::Config。
+//! Priority: environment variables > builder setters (incl. properties file) > auto-discovered config file > defaults.
+//! Required fields (tiger_id, private_key) return TigerError::Config when empty.
 
 use std::time::Duration;
 use crate::error::TigerError;
@@ -9,19 +9,24 @@ use crate::model::enums::Language;
 use crate::config::config_parser;
 use crate::config::domain;
 
-/// 默认超时时间（秒）
+/// Default timeout in seconds
 const DEFAULT_TIMEOUT_SECS: u64 = 15;
-/// 默认服务器地址
+/// Default server URL
 const DEFAULT_SERVER_URL: &str = "https://openapi.tigerfintech.com/gateway";
-/// 沙箱服务器地址
-const SANDBOX_SERVER_URL: &str = "https://openapi-sandbox.tigerfintech.com/gateway";
 
-/// 环境变量名
+/// Tiger public key for response signature verification
+const TIGER_PUBLIC_KEY: &str = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDNF3G8SoEcCZh2rshUbayDgLLrj6rKgzNMxDL2HSnKcB0+GPOsndqSv+a4IBu9+I3fyBp5hkyMMG2+AXugd9pMpy6VxJxlNjhX1MYbNTZJUT4nudki4uh+LMOkIBHOceGNXjgB+cXqmlUnjlqha/HgboeHSnSgpM3dKSJQlIOsDwIDAQAB";
+
+/// Config file name for auto-discovery
+const CONFIG_FILE_NAME: &str = "tiger_openapi_config.properties";
+
+/// Environment variable names
 const ENV_TIGER_ID: &str = "TIGEROPEN_TIGER_ID";
 const ENV_PRIVATE_KEY: &str = "TIGEROPEN_PRIVATE_KEY";
 const ENV_ACCOUNT: &str = "TIGEROPEN_ACCOUNT";
+const ENV_TOKEN: &str = "TIGEROPEN_TOKEN";
 
-/// 客户端配置
+/// Client configuration
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
     pub tiger_id: String,
@@ -31,13 +36,15 @@ pub struct ClientConfig {
     pub language: Language,
     pub timezone: Option<String>,
     pub timeout: Duration,
-    pub sandbox_debug: bool,
     pub token: Option<String>,
     pub token_refresh_duration: Option<Duration>,
     pub server_url: String,
+    pub quote_server_url: String,
+    pub tiger_public_key: String,
+    pub device_id: String,
 }
 
-/// ClientConfig 构建器
+/// ClientConfig builder
 pub struct ClientConfigBuilder {
     tiger_id: Option<String>,
     private_key: Option<String>,
@@ -46,22 +53,24 @@ pub struct ClientConfigBuilder {
     language: Option<Language>,
     timezone: Option<String>,
     timeout: Option<Duration>,
-    sandbox_debug: bool,
     token: Option<String>,
     token_refresh_duration: Option<Duration>,
     server_url: Option<String>,
+    quote_server_url: Option<String>,
     enable_dynamic_domain: bool,
+    tiger_public_key: Option<String>,
+    device_id: Option<String>,
 }
 
 impl ClientConfig {
-    /// 创建 Builder
+    /// Create a new builder
     pub fn builder() -> ClientConfigBuilder {
         ClientConfigBuilder::new()
     }
 }
 
 impl ClientConfigBuilder {
-    /// 创建新的构建器
+    /// Create a new builder
     pub fn new() -> Self {
         Self {
             tiger_id: None,
@@ -71,82 +80,96 @@ impl ClientConfigBuilder {
             language: None,
             timezone: None,
             timeout: None,
-            sandbox_debug: false,
             token: None,
             token_refresh_duration: None,
             server_url: None,
-            enable_dynamic_domain: true, // 默认启用
+            quote_server_url: None,
+            enable_dynamic_domain: true, // enabled by default
+            tiger_public_key: None,
+            device_id: None,
         }
     }
 
-    /// 设置开发者 ID
+    /// Set developer ID
     pub fn tiger_id(mut self, id: impl Into<String>) -> Self {
         self.tiger_id = Some(id.into());
         self
     }
 
-    /// 设置 RSA 私钥
+    /// Set RSA private key
     pub fn private_key(mut self, key: impl Into<String>) -> Self {
         self.private_key = Some(key.into());
         self
     }
 
-    /// 设置交易账户
+    /// Set trading account
     pub fn account(mut self, account: impl Into<String>) -> Self {
         self.account = Some(account.into());
         self
     }
 
-    /// 设置牌照类型
+    /// Set license type
     pub fn license(mut self, license: impl Into<String>) -> Self {
         self.license = Some(license.into());
         self
     }
 
-    /// 设置语言
+    /// Set language
     pub fn language(mut self, lang: Language) -> Self {
         self.language = Some(lang);
         self
     }
 
-    /// 设置时区
+    /// Set timezone
     pub fn timezone(mut self, tz: impl Into<String>) -> Self {
         self.timezone = Some(tz.into());
         self
     }
 
-    /// 设置请求超时时间
+    /// Set request timeout
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
-    /// 设置是否使用沙箱环境
-    pub fn sandbox_debug(mut self, sandbox: bool) -> Self {
-        self.sandbox_debug = sandbox;
-        self
-    }
-
-    /// 设置是否启用动态域名获取（默认启用）
+    /// Set whether to enable dynamic domain resolution (enabled by default)
     pub fn enable_dynamic_domain(mut self, enable: bool) -> Self {
         self.enable_dynamic_domain = enable;
         self
     }
 
-    /// 设置 TBHK 牌照 Token
+    /// Set TBHK license token
     pub fn token(mut self, token: impl Into<String>) -> Self {
         self.token = Some(token.into());
         self
     }
 
-    /// 设置 Token 刷新间隔
+    /// Set token refresh interval
     pub fn token_refresh_duration(mut self, d: Duration) -> Self {
         self.token_refresh_duration = Some(d);
         self
     }
 
-    /// 从 properties 文件加载配置。
-    /// 文件加载失败时静默跳过，后续校验会捕获必填字段缺失。
+    /// Set tiger public key for response signature verification
+    pub fn tiger_public_key(mut self, key: impl Into<String>) -> Self {
+        self.tiger_public_key = Some(key.into());
+        self
+    }
+
+    /// Set quote server URL (separate gateway for quote requests)
+    pub fn quote_server_url(mut self, url: impl Into<String>) -> Self {
+        self.quote_server_url = Some(url.into());
+        self
+    }
+
+    /// Set device ID (MAC address). Auto-detected if not set.
+    pub fn device_id(mut self, id: impl Into<String>) -> Self {
+        self.device_id = Some(id.into());
+        self
+    }
+
+    /// Load config from a properties file.
+    /// Silently skips if the file cannot be read; validation will catch missing required fields.
     pub fn properties_file(mut self, path: &str) -> Self {
         if let Ok(props) = config_parser::parse_properties_file(path) {
             self.apply_properties(&props);
@@ -154,14 +177,14 @@ impl ClientConfigBuilder {
         self
     }
 
-    /// 将 properties 键值对应用到构建器（仅填充未设置的字段）
+    /// Apply properties key-value pairs to the builder (only fills unset fields)
     fn apply_properties(&mut self, props: &std::collections::HashMap<String, String>) {
         if self.tiger_id.is_none() {
             if let Some(v) = props.get("tiger_id") {
                 self.tiger_id = Some(v.clone());
             }
         }
-        // 私钥优先级：private_key > private_key_pk8 > private_key_pk1
+        // Private key priority: private_key > private_key_pk8 > private_key_pk1
         if self.private_key.is_none() {
             if let Some(v) = props.get("private_key") {
                 self.private_key = Some(v.clone());
@@ -198,12 +221,40 @@ impl ClientConfigBuilder {
         }
     }
 
-    /// 构建 ClientConfig。
+    /// Return candidate paths for auto-discovery of the config properties file.
+    /// Search order: ./tiger_openapi_config.properties -> ~/.tigeropen/tiger_openapi_config.properties
+    fn auto_discover_paths() -> Vec<String> {
+        let mut paths = Vec::new();
+
+        // 1. Current directory
+        paths.push(format!("./{}", CONFIG_FILE_NAME));
+
+        // 2. ~/.tigeropen/
+        if let Ok(home) = std::env::var("HOME") {
+            paths.push(format!("{}/.tigeropen/{}", home, CONFIG_FILE_NAME));
+        }
+
+        paths
+    }
+
+    /// Build ClientConfig.
     ///
-    /// 应用顺序：环境变量覆盖 > Builder 设置（含配置文件） > 默认值。
-    /// 必填字段 tiger_id 和 private_key 为空时返回 TigerError::Config。
+    /// Resolution order: environment variables > builder setters (incl. properties file) > auto-discovered config > defaults.
+    /// Returns TigerError::Config when required fields tiger_id or private_key are empty.
     pub fn build(mut self) -> Result<ClientConfig, TigerError> {
-        // 环境变量覆盖（最高优先级）
+        // Auto-discover config file if no explicit values have been set for required fields.
+        // Search order: ./tiger_openapi_config.properties -> ~/.tigeropen/tiger_openapi_config.properties
+        if self.tiger_id.is_none() || self.private_key.is_none() {
+            let candidates = Self::auto_discover_paths();
+            for path in &candidates {
+                if let Ok(props) = config_parser::parse_properties_file(path) {
+                    self.apply_properties(&props);
+                    break; // use the first file found
+                }
+            }
+        }
+
+        // Environment variable overrides (highest priority)
         if let Ok(v) = std::env::var(ENV_TIGER_ID) {
             if !v.is_empty() {
                 self.tiger_id = Some(v);
@@ -219,42 +270,63 @@ impl ClientConfigBuilder {
                 self.account = Some(v);
             }
         }
+        if self.token.is_none() {
+            if let Ok(v) = std::env::var(ENV_TOKEN) {
+                if !v.is_empty() {
+                    self.token = Some(v);
+                }
+            }
+        }
 
-        // 确定服务器地址：sandbox > 动态域名 > 默认
-        let server_url = if self.sandbox_debug {
-            SANDBOX_SERVER_URL.to_string()
-        } else if let Some(url) = self.server_url {
-            url
+        // Determine server URL: dynamic domain > default
+        let (server_url, quote_server_url) = if let Some(url) = self.server_url {
+            let quote_url = self.quote_server_url.unwrap_or_else(|| url.clone());
+            (url, quote_url)
         } else {
-            // 尝试动态域名获取
-            let mut resolved = String::new();
+            // Try dynamic domain resolution
+            let mut resolved_server = String::new();
+            let mut resolved_quote = String::new();
             if self.enable_dynamic_domain {
                 let domain_conf = domain::query_domains(self.license.as_deref());
                 if let Some(url) = domain::resolve_dynamic_server_url(&domain_conf, self.license.as_deref()) {
-                    resolved = url;
+                    resolved_server = url;
+                }
+                if let Some(url) = domain::resolve_dynamic_quote_server_url(&domain_conf, self.license.as_deref()) {
+                    resolved_quote = url;
                 }
             }
-            if resolved.is_empty() {
+            let server = if resolved_server.is_empty() {
                 DEFAULT_SERVER_URL.to_string()
             } else {
-                resolved
-            }
+                resolved_server
+            };
+            let quote = if let Some(url) = self.quote_server_url {
+                url
+            } else if resolved_quote.is_empty() {
+                server.clone()
+            } else {
+                resolved_quote
+            };
+            (server, quote)
         };
 
-        // 校验必填字段
+        // Validate required fields
         let tiger_id = self.tiger_id.filter(|s| !s.is_empty()).ok_or_else(|| {
             TigerError::Config(format!(
-                "tiger_id 不能为空，请通过 builder().tiger_id() 或环境变量 {} 设置",
+                "tiger_id is required. Set it via builder().tiger_id(), env var {}, or a properties file",
                 ENV_TIGER_ID
             ))
         })?;
 
         let private_key = self.private_key.filter(|s| !s.is_empty()).ok_or_else(|| {
             TigerError::Config(format!(
-                "private_key 不能为空，请通过 builder().private_key() 或环境变量 {} 设置",
+                "private_key is required. Set it via builder().private_key(), env var {}, or a properties file",
                 ENV_PRIVATE_KEY
             ))
         })?;
+
+        // Auto-detect device ID from MAC address if not explicitly set
+        let device_id = self.device_id.unwrap_or_else(detect_device_id);
 
         Ok(ClientConfig {
             tiger_id,
@@ -264,11 +336,22 @@ impl ClientConfigBuilder {
             language: self.language.unwrap_or(Language::ZhCn),
             timezone: self.timezone,
             timeout: self.timeout.unwrap_or(Duration::from_secs(DEFAULT_TIMEOUT_SECS)),
-            sandbox_debug: self.sandbox_debug,
             token: self.token,
             token_refresh_duration: self.token_refresh_duration,
             server_url,
+            quote_server_url,
+            tiger_public_key: self.tiger_public_key.unwrap_or_else(|| TIGER_PUBLIC_KEY.to_string()),
+            device_id,
         })
+    }
+}
+
+/// Auto-detect device ID from MAC address.
+/// Returns the MAC address as a string (e.g. "AA:BB:CC:DD:EE:FF"), or empty string on failure.
+fn detect_device_id() -> String {
+    match mac_address::get_mac_address() {
+        Ok(Some(ma)) => ma.to_string(),
+        _ => String::new(),
     }
 }
 
@@ -286,6 +369,7 @@ mod tests {
         std::env::remove_var(ENV_TIGER_ID);
         std::env::remove_var(ENV_PRIVATE_KEY);
         std::env::remove_var(ENV_ACCOUNT);
+        std::env::remove_var(ENV_TOKEN);
     }
 
     // ========== 单元测试 ==========
@@ -317,21 +401,7 @@ mod tests {
         assert_eq!(config.language, Language::ZhCn);
         assert_eq!(config.timeout, Duration::from_secs(15));
         assert_eq!(config.server_url, DEFAULT_SERVER_URL);
-        assert!(!config.sandbox_debug);
-    }
-
-    #[test]
-    fn test_builder_sandbox_mode() {
-        let _lock = ENV_MUTEX.lock().unwrap();
-        clear_env_vars();
-        let config = ClientConfig::builder()
-            .tiger_id("test_id")
-            .private_key("test_key")
-            .sandbox_debug(true)
-            .build()
-            .unwrap();
-        assert!(config.sandbox_debug);
-        assert_eq!(config.server_url, SANDBOX_SERVER_URL);
+        assert_eq!(config.tiger_public_key, TIGER_PUBLIC_KEY);
     }
 
     #[test]

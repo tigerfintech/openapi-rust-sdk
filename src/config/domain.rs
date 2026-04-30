@@ -45,8 +45,34 @@ fn do_query_domains(license: Option<&str>) -> Option<HashMap<String, serde_json:
     Some(conf)
 }
 
-/// 根据动态域名配置和 license 解析服务器地址。
-/// 返回 None 表示无法解析（应使用默认地址）。
+/// Resolve quote server URL from dynamic domain config.
+/// Uses `{LICENSE}-QUOTE` key, falls back to COMMON, returns None if unavailable.
+pub fn resolve_dynamic_quote_server_url(
+    domain_conf: &HashMap<String, serde_json::Value>,
+    license: Option<&str>,
+) -> Option<String> {
+    if domain_conf.is_empty() {
+        return None;
+    }
+
+    // Try {LICENSE}-QUOTE key first
+    if let Some(lic) = license {
+        let quote_key = format!("{}-QUOTE", lic);
+        if let Some(url) = domain_conf.get(&quote_key).and_then(|v| v.as_str()) {
+            return Some(format!("{}{}", url, GATEWAY_SUFFIX));
+        }
+    }
+
+    // Fall back to COMMON
+    if let Some(url) = domain_conf.get(DOMAIN_KEY_COMMON).and_then(|v| v.as_str()) {
+        return Some(format!("{}{}", url, GATEWAY_SUFFIX));
+    }
+
+    None
+}
+
+/// Resolve trade server URL from dynamic domain config and license.
+/// Returns None when resolution fails (caller should use default URL).
 pub fn resolve_dynamic_server_url(
     domain_conf: &HashMap<String, serde_json::Value>,
     license: Option<&str>,
@@ -61,7 +87,7 @@ pub fn resolve_dynamic_server_url(
         return Some(format!("{}{}", url, GATEWAY_SUFFIX));
     }
 
-    // 回退到 COMMON
+    // Fall back to COMMON
     if let Some(url) = domain_conf.get(DOMAIN_KEY_COMMON).and_then(|v| v.as_str()) {
         return Some(format!("{}{}", url, GATEWAY_SUFFIX));
     }

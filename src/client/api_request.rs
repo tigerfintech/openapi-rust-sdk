@@ -3,32 +3,46 @@
 
 use serde::{Deserialize, Serialize};
 
-/// API 请求结构体
+/// API request struct
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRequest {
-    /// API 方法名（如 "market_state"、"place_order"）
+    /// API method name (e.g. "market_state", "place_order")
     pub method: String,
-    /// 业务参数 JSON 字符串
+    /// Business parameters JSON string
     pub biz_content: String,
+    /// Optional per-request API version override (e.g. "3.0")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
 }
 
 impl ApiRequest {
-    /// 创建 API 请求
-    /// method: API 方法名
-    /// biz_content: 业务参数 JSON 字符串
+    /// Create an API request
+    /// method: API method name
+    /// biz_content: business parameters JSON string
     pub fn new(method: impl Into<String>, biz_content: impl Into<String>) -> Self {
         Self {
             method: method.into(),
             biz_content: biz_content.into(),
+            version: None,
         }
     }
 
-    /// 从可序列化的业务参数创建 API 请求
+    /// Create an API request with a specific API version
+    pub fn with_version(method: impl Into<String>, biz_content: impl Into<String>, version: impl Into<String>) -> Self {
+        Self {
+            method: method.into(),
+            biz_content: biz_content.into(),
+            version: Some(version.into()),
+        }
+    }
+
+    /// Create an API request from serializable business parameters
     pub fn from_params<T: Serialize>(method: impl Into<String>, params: &T) -> Result<Self, serde_json::Error> {
         let biz_content = serde_json::to_string(params)?;
         Ok(Self {
             method: method.into(),
             biz_content,
+            version: None,
         })
     }
 }
