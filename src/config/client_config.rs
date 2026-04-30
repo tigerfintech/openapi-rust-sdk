@@ -60,6 +60,8 @@ pub struct ClientConfigBuilder {
     enable_dynamic_domain: bool,
     tiger_public_key: Option<String>,
     device_id: Option<String>,
+    /// When true, skip auto-discovery of config files (set when properties_file() is called)
+    skip_auto_discover: bool,
 }
 
 impl ClientConfig {
@@ -87,6 +89,7 @@ impl ClientConfigBuilder {
             enable_dynamic_domain: true, // enabled by default
             tiger_public_key: None,
             device_id: None,
+            skip_auto_discover: false,
         }
     }
 
@@ -171,6 +174,7 @@ impl ClientConfigBuilder {
     /// Load config from a properties file.
     /// Silently skips if the file cannot be read; validation will catch missing required fields.
     pub fn properties_file(mut self, path: &str) -> Self {
+        self.skip_auto_discover = true; // explicit file provided, skip auto-discovery
         if let Ok(props) = config_parser::parse_properties_file(path) {
             self.apply_properties(&props);
         }
@@ -244,7 +248,8 @@ impl ClientConfigBuilder {
     pub fn build(mut self) -> Result<ClientConfig, TigerError> {
         // Auto-discover config file if no explicit values have been set for required fields.
         // Search order: ./tiger_openapi_config.properties -> ~/.tigeropen/tiger_openapi_config.properties
-        if self.tiger_id.is_none() || self.private_key.is_none() {
+        // Skip if properties_file() was explicitly called (even if the file was not found).
+        if !self.skip_auto_discover && (self.tiger_id.is_none() || self.private_key.is_none()) {
             let candidates = Self::auto_discover_paths();
             for path in &candidates {
                 if let Ok(props) = config_parser::parse_properties_file(path) {
@@ -364,6 +369,11 @@ mod tests {
     // 全局锁，确保环境变量测试串行执行
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
+    /// Acquire the env mutex, recovering from poison if a previous test panicked.
+    fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+        ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// 清理环境变量的辅助函数
     fn clear_env_vars() {
         std::env::remove_var(ENV_TIGER_ID);
@@ -376,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_builder_basic_fields() {
-        let _lock = ENV_MUTEX.lock().unwrap();
+        let _lock = lock_env();
         clear_env_vars();
         let config = ClientConfig::builder()
             .tiger_id("test_id")
@@ -391,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_builder_defaults() {
-        let _lock = ENV_MUTEX.lock().unwrap();
+        let _lock = lock_env();
         clear_env_vars();
         let config = ClientConfig::builder()
             .tiger_id("test_id")
@@ -406,25 +416,33 @@ mod tests {
 
     #[test]
     fn test_builder_missing_tiger_id() {
-        let _lock = ENV_MUTEX.lock().unwrap();
+        let _lock = lock_env();
         clear_env_vars();
-        let result = ClientConfig::builder().private_key("test_key").build();
+        // Set a non-existent properties file to prevent auto-discovery from filling in tiger_id
+        let result = ClientConfig::builder()
+            .properties_file("/nonexistent/path/config.properties")
+            .private_key("test_key")
+            .build();
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), TigerError::Config(_)));
     }
 
     #[test]
     fn test_builder_missing_private_key() {
-        let _lock = ENV_MUTEX.lock().unwrap();
+        let _lock = lock_env();
         clear_env_vars();
-        let result = ClientConfig::builder().tiger_id("test_id").build();
+        // Set a non-existent properties file to prevent auto-discovery from filling in private_key
+        let result = ClientConfig::builder()
+            .properties_file("/nonexistent/path/config.properties")
+            .tiger_id("test_id")
+            .build();
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), TigerError::Config(_)));
     }
 
     #[test]
     fn test_env_overrides_builder() {
-        let _lock = ENV_MUTEX.lock().unwrap();
+        let _lock = lock_env();
         clear_env_vars();
         std::env::set_var(ENV_TIGER_ID, "env_tiger_id");
         std::env::set_var(ENV_PRIVATE_KEY, "env_private_key");
@@ -443,7 +461,7 @@ mod tests {
 
     #[test]
     fn test_builder_optional_fields() {
-        let _lock = ENV_MUTEX.lock().unwrap();
+        let _lock = lock_env();
         clear_env_vars();
         let config = ClientConfig::builder()
             .tiger_id("test_id")
@@ -466,7 +484,7 @@ mod tests {
 
     #[test]
     fn test_builder_from_properties_file() {
-        let _lock = ENV_MUTEX.lock().unwrap();
+        let _lock = lock_env();
         clear_env_vars();
         let dir = std::env::temp_dir();
         let path = dir.join("test_rust_client_config.properties");
@@ -487,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_env_only_overrides_when_set() {
-        let _lock = ENV_MUTEX.lock().unwrap();
+        let _lock = lock_env();
         clear_env_vars();
         std::env::set_var(ENV_TIGER_ID, "env_tiger_id");
         let config = ClientConfig::builder()
@@ -524,7 +542,7 @@ mod tests {
             account in non_empty_string(),
             timeout_secs in valid_timeout_secs(),
         ) {
-            let _lock = ENV_MUTEX.lock().unwrap();
+            let _lock = lock_env();
             clear_env_vars();
             let config = ClientConfig::builder()
                 .tiger_id(&tiger_id)
@@ -556,7 +574,7 @@ mod tests {
             builder_private_key in non_empty_string(),
             builder_account in non_empty_string(),
         ) {
-            let _lock = ENV_MUTEX.lock().unwrap();
+            let _lock = lock_env();
             clear_env_vars();
             std::env::set_var(ENV_TIGER_ID, &env_tiger_id);
             std::env::set_var(ENV_PRIVATE_KEY, &env_private_key);
