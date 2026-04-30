@@ -1,38 +1,71 @@
-//! 行情查询示例
+//! Quote example
 //!
-//! 演示如何使用 QuoteClient 查询市场状态和实时报价。
+//! Demonstrates how to use QuoteClient to query market state, real-time quotes,
+//! K-line data, depth, trade ticks, timelines, option expirations, futures
+//! exchanges, and quote permissions.
 //!
-//! 运行方式：cargo run --example quote_example
+//! Config is auto-discovered from:
+//!   1. ./tiger_openapi_config.properties
+//!   2. ~/.tigeropen/tiger_openapi_config.properties
+//!
+//! Run: `cargo run --example quote_example`
 
-/*
 use tigeropen::config::ClientConfig;
+use tigeropen::client::http_client::HttpClient;
 use tigeropen::quote::QuoteClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 创建配置
-    let config = ClientConfig::builder()
-        .tiger_id("你的 tiger_id")
-        .private_key("你的 RSA 私钥")
-        .account("你的交易账户")
-        .build()?;
+    let config = ClientConfig::builder().build()?; // auto-discovers config
+    println!("tiger_id: {}, account: {}", config.tiger_id, config.account);
 
-    let qc = QuoteClient::new(config);
+    let http = HttpClient::new(config);
+    let qc = QuoteClient::new(&http);
 
-    // 查询市场状态
-    println!("=== 市场状态 ===");
-    let states = qc.get_market_state("US").await?;
-    println!("{:?}", states);
+    // Market state
+    println!("=== Market State (US) ===");
+    let states = qc.market_state("US").await?;
+    println!("{:#?}", states);
 
-    // 查询实时报价
-    println!("\n=== 实时报价 ===");
-    let quotes = qc.get_quote_real_time(&["AAPL", "TSLA"]).await?;
-    println!("{:?}", quotes);
+    // Real-time quotes for multiple symbols
+    println!("\n=== Real-Time Quotes ===");
+    let quotes = qc.quote_real_time(&["AAPL", "TSLA", "GOOG"]).await?;
+    println!("{:#?}", quotes);
+
+    // Timeline (intraday minute bars)
+    println!("\n=== Timeline (AAPL) ===");
+    let timeline = qc.timeline(&["AAPL"]).await?;
+    println!("{:#?}", timeline);
+
+    // Quote depth (level 2 order book)
+    println!("\n=== Quote Depth (AAPL) ===");
+    let depth = qc.quote_depth("AAPL").await?;
+    println!("{:#?}", depth);
+
+    // Trade ticks (recent trades)
+    println!("\n=== Trade Ticks (AAPL) ===");
+    let ticks = qc.trade_tick(&["AAPL"]).await?;
+    println!("{:#?}", ticks);
+
+    // K-line data (daily bars)
+    println!("\n=== K-Line (AAPL, day) ===");
+    let kline = qc.kline("AAPL", "day").await?;
+    println!("{:#?}", kline);
+
+    // Option expiration dates
+    println!("\n=== Option Expiration (AAPL) ===");
+    let expirations = qc.option_expiration("AAPL").await?;
+    println!("{:#?}", expirations);
+
+    // Futures exchange list
+    println!("\n=== Future Exchanges ===");
+    let exchanges = qc.future_exchange().await?;
+    println!("{:#?}", exchanges);
+
+    // Quote permissions
+    println!("\n=== Quote Permissions ===");
+    let permissions = qc.grab_quote_permission().await?;
+    println!("{:#?}", permissions);
 
     Ok(())
-}
-*/
-
-fn main() {
-    println!("请取消注释上方代码并填入真实配置后运行");
 }

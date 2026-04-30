@@ -1,33 +1,69 @@
-//! 交易下单示例
+//! Trade example
 //!
-//! 演示如何使用 TradeClient 进行下单和查询。
+//! Demonstrates how to use TradeClient to query orders, positions, assets,
+//! active orders, and shows a sample order JSON for place_order.
+//!
+//! Config is auto-discovered from:
+//!   1. ./tiger_openapi_config.properties
+//!   2. ~/.tigeropen/tiger_openapi_config.properties
+//!
+//! Run: `cargo run --example trade_example`
 
-/*
 use tigeropen::config::ClientConfig;
+use tigeropen::client::http_client::HttpClient;
 use tigeropen::trade::TradeClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ClientConfig::builder()
-        .tiger_id("你的 tiger_id")
-        .private_key("你的 RSA 私钥")
-        .account("你的交易账户")
-        .build()?;
+    let config = ClientConfig::builder().build()?; // auto-discovers config
+    println!("tiger_id: {}, account: {}", config.tiger_id, config.account);
 
-    let tc = TradeClient::new(config);
+    let account = config.account.clone();
+    let http = HttpClient::new(config);
+    let tc = TradeClient::new(&http, &account);
 
-    // 查询订单
-    let orders = tc.get_orders().await?;
-    println!("订单列表: {:?}", orders);
+    // Query account assets
+    println!("=== Assets ===");
+    let assets = tc.assets().await?;
+    println!("{:#?}", assets);
 
-    // 查询持仓
-    let positions = tc.get_positions().await?;
-    println!("持仓列表: {:?}", positions);
+    // Query all orders
+    println!("\n=== Orders ===");
+    let orders = tc.orders().await?;
+    println!("{:#?}", orders);
+
+    // Query active (pending) orders
+    println!("\n=== Active Orders ===");
+    let active = tc.active_orders().await?;
+    println!("{:#?}", active);
+
+    // Query positions
+    println!("\n=== Positions ===");
+    let positions = tc.positions().await?;
+    println!("{:#?}", positions);
+
+    // Sample order JSON for place_order (not executed)
+    // Uncomment the tc.place_order() call below to actually submit the order.
+    println!("\n=== Sample Limit Order (not submitted) ===");
+    let sample_order = serde_json::json!({
+        "symbol": "AAPL",
+        "secType": "STK",
+        "action": "BUY",
+        "orderType": "LMT",
+        "totalQuantity": 1,
+        "limitPrice": 150.0,
+        "timeInForce": "DAY",
+        "outsideRth": false,
+    });
+    println!("{}", serde_json::to_string_pretty(&sample_order)?);
+
+    // To preview the order without submitting:
+    // let preview = tc.preview_order(sample_order.clone()).await?;
+    // println!("{:#?}", preview);
+
+    // To actually place the order:
+    // let result = tc.place_order(sample_order).await?;
+    // println!("{:#?}", result);
 
     Ok(())
-}
-*/
-
-fn main() {
-    println!("请取消注释上方代码并填入真实配置后运行");
 }
