@@ -1,18 +1,19 @@
 //! TradeClient 测试模块。
-//! 使用 wiremock mock HTTP 响应，验证各交易方法的请求构造和响应解析。
+//! 使用 wiremock 验证请求使用 snake_case，响应被解析为强类型。
 
 use super::*;
-use std::time::Duration;
 use std::sync::OnceLock;
-use wiremock::{MockServer, Mock, ResponseTemplate};
+use std::time::Duration;
 use wiremock::matchers::method;
-use rsa::RsaPrivateKey;
-use rsa::pkcs8::EncodePrivateKey;
-use rsa::pkcs8::LineEnding;
-use crate::config::client_config::ClientConfig;
-use crate::client::http_client::HttpClient;
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// 缓存测试用 RSA 私钥
+use rsa::pkcs8::{EncodePrivateKey, LineEnding};
+use rsa::RsaPrivateKey;
+
+use crate::client::http_client::HttpClient;
+use crate::config::client_config::ClientConfig;
+use crate::model::order::limit_order;
+
 fn cached_test_private_key() -> &'static str {
     static KEY: OnceLock<String> = OnceLock::new();
     KEY.get_or_init(|| {
@@ -25,7 +26,6 @@ fn cached_test_private_key() -> &'static str {
     })
 }
 
-/// Create test ClientConfig
 fn test_config(server_url: &str) -> ClientConfig {
     ClientConfig {
         tiger_id: "test_tiger_id".to_string(),
@@ -44,7 +44,6 @@ fn test_config(server_url: &str) -> ClientConfig {
     }
 }
 
-/// 创建返回成功响应的 mock 服务器
 async fn mock_success_server(data: &str) -> MockServer {
     let mock_server = MockServer::start().await;
     let response_body = format!(
@@ -58,7 +57,6 @@ async fn mock_success_server(data: &str) -> MockServer {
     mock_server
 }
 
-/// 创建返回错误响应的 mock 服务器
 async fn mock_error_server(code: i32, message: &str) -> MockServer {
     let mock_server = MockServer::start().await;
     let response_body = format!(
@@ -72,304 +70,308 @@ async fn mock_error_server(code: i32, message: &str) -> MockServer {
     mock_server
 }
 
-// ========== 19.1 合约查询测试 ==========
+fn biz_of(req: &wiremock::Request) -> serde_json::Value {
+    let v: serde_json::Value = serde_json::from_slice(&req.body).unwrap();
+    let s = v["biz_content"].as_str().unwrap();
+    serde_json::from_str(s).unwrap()
+}
+
+// ========== typed response 测试 ==========
 
 #[tokio::test]
-async fn test_get_contract() {
-    let server = mock_success_server(r#"{"symbol":"AAPL","secType":"STK"}"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_contract_unwraps_items_typed() {
+    let server = mock_success_server(
+        r#"{"items":[{"symbol":"AAPL","secType":"STK","contractId":12345,"primaryExchange":"NASDAQ"}]}"#,
+    )
+    .await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let data = tc.get_contract("AAPL", "STK").await.unwrap();
-    assert!(data.is_some());
+    let contracts = tc.get_contract("AAPL", "STK").await.unwrap();
+    assert_eq!(contracts.len(), 1);
+    assert_eq!(contracts[0].symbol, "AAPL");
+    assert_eq!(contracts[0].sec_type, "STK");
+    assert_eq!(contracts[0].contract_id, Some(12345));
 }
 
 #[tokio::test]
-async fn test_get_contracts() {
-    let server = mock_success_server(r#"[{"symbol":"AAPL","secType":"STK"},{"symbol":"GOOG","secType":"STK"}]"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_contracts_unwraps_items_typed() {
+    let server = mock_success_server(
+        r#"{"items":[{"symbol":"AAPL","secType":"STK"},{"symbol":"GOOG","secType":"STK"}]}"#,
+    )
+    .await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let data = tc.get_contracts(&["AAPL", "GOOG"], "STK").await.unwrap();
-    assert!(data.is_some());
+    let cs = tc.get_contracts(&["AAPL", "GOOG"], "STK").await.unwrap();
+    assert_eq!(cs.len(), 2);
 }
 
 #[tokio::test]
-async fn test_get_quote_contract() {
-    let server = mock_success_server(r#"{"symbol":"AAPL","secType":"OPT"}"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_quote_contract_unwraps_items() {
+    let server =
+        mock_success_server(r#"{"items":[{"symbol":"AAPL","secType":"OPT","expiry":"20260619"}]}"#)
+            .await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let data = tc.get_quote_contract("AAPL", "OPT").await.unwrap();
-    assert!(data.is_some());
-}
-
-// ========== 19.3 订单操作测试 ==========
-
-#[tokio::test]
-async fn test_place_order() {
-    let server = mock_success_server(r#"{"id":12345,"orderId":1}"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
-
-    let order = serde_json::json!({
-        "symbol": "AAPL",
-        "secType": "STK",
-        "action": "BUY",
-        "orderType": "LMT",
-        "quantity": 100,
-        "limitPrice": 150.0,
-        "timeInForce": "DAY"
-    });
-    let data = tc.place_order(order).await.unwrap();
-    assert!(data.is_some());
+    let cs = tc.get_quote_contract("AAPL", "OPT", "20260619").await.unwrap();
+    assert_eq!(cs.len(), 1);
+    assert_eq!(cs[0].sec_type, "OPT");
 }
 
 #[tokio::test]
-async fn test_preview_order() {
-    let server = mock_success_server(r#"{"estimatedCommission":1.5}"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_preview_order_typed() {
+    let server = mock_success_server(
+        r#"{"isPass":true,"commission":0.5,"commissionCurrency":"USD","initMargin":50.0}"#,
+    )
+    .await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let order = serde_json::json!({
-        "symbol": "AAPL",
-        "secType": "STK",
-        "action": "BUY",
-        "orderType": "MKT",
-        "quantity": 100
-    });
-    let data = tc.preview_order(order).await.unwrap();
-    assert!(data.is_some());
+    let req = limit_order("test_account", "AAPL", "STK", "BUY", 1, 1.00);
+    let p = tc.preview_order(req).await.unwrap();
+    let p = p.expect("preview should return data");
+    assert!(p.is_pass);
+    assert_eq!(p.commission, 0.5);
 }
 
 #[tokio::test]
-async fn test_modify_order() {
+async fn test_place_order_typed_returns_id_and_order_id() {
+    let server = mock_success_server(r#"{"id":42519413060422656,"order_id":143}"#).await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
+
+    let req = limit_order("test_account", "AAPL", "STK", "BUY", 1, 1.00);
+    let r = tc.place_order(req).await.unwrap().expect("placed");
+    assert_eq!(r.id, 42519413060422656);
+    assert_eq!(r.order_id, 143);
+}
+
+#[tokio::test]
+async fn test_cancel_order_typed() {
     let server = mock_success_server(r#"{"id":12345}"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let order = serde_json::json!({
-        "orderType": "LMT",
-        "quantity": 200,
-        "limitPrice": 155.0
-    });
-    let data = tc.modify_order(12345, order).await.unwrap();
-    assert!(data.is_some());
+    let r = tc.cancel_order(12345).await.unwrap().expect("canceled");
+    assert_eq!(r.id, 12345);
 }
 
 #[tokio::test]
-async fn test_cancel_order() {
-    let server = mock_success_server(r#"{"id":12345}"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_orders_unwraps_items_typed() {
+    let server = mock_success_server(
+        r#"{"items":[{"id":1,"orderId":100,"symbol":"AAPL","secType":"STK","status":"Submitted","totalQuantity":10,"limitPrice":150.5}]}"#,
+    )
+    .await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let data = tc.cancel_order(12345).await.unwrap();
-    assert!(data.is_some());
-}
-
-// ========== 19.5 订单查询测试 ==========
-
-#[tokio::test]
-async fn test_get_orders() {
-    let server = mock_success_server(r#"[{"id":1,"symbol":"AAPL"}]"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
-
-    let data = tc.get_orders().await.unwrap();
-    assert!(data.is_some());
+    let orders = tc.get_orders().await.unwrap();
+    assert_eq!(orders.len(), 1);
+    assert_eq!(orders[0].id, 1);
+    assert_eq!(orders[0].order_id, 100);
+    assert_eq!(orders[0].sec_type, "STK");
+    assert_eq!(orders[0].total_quantity, 10);
 }
 
 #[tokio::test]
-async fn test_get_active_orders() {
-    let server = mock_success_server(r#"[{"id":1,"status":"Submitted"}]"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_filled_orders_unwraps_items_typed() {
+    let server = mock_success_server(r#"{"items":[{"id":1,"status":"Filled","filledQuantity":50}]}"#).await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let data = tc.get_active_orders().await.unwrap();
-    assert!(data.is_some());
+    let orders = tc.get_filled_orders(0, 0).await.unwrap();
+    assert_eq!(orders.len(), 1);
+    assert_eq!(orders[0].status, "Filled");
 }
 
 #[tokio::test]
-async fn test_get_inactive_orders() {
-    let server = mock_success_server(r#"[{"id":1,"status":"Cancelled"}]"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_positions_unwraps_items_typed() {
+    let server = mock_success_server(
+        r#"{"items":[{"symbol":"AAPL","secType":"STK","position":100,"averageCost":150.0,"marketValue":15500.0}]}"#,
+    )
+    .await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let data = tc.get_inactive_orders().await.unwrap();
-    assert!(data.is_some());
+    let ps = tc.get_positions().await.unwrap();
+    assert_eq!(ps.len(), 1);
+    assert_eq!(ps[0].symbol, Some("AAPL".to_string()));
+    assert_eq!(ps[0].position, Some(100));
 }
 
 #[tokio::test]
-async fn test_get_filled_orders() {
-    let server = mock_success_server(r#"[{"id":1,"status":"Filled"}]"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_assets_unwraps_items_typed() {
+    let server = mock_success_server(
+        r#"{"items":[{"account":"DU123","currency":"USD","buyingPower":10000.0,"netLiquidation":20000.0}]}"#,
+    )
+    .await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let data = tc.get_filled_orders().await.unwrap();
-    assert!(data.is_some());
-}
-
-// ========== 19.7 持仓和资产查询测试 ==========
-
-#[tokio::test]
-async fn test_get_positions() {
-    let server = mock_success_server(r#"[{"symbol":"AAPL","quantity":100}]"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
-
-    let data = tc.get_positions().await.unwrap();
-    assert!(data.is_some());
+    let assets = tc.get_assets().await.unwrap();
+    assert_eq!(assets.len(), 1);
+    assert_eq!(assets[0].account, "DU123");
+    assert_eq!(assets[0].buying_power, 10000.0);
 }
 
 #[tokio::test]
-async fn test_get_assets() {
-    let server = mock_success_server(r#"{"netLiquidation":100000.0}"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_prime_assets_typed_no_items_wrap() {
+    let server = mock_success_server(
+        r#"{"accountId":"acc1","updateTimestamp":1700000000,"segments":[{"capability":"MARGIN","category":"S","currency":"USD","buyingPower":10000.0}]}"#,
+    )
+    .await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let data = tc.get_assets().await.unwrap();
-    assert!(data.is_some());
+    let pa = tc.get_prime_assets().await.unwrap().expect("prime_assets");
+    assert_eq!(pa.account_id, "acc1");
+    assert_eq!(pa.segments.len(), 1);
+    assert_eq!(pa.segments[0].buying_power, 10000.0);
 }
 
 #[tokio::test]
-async fn test_get_prime_assets() {
-    let server = mock_success_server(r#"{"netLiquidation":200000.0}"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_order_transactions_unwraps_items_typed() {
+    let server = mock_success_server(
+        r#"{"items":[{"id":1,"orderId":2,"symbol":"AAPL","secType":"STK","price":150.0,"filledQuantity":50}]}"#,
+    )
+    .await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
 
-    let data = tc.get_prime_assets().await.unwrap();
-    assert!(data.is_some());
+    let txs = tc.get_order_transactions(2, "AAPL", "STK").await.unwrap();
+    assert_eq!(txs.len(), 1);
+    assert_eq!(txs[0].order_id, 2);
+    assert_eq!(txs[0].filled_quantity, 50);
 }
 
-#[tokio::test]
-async fn test_get_order_transactions() {
-    let server = mock_success_server(r#"[{"id":12345,"filledQuantity":50}]"#).await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
-
-    let data = tc.get_order_transactions(12345).await.unwrap();
-    assert!(data.is_some());
-}
-
-// ========== 错误处理测试 ==========
+// ========== 请求参数 snake_case 测试 ==========
 
 #[tokio::test]
-async fn test_trade_client_api_error() {
-    let server = mock_error_server(1100, "交易操作失败").await;
-    let config = test_config(&server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+async fn test_get_contract_wire_snake_case() {
+    let server = mock_success_server(r#"{"items":[]}"#).await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
+    let _ = tc.get_contract("AAPL", "STK").await;
 
-    let result = tc.get_orders().await;
-    assert!(result.is_err());
-}
-
-// ========== 请求参数验证测试 ==========
-
-#[tokio::test]
-async fn test_place_order_sends_correct_method() {
-    let mock_server = MockServer::start().await;
-    let response_body = r#"{"code":0,"message":"success","data":{"id":1},"timestamp":1700000000}"#;
-    Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(response_body))
-        .mount(&mock_server)
-        .await;
-
-    let config = test_config(&mock_server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
-
-    let order = serde_json::json!({"symbol": "AAPL", "action": "BUY"});
-    let _ = tc.place_order(order).await;
-
-    let received = mock_server.received_requests().await.unwrap();
-    assert_eq!(received.len(), 1);
-    let req_body: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
-    assert_eq!(req_body["method"].as_str().unwrap(), "place_order");
-}
-
-#[tokio::test]
-async fn test_place_order_includes_account() {
-    let mock_server = MockServer::start().await;
-    let response_body = r#"{"code":0,"message":"success","data":{"id":1},"timestamp":1700000000}"#;
-    Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(response_body))
-        .mount(&mock_server)
-        .await;
-
-    let config = test_config(&mock_server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
-
-    let order = serde_json::json!({"symbol": "AAPL", "action": "BUY"});
-    let _ = tc.place_order(order).await;
-
-    // 验证 biz_content 中包含 account 字段
-    let received = mock_server.received_requests().await.unwrap();
-    let req_body: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
-    let biz: serde_json::Value = serde_json::from_str(req_body["biz_content"].as_str().unwrap()).unwrap();
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "contract");
+    let biz = biz_of(&received[0]);
     assert_eq!(biz["account"].as_str().unwrap(), "test_account");
+    assert_eq!(biz["sec_type"].as_str().unwrap(), "STK");
+    assert!(biz.get("secType").is_none());
 }
 
 #[tokio::test]
-async fn test_cancel_order_sends_correct_params() {
-    let mock_server = MockServer::start().await;
-    let response_body = r#"{"code":0,"message":"success","data":{"id":12345},"timestamp":1700000000}"#;
-    Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(response_body))
-        .mount(&mock_server)
-        .await;
+async fn test_get_quote_contract_wire_has_symbols_and_expiry() {
+    let server = mock_success_server(r#"{"items":[]}"#).await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
+    let _ = tc.get_quote_contract("AAPL", "OPT", "20260619").await;
 
-    let config = test_config(&mock_server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["symbols"][0].as_str().unwrap(), "AAPL");
+    assert_eq!(biz["expiry"].as_str().unwrap(), "20260619");
+    assert_eq!(biz["sec_type"].as_str().unwrap(), "OPT");
+}
 
+#[tokio::test]
+async fn test_place_order_wire_snake_case() {
+    let server = mock_success_server(r#"{"id":1,"order_id":1}"#).await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
+
+    let req = limit_order("test_account", "AAPL", "STK", "BUY", 1, 1.0);
+    let _ = tc.place_order(req).await;
+
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "place_order");
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["account"].as_str().unwrap(), "test_account");
+    assert_eq!(biz["sec_type"].as_str().unwrap(), "STK");
+    assert_eq!(biz["order_type"].as_str().unwrap(), "LMT");
+    assert_eq!(biz["total_quantity"].as_i64().unwrap(), 1);
+    assert_eq!(biz["limit_price"].as_f64().unwrap(), 1.0);
+    assert_eq!(biz["time_in_force"].as_str().unwrap(), "DAY");
+    // no camelCase
+    assert!(biz.get("secType").is_none());
+    assert!(biz.get("orderType").is_none());
+    assert!(biz.get("totalQuantity").is_none());
+    assert!(biz.get("limitPrice").is_none());
+    assert!(biz.get("timeInForce").is_none());
+}
+
+#[tokio::test]
+async fn test_modify_order_wire_includes_id_and_account() {
+    let server = mock_success_server(r#"{"id":12345}"#).await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
+
+    let mut req = limit_order("test_account", "AAPL", "STK", "BUY", 1, 1.5);
+    req.limit_price = Some(1.5);
+    let _ = tc.modify_order(12345, req).await;
+
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "modify_order");
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["id"].as_i64().unwrap(), 12345);
+    assert_eq!(biz["account"].as_str().unwrap(), "test_account");
+    assert_eq!(biz["limit_price"].as_f64().unwrap(), 1.5);
+}
+
+#[tokio::test]
+async fn test_cancel_order_wire_has_account_and_id() {
+    let server = mock_success_server(r#"{"id":12345}"#).await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
     let _ = tc.cancel_order(12345).await;
 
-    let received = mock_server.received_requests().await.unwrap();
-    let req_body: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
-    assert_eq!(req_body["method"].as_str().unwrap(), "cancel_order");
-    let biz: serde_json::Value = serde_json::from_str(req_body["biz_content"].as_str().unwrap()).unwrap();
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "cancel_order");
+    let biz = biz_of(&received[0]);
     assert_eq!(biz["account"].as_str().unwrap(), "test_account");
     assert_eq!(biz["id"].as_i64().unwrap(), 12345);
 }
 
 #[tokio::test]
-async fn test_modify_order_includes_id_and_account() {
-    let mock_server = MockServer::start().await;
-    let response_body = r#"{"code":0,"message":"success","data":{"id":12345},"timestamp":1700000000}"#;
-    Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(response_body))
-        .mount(&mock_server)
-        .await;
+async fn test_get_filled_orders_wire_snake_case_dates() {
+    let server = mock_success_server(r#"{"items":[]}"#).await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
+    let _ = tc.get_filled_orders(1700000000000, 1710000000000).await;
 
-    let config = test_config(&mock_server.uri());
-    let http_client = HttpClient::new(config);
-    let tc = TradeClient::new(&http_client, "test_account");
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["start_date"].as_i64().unwrap(), 1700000000000);
+    assert_eq!(biz["end_date"].as_i64().unwrap(), 1710000000000);
+    assert!(biz.get("startDate").is_none());
+}
 
-    let order = serde_json::json!({"limitPrice": 155.0});
-    let _ = tc.modify_order(12345, order).await;
+#[tokio::test]
+async fn test_get_order_transactions_wire_snake_case() {
+    let server = mock_success_server(r#"{"items":[]}"#).await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
+    let _ = tc.get_order_transactions(12345, "AAPL", "STK").await;
 
-    let received = mock_server.received_requests().await.unwrap();
-    let req_body: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
-    assert_eq!(req_body["method"].as_str().unwrap(), "modify_order");
-    let biz: serde_json::Value = serde_json::from_str(req_body["biz_content"].as_str().unwrap()).unwrap();
-    assert_eq!(biz["account"].as_str().unwrap(), "test_account");
-    assert_eq!(biz["id"].as_i64().unwrap(), 12345);
-    assert_eq!(biz["limitPrice"].as_f64().unwrap(), 155.0);
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["order_id"].as_i64().unwrap(), 12345);
+    assert_eq!(biz["symbol"].as_str().unwrap(), "AAPL");
+    assert_eq!(biz["sec_type"].as_str().unwrap(), "STK");
+    assert!(biz.get("orderId").is_none());
+}
+
+#[tokio::test]
+async fn test_trade_api_error() {
+    let server = mock_error_server(1100, "交易操作失败").await;
+    let http = HttpClient::new(test_config(&server.uri()));
+    let tc = TradeClient::new(&http, "test_account");
+    assert!(tc.get_orders().await.is_err());
 }

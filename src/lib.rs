@@ -23,4 +23,4 @@ pub mod push;
 pub mod logger;
 
 /// SDK 版本号
-pub const VERSION: &str = "0.1.0";
+pub const VERSION: &str = "0.3.0";
