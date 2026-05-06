@@ -47,7 +47,7 @@ fn test_config(server_url: &str) -> ClientConfig {
 
 #[test]
 fn test_user_agent() {
-    assert_eq!(HttpClient::user_agent(), "openapi-rust-sdk-0.1.0");
+    assert_eq!(HttpClient::user_agent(), "openapi-rust-sdk-0.3.0");
 }
 
 #[test]
