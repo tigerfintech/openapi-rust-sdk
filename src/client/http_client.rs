@@ -12,7 +12,7 @@ use super::retry::RetryPolicy;
 /// User-Agent 前缀
 const USER_AGENT_PREFIX: &str = "openapi-rust-sdk-";
 /// SDK 版本号
-const SDK_VERSION: &str = "0.1.0";
+const SDK_VERSION: &str = "0.3.0";
 /// 默认字符集
 const DEFAULT_CHARSET: &str = "UTF-8";
 /// 默认签名类型
@@ -20,15 +20,20 @@ const DEFAULT_SIGN_TYPE: &str = "RSA";
 /// 默认 API 版本
 const DEFAULT_VERSION: &str = "2.0";
 
-/// HttpClient wraps HTTP requests, signing, retry, and timeout
+/// HttpClient wraps HTTP requests, signing, retry, and timeout.
+///
+/// The client posts to either `config.server_url` (default, for trade endpoints)
+/// or `config.quote_server_url` (when constructed via [`HttpClient::with_quote_server`]).
 pub struct HttpClient {
     config: ClientConfig,
     client: reqwest::Client,
     retry_policy: RetryPolicy,
+    /// Override POST target. When None, use `config.server_url`.
+    url_override: Option<String>,
 }
 
 impl HttpClient {
-    /// Create HttpClient instance
+    /// Create HttpClient instance (posts to `config.server_url`).
     pub fn new(config: ClientConfig) -> Self {
         let client = reqwest::Client::builder()
             .timeout(config.timeout)
@@ -38,6 +43,26 @@ impl HttpClient {
             config,
             client,
             retry_policy: RetryPolicy::default(),
+            url_override: None,
+        }
+    }
+
+    /// Create HttpClient wired to the quote server URL.
+    ///
+    /// Use this variant when constructing a [`crate::quote::QuoteClient`] so
+    /// quote requests go to `config.quote_server_url` instead of the default
+    /// `config.server_url` (which is used for trade endpoints).
+    pub fn with_quote_server(config: ClientConfig) -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(config.timeout)
+            .build()
+            .unwrap_or_default();
+        let override_url = config.quote_server_url.clone();
+        Self {
+            config,
+            client,
+            retry_policy: RetryPolicy::default(),
+            url_override: Some(override_url),
         }
     }
 
@@ -47,6 +72,7 @@ impl HttpClient {
             config,
             client,
             retry_policy: RetryPolicy::default(),
+            url_override: None,
         }
     }
 
@@ -184,8 +210,9 @@ impl HttpClient {
 
     /// Send HTTP POST request
     async fn do_http_post(&self, params: &BTreeMap<String, String>) -> Result<Vec<u8>, TigerError> {
+        let url = self.url_override.as_deref().unwrap_or(&self.config.server_url);
         let mut request = self.client
-            .post(&self.config.server_url)
+            .post(url)
             .header("Content-Type", "application/json;charset=UTF-8")
             .header("User-Agent", Self::user_agent());
 
