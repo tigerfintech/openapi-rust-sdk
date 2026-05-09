@@ -3,7 +3,8 @@
 //! - `Order`：查询类接口返回的订单数据，使用 `#[serde(rename_all = "camelCase")]`。
 //! - `OrderRequest`：下单/改单/预览订单接口的请求体，使用 `#[serde(rename_all = "snake_case")]`。
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 
 // ========== 响应模型（查询类接口返回） ==========
 
@@ -61,7 +62,7 @@ pub struct Order {
     pub aux_price: f64,
     #[serde(default)]
     pub trailing_percent: f64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_order_status")]
     pub status: String,
     #[serde(default)]
     pub filled_quantity: i64,
@@ -145,6 +146,35 @@ pub struct Order {
     pub trading_session_type: String,
     #[serde(default)]
     pub latest_price: f64,
+}
+
+// ========== 自定义反序列化器 ==========
+
+/// 处理服务端偶尔返回整数状态码的情况，将其转换为 Java SDK 枚举字符串名。
+///
+/// 整数映射表：-2=Invalid, -1=Initial, 3=PendingCancel, 4=Cancelled,
+///             5=Submitted, 6=Filled, 7=Inactive, 8=PendingSubmit
+fn deserialize_order_status<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    let v = Value::deserialize(d)?;
+    match v {
+        Value::String(s) => Ok(s),
+        Value::Number(n) => {
+            let code = n.as_i64().unwrap_or(0);
+            let name = match code {
+                -2 => "Invalid",
+                -1 => "Initial",
+                3 => "PendingCancel",
+                4 => "Cancelled",
+                5 => "Submitted",
+                6 => "Filled",
+                7 => "Inactive",
+                8 => "PendingSubmit",
+                _ => "Unknown",
+            };
+            Ok(name.to_string())
+        }
+        _ => Ok(String::new()),
+    }
 }
 
 // ========== 请求模型（下单/改单/预览） ==========
@@ -380,6 +410,31 @@ pub fn new_order_leg(leg_type: &str, price: f64, time_in_force: &str) -> OrderLe
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_order_status_integer_deserialization() {
+        // 服务端偶尔返回整数状态码
+        let json = r#"{"status": 6}"#;
+        let order: Order = serde_json::from_str(json).unwrap();
+        assert_eq!(order.status, "Filled");
+
+        let json = r#"{"status": 5}"#;
+        let order: Order = serde_json::from_str(json).unwrap();
+        assert_eq!(order.status, "Submitted");
+
+        let json = r#"{"status": 8}"#;
+        let order: Order = serde_json::from_str(json).unwrap();
+        assert_eq!(order.status, "PendingSubmit");
+
+        let json = r#"{"status": -2}"#;
+        let order: Order = serde_json::from_str(json).unwrap();
+        assert_eq!(order.status, "Invalid");
+
+        // 字符串形式仍然正常工作
+        let json = r#"{"status": "Filled"}"#;
+        let order: Order = serde_json::from_str(json).unwrap();
+        assert_eq!(order.status, "Filled");
+    }
 
     #[test]
     fn test_order_request_serializes_to_snake_case() {

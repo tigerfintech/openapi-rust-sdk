@@ -779,3 +779,534 @@ mod tests {
         assert_eq!(ps[0].expire_at, 1700000000);
     }
 }
+
+// ============================================================================
+// Batch 3-5：扩展响应模型
+// ============================================================================
+
+/// 合约代码 + 名称（all_symbol_names 返回）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SymbolName {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub market: String,
+}
+
+/// 交易元数据（quote_stock_trade）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TradeMeta {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub lot_size: i32,
+    #[serde(default)]
+    pub min_tick: f64,
+    #[serde(default)]
+    pub spread_scale: f64,
+    #[serde(default)]
+    pub shortable_flag: String,
+    #[serde(default)]
+    pub marginable_flag: String,
+}
+
+/// 股票详情（stock_detail）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StockDetail {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub name_cn: String,
+    #[serde(default)]
+    pub name_en: String,
+    #[serde(default)]
+    pub exchange: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub sec_type: String,
+    #[serde(default)]
+    pub sector: String,
+    #[serde(default)]
+    pub industry: String,
+    #[serde(default)]
+    pub listing_date: i64,
+    #[serde(default)]
+    pub market_cap: f64,
+    #[serde(default)]
+    pub circulation_cap: f64,
+    #[serde(default)]
+    pub total_shares: f64,
+    #[serde(default)]
+    pub eps_ttm: f64,
+    #[serde(default)]
+    pub pe_ratio_ttm: f64,
+}
+
+/// 做空数据（quote_shortable_stocks）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ShortInterest {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub settlement_date: String,
+    #[serde(default)]
+    pub short_interest: f64,
+    #[serde(default)]
+    pub avg_daily_volume: f64,
+    #[serde(default)]
+    pub days_to_cover: f64,
+    #[serde(default)]
+    pub percent_of_float: f64,
+    #[serde(default)]
+    pub short_interest_previous: f64,
+    #[serde(default)]
+    pub percent_change: f64,
+}
+
+/// 经纪商明细。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BrokerDetail {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+/// 经纪商档位条目。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StockBrokerItem {
+    #[serde(default)]
+    pub level: i32,
+    #[serde(default)]
+    pub price: f64,
+    #[serde(default)]
+    pub brokers: Vec<BrokerDetail>,
+}
+
+/// 经纪商持仓（stock_broker）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StockBroker {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub level_ask_list: Vec<StockBrokerItem>,
+    #[serde(default)]
+    pub level_bid_list: Vec<StockBrokerItem>,
+}
+
+/// 股票基本面（stock_fundamental）。raw map，由调用方进一步解析。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StockFundamental {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
+}
+
+/// 股票行业归属（stock_industry）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StockIndustry {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub gsector: String,
+    #[serde(default)]
+    pub ggroup: String,
+    #[serde(default)]
+    pub gind: String,
+    #[serde(default)]
+    pub gsubind: String,
+    #[serde(default)]
+    pub level: String,
+}
+
+/// 成交榜单条目（trade_rank）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TradeRankItem {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub latest_price: f64,
+    #[serde(default)]
+    pub change: f64,
+    #[serde(default)]
+    pub change_rate: f64,
+    #[serde(default)]
+    pub volume: i64,
+    #[serde(default)]
+    pub amount: f64,
+}
+
+/// K 线配额明细。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct KlineQuotaDetail {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub used_bars: i32,
+    #[serde(default)]
+    pub quota_bars: i32,
+    #[serde(default)]
+    pub last_access: i64,
+}
+
+/// K 线配额（kline_quota）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct KlineQuota {
+    #[serde(default)]
+    pub method: String,
+    #[serde(default)]
+    pub used: i32,
+    #[serde(default)]
+    pub quota: i32,
+    #[serde(default)]
+    pub detail: Vec<KlineQuotaDetail>,
+}
+
+/// 期权历史波动率时序点。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionVolatilityPoint {
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub volatility: f64,
+}
+
+/// 期权分析（option_analysis）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionAnalysis {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub historical_volatility30_day: f64,
+    #[serde(default)]
+    pub historical_volatility60_day: f64,
+    #[serde(default)]
+    pub historical_volatility90_day: f64,
+    #[serde(default)]
+    pub implied_volatility: f64,
+    #[serde(default)]
+    pub volatility_list: Vec<OptionVolatilityPoint>,
+}
+
+/// 期权代码（option_symbol 返回）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionSymbol {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub name_cn: String,
+    #[serde(default)]
+    pub name_en: String,
+}
+
+/// 期货主力合约历史（future_main_contract）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FutureMainContractHistory {
+    #[serde(default)]
+    pub contract_code: String,
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub begin_date: String,
+    #[serde(default)]
+    pub end_date: String,
+}
+
+/// 单个期货交易时段。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FutureTradingSegment {
+    #[serde(default)]
+    pub start: i64,
+    #[serde(default)]
+    pub end: i64,
+    #[serde(default)]
+    pub r#type: String,
+}
+
+/// 期货交易时段（future_trading_date）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FutureTradingTime {
+    #[serde(default)]
+    pub contract_code: String,
+    #[serde(default)]
+    pub biz_date: String,
+    #[serde(default)]
+    pub zone: String,
+    #[serde(default)]
+    pub trading_times: Vec<FutureTradingSegment>,
+}
+
+/// 期货逐笔（future_tick v3.0）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FutureTradeTickItem {
+    #[serde(default)]
+    pub contract_code: String,
+    #[serde(default)]
+    pub index: i64,
+    #[serde(default)]
+    pub time: i64,
+    #[serde(default)]
+    pub price: f64,
+    #[serde(default)]
+    pub volume: i64,
+    #[serde(default)]
+    pub direction: String,
+}
+
+/// 期货盘口（future_depth）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FutureDepth {
+    #[serde(default)]
+    pub contract_code: String,
+    #[serde(default)]
+    pub timestamp: i64,
+    #[serde(default)]
+    pub asks: Vec<DepthLevel>,
+    #[serde(default)]
+    pub bids: Vec<DepthLevel>,
+}
+
+/// 基金合约信息（fund_contracts）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FundContractInfo {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub fund_type: String,
+    #[serde(default)]
+    pub inception: String,
+    #[serde(default)]
+    pub net_asset_value: f64,
+    #[serde(default)]
+    pub expense_ratio: f64,
+}
+
+/// 基金净值报价（fund_quote）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FundQuote {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub latest_nav: f64,
+    #[serde(default)]
+    pub change: f64,
+    #[serde(default)]
+    pub change_rate: f64,
+    #[serde(default)]
+    pub date: String,
+}
+
+/// 基金历史净值（fund_history_quote）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FundHistoryQuote {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub nav: f64,
+}
+
+/// 窝轮简要信息（warrant_briefs）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WarrantBrief {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub latest_price: f64,
+    #[serde(default)]
+    pub change: f64,
+    #[serde(default)]
+    pub change_rate: f64,
+    #[serde(default)]
+    pub volume: i64,
+    #[serde(default)]
+    pub amount: f64,
+    #[serde(default)]
+    pub underlying: String,
+    #[serde(default)]
+    pub issuer: String,
+    #[serde(default)]
+    pub expiry_date: String,
+    #[serde(default)]
+    pub strike_price: f64,
+    #[serde(default)]
+    pub warrant_type: String,
+}
+
+/// 窝轮筛选结果（warrant_filter）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WarrantFilterResult {
+    #[serde(default)]
+    pub total: i32,
+    #[serde(default)]
+    pub items: Vec<WarrantBrief>,
+    #[serde(default)]
+    pub page_size: i32,
+    #[serde(default)]
+    pub page: i32,
+}
+
+/// 行业列表条目（industry_list）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct IndustryItem {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub level: String,
+}
+
+/// 行业归属股票条目（industry_stock_list）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct IndustryStock {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub industry_id: String,
+    #[serde(default)]
+    pub change: f64,
+    #[serde(default)]
+    pub change_rate: f64,
+}
+
+/// 汇率数据（financial_exchange_rate）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ExchangeRate {
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub rate: f64,
+    #[serde(default)]
+    pub base_currency: String,
+}
+
+/// 财报货币（financial_currency）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FinancialCurrency {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub currency: String,
+}
+
+/// 交易日历（trading_calendar）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TradingCalendarItem {
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub is_trading: bool,
+    #[serde(default)]
+    pub session_type: String,
+}
+
+/// 扫描器标签（market_scanner_tags）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketScannerTag {
+    #[serde(default)]
+    pub field: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub values: Vec<String>,
+}
+
+/// 扫描器可用标签集合（market_scanner_tags）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketScannerTags {
+    #[serde(default)]
+    pub tag_fields: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<MarketScannerTag>,
+}
+
+/// 隔夜行情（quote_overnight）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct QuoteOvernight {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub pre_close: f64,
+    #[serde(default)]
+    pub open: f64,
+    #[serde(default)]
+    pub close: f64,
+    #[serde(default)]
+    pub high: f64,
+    #[serde(default)]
+    pub low: f64,
+    #[serde(default)]
+    pub volume: i64,
+    #[serde(default)]
+    pub amount: f64,
+    #[serde(default)]
+    pub change: f64,
+    #[serde(default)]
+    pub change_rate: f64,
+    #[serde(default)]
+    pub begin_time: i64,
+    #[serde(default)]
+    pub end_time: i64,
+}
+

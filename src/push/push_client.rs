@@ -35,7 +35,7 @@ const MAX_RECONNECT_INTERVAL_SECS: u64 = 60;
 /// Default connect timeout in seconds
 const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 30;
 /// SDK version string
-const SDK_VERSION: &str = "rust-sdk/1.0.0";
+const SDK_VERSION: &str = "rust-sdk/0.4.0";
 /// Protocol version
 const ACCEPT_VERSION: &str = "2";
 /// Default heartbeat send interval in milliseconds
@@ -298,6 +298,11 @@ impl PushClient {
                     if let Some(cb) = &cbs.on_future {
                         cb(d);
                     }
+                } else if data_type == DataType::Cc as i32 {
+                    // Cc 复用 QuoteData，路由至 on_quote
+                    if let Some(cb) = &cbs.on_quote {
+                        cb(d);
+                    }
                 } else {
                     // QuoteBbo also uses QuoteData
                     if let Some(cb) = &cbs.on_quote_bbo {
@@ -410,6 +415,50 @@ impl PushClient {
     /// Get account-level subscriptions
     pub fn get_account_subscriptions(&self) -> Vec<SubjectType> {
         self.account_subs.read().unwrap().iter().cloned().collect()
+    }
+
+    // ===== Cc / Market 订阅方法 =====
+
+    /// 订阅数字货币行情
+    ///
+    /// symbols 不能为空，每次订阅需指定标的列表。
+    pub fn subscribe_cc(&self, symbols: &[&str]) -> Result<(), crate::error::TigerError> {
+        let symbols_str = symbols.join(",");
+        self.subscribe(&SubjectType::Cc, Some(&symbols_str), None, None);
+        self.add_subscription(SubjectType::Cc, &symbols.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        Ok(())
+    }
+
+    /// 取消订阅数字货币行情
+    ///
+    /// symbols 为 None 时取消所有 Cc 订阅。
+    pub fn unsubscribe_cc(&self, symbols: Option<&[&str]>) -> Result<(), crate::error::TigerError> {
+        let symbols_str = symbols.map(|ss| ss.join(","));
+        self.unsubscribe(&SubjectType::Cc, symbols_str.as_deref(), None, None);
+        match symbols {
+            None => self.remove_subscription(SubjectType::Cc, None),
+            Some(ss) => {
+                let owned: Vec<String> = ss.iter().map(|s| s.to_string()).collect();
+                self.remove_subscription(SubjectType::Cc, Some(&owned));
+            }
+        }
+        Ok(())
+    }
+
+    /// 订阅市场状态推送
+    ///
+    /// market 为市场代码（如 "US"/"HK"）。symbols 为空，只传 market 字段。
+    pub fn subscribe_market(&self, market: &str) -> Result<(), crate::error::TigerError> {
+        self.subscribe(&SubjectType::Market, None, None, Some(market));
+        self.add_subscription(SubjectType::Market, &[market.to_string()]);
+        Ok(())
+    }
+
+    /// 取消订阅市场状态推送
+    pub fn unsubscribe_market(&self, market: &str) -> Result<(), crate::error::TigerError> {
+        self.unsubscribe(&SubjectType::Market, None, None, Some(market));
+        self.remove_subscription(SubjectType::Market, Some(&[market.to_string()]));
+        Ok(())
     }
 }
 

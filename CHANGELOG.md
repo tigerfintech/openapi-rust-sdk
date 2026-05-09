@@ -5,6 +5,132 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-09
+
+本次发布达到与 Python / Java / Go / TypeScript SDK **100% API 覆盖**。新增约 65 个方法，重构 12 个方法签名，OrderStatus 枚举对齐 Java SDK。包含多处 breaking change。
+
+### Added
+
+**Trade (17 个新方法)**
+
+- `get_order(req)` — 按 ID 查询单个订单（wire: `orders`，传 id/order_id，返回单个对象）
+- `get_managed_accounts(req)` — 查询机构子账户列表（`accounts`）
+- `get_derivative_contracts(req)` — 衍生品合约列表（`quote_contract`）
+- `get_analytics_asset(req)` — 按日资产分析（`analytics_asset`）
+- `get_aggregate_assets(req)` — 综合账户资产汇总（`aggregate_assets`）
+- `get_estimate_tradable_quantity(req)` — 可交易数量估算（`estimate_tradable_quantity`）
+- `place_forex_order(req)` — 外汇下单（`place_forex_order`）
+- `get_segment_fund_available(req)` / `get_segment_fund_history(req)` / `transfer_segment_fund(req)` / `cancel_segment_fund(req)` — 子账户资金调拨
+- `get_fund_details(req)` — 资金流水明细（`fund_details`）
+- `get_funding_history(req)` — 资金调拨记录（`transfer_fund`）
+- `transfer_position(req)` — 内部转股（`position_transfer`）
+- `get_position_transfer_records(req)` / `get_position_transfer_detail(req)` / `get_position_transfer_external_records(req)` — 转股记录查询
+
+**Quote (~45 个新方法)**
+
+- 股票基础(15): `get_symbols` / `get_symbol_names` / `get_trade_metas` / `get_stock_details` / `get_stock_delay_briefs` / `get_bars` / `get_bars_by_page` / `get_timeline_history` / `get_trade_rank` / `get_short_interest` / `get_stock_broker` / `get_stock_fundamental` / `get_stock_industry` / `get_quote_permission` / `get_kline_quota`
+- 期权扩展(6): `get_option_bars` / `get_option_trade_ticks` / `get_option_timeline` / `get_option_depth` / `get_option_symbols` / `get_option_analysis`
+- 期货扩展(10): `get_future_contract` / `get_all_future_contracts` / `get_current_future_contract` / `get_future_continuous_contracts` / `get_future_history_main_contract` / `get_future_bars` / `get_future_bars_by_page` / `get_future_trade_ticks` / `get_future_depth` / `get_future_trading_times`
+- 基金(4): `get_fund_symbols` / `get_fund_contracts` / `get_fund_quote` / `get_fund_history_quote`
+- 窝轮(2): `get_warrant_briefs` / `get_warrant_filter`
+- 行业(2): `get_industry_list` / `get_industry_stocks`
+- 公司行动/财务/日历(6): `get_corporate_split` / `get_corporate_dividend` / `get_corporate_earnings_calendar` / `get_financial_currency` / `get_financial_exchange_rate` / `get_trading_calendar`
+- 其他(2): `get_market_scanner_tags` / `get_quote_overnight`
+
+**Push (4 对新订阅)**
+
+- `subscribe_cc(symbols)` / `unsubscribe_cc(symbols)` — 加密货币行情（Cc 数据走 `on_quote` 回调）
+- `subscribe_market(market)` / `unsubscribe_market(market)` — 市场状态（数据走 `on_quote` 回调）
+- StockTop / OptionTop 订阅已在 v0.3.1 中存在，本次确认其 v0.4.0 行为不变
+
+**枚举 (7 个新专属枚举)**
+
+- `OrderSortBy` — 订单排序字段(LATEST_CREATED / LATEST_STATUS_UPDATED)
+- `SegmentType` — 账户分部类型(SEC / FUT / FUND / ALL)
+- `CorporateActionType` — 公司行动类型(split / dividend / earning)
+- `IndustryLevel` — 行业级别(GSECTOR / GGROUP / GIND / GSUBIND)
+- `SortDirection` — 排序方向
+- `OptionAnalysisPeriod` — 期权分析周期
+- `FinancialReportPeriod` — 财报类型(Annual / Quarterly / Ltm)
+- `License::Tbms` 新增 `"TBMS"` 变体
+
+**Request structs**
+
+- 新建 `src/model/trade_requests.rs`：`OrdersRequest` / `GetOrderRequest` / `OrderTransactionsRequest` / `PositionsRequest` / `AssetsRequest` 等 18 个 Request struct
+- 新建 `src/model/quote_requests.rs`：`BriefRequest` / `TradeTickRequest` / `DepthQuoteRequest` / `FutureBriefRequest` 等 47 个 Request struct
+
+### Changed (BREAKING)
+
+1. **`OrderStatus` 枚举对齐 Java SDK**：删除 `PendingNew` 和 `PartiallyFilled`（Python 客户端派生，服务端不返回）；新增 `PendingSubmit`（code=8）。所有变体添加显式 `#[serde(rename = "...")]`。最终 8 个值：`Invalid(-2)` / `Initial(-1)` / `PendingCancel(3)` / `Cancelled(4)` / `Submitted(5)` / `Filled(6)` / `Inactive(7)` / `PendingSubmit(8)`。新增 `OrderStatus::code()` 方法。
+
+2. **8 个 Trade 方法改签名为 Request struct**：
+   - `get_orders()` → `get_orders(req: OrdersRequest)`
+   - `get_active_orders()` → `get_active_orders(req: OrdersRequest)`
+   - `get_inactive_orders()` → `get_inactive_orders(req: OrdersRequest)`
+   - `get_filled_orders(start_ms, end_ms)` → `get_filled_orders(req: OrdersRequest)`（start_ms/end_ms 改为 `req.start_date`/`req.end_date`）
+   - `get_order_transactions(id, symbol, sec_type)` → `get_order_transactions(req: OrderTransactionsRequest)`（全字段可选）
+   - `get_positions()` → `get_positions(req: PositionsRequest)`
+   - `get_assets()` → `get_assets(req: AssetsRequest)`
+   - `get_prime_assets()` → `get_prime_assets(req: AssetsRequest)`
+
+3. **4 个 Quote 方法改签名为 Request struct**：
+   - `get_brief(symbols: &[&str])` → `get_brief(req: BriefRequest)`
+   - `get_trade_tick(symbols: &[&str])` → `get_trade_tick(req: TradeTickRequest)`
+   - `get_quote_depth(symbol: &str, market: &str)` → `get_quote_depth(req: DepthQuoteRequest)`
+   - `get_future_real_time_quote(contract_codes: &[&str])` → `get_future_real_time_quote(req: FutureBriefRequest)`
+
+### Fixed
+
+- **Push dispatcher Cc dataType bug**：`Cc` 类型的推送数据（加密货币）之前会错误落入 `QuoteBBO` fallback 分支。现已修复，`Cc` 明确路由到 `on_quote` 回调，与 Go/Python/Java SDK 一致。
+- **`Order.status` 整数反序列化**：服务端可能返回整数 status 码（如 `6` = Filled），之前 `String` 字段会反序列化失败。现在 `status` 字段使用自定义 deserializer，自动将整数转为 Java 枚举字符串名（`-2→Invalid`, `-1→Initial`, `3→PendingCancel`, `4→Cancelled`, `5→Submitted`, `6→Filled`, `7→Inactive`, `8→PendingSubmit`）。
+- **examples 支持 `TIGER_CONFIG_PATH` env var**：不再依赖 CWD 内的配置文件，避免凭证文件被误提交。用法：`TIGER_CONFIG_PATH=~/.tigeropen/tiger_openapi_config.properties cargo run --example trade_example`
+
+### 迁移指引
+
+```rust
+// Before (0.3.x)
+let orders = tc.get_orders().await?;
+let filled = tc.get_filled_orders(start_ms, end_ms).await?;
+let txs = tc.get_order_transactions(id, "AAPL", "STK").await?;
+let pos = tc.get_positions().await?;
+let briefs = qc.get_brief(&["AAPL"]).await?;
+let depth = qc.get_quote_depth("AAPL", "US").await?;
+
+// After (0.4.0)
+let orders = tc.get_orders(OrdersRequest::default()).await?;
+let filled = tc.get_filled_orders(OrdersRequest {
+    start_date: Some(start_ms), end_date: Some(end_ms), ..Default::default()
+}).await?;
+let txs = tc.get_order_transactions(OrderTransactionsRequest {
+    order_id: Some(id), symbol: Some("AAPL".into()), sec_type: Some("STK".into()),
+    ..Default::default()
+}).await?;
+let pos = tc.get_positions(PositionsRequest::default()).await?;
+let briefs = qc.get_brief(BriefRequest {
+    symbols: Some(vec!["AAPL".to_string()]), ..Default::default()
+}).await?;
+let depth = qc.get_quote_depth(DepthQuoteRequest {
+    symbols: Some(vec!["AAPL".to_string()]), market: Some("US".to_string()),
+    ..Default::default()
+}).await?;
+
+// OrderStatus migration
+// OrderStatus::PendingNew   → removed (Python-derived)
+// OrderStatus::PartiallyFilled → removed (same)
+// OrderStatus::PendingSubmit   → added (maps to server code 8)
+```
+
+### 设计原则
+
+- **Request struct 字段名 = 服务端 wire 真名**，Rust 字段天然 snake_case，无需额外 rename。Response struct 用 `#[serde(rename_all = "camelCase")]` 对齐服务端 camelCase 返回。
+- 所有 Request 字段 `Option<T>` + `#[serde(skip_serializing_if = "Option::is_none")]`；`account` / `account_id` 留 None 时自动填充 client 初始化的默认账户。
+
+## [0.3.1] - 2026-05-07
+
+### Added
+
+- `OrderStatusData` push message: new fields `updateTime` (field 44, timestamp ms of order info update) and `latestTime` (field 45, timestamp ms of order status update). Generated automatically by `build.rs` via `prost-build`.
+
 ## [0.3.0] - 2026-05-06
 
 ### Changed (BREAKING)
