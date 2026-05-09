@@ -82,18 +82,44 @@ pub enum OrderType {
     Oca,
 }
 
-/// 订单状态枚举
+/// 订单状态枚举（对齐 Java SDK OrderStatus.java）
+///
+/// 服务端 code 映射：Invalid(-2), Initial(-1), PendingCancel(3),
+/// Cancelled(4), Submitted(5), Filled(6), Inactive(7), PendingSubmit(8)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OrderStatus {
-    PendingNew,
-    Initial,
-    Submitted,
-    PartiallyFilled,
-    Filled,
-    Cancelled,
-    PendingCancel,
-    Inactive,
+    #[serde(rename = "Invalid")]
     Invalid,
+    #[serde(rename = "Initial")]
+    Initial,
+    #[serde(rename = "PendingCancel")]
+    PendingCancel,
+    #[serde(rename = "Cancelled")]
+    Cancelled,
+    #[serde(rename = "Submitted")]
+    Submitted,
+    #[serde(rename = "Filled")]
+    Filled,
+    #[serde(rename = "Inactive")]
+    Inactive,
+    #[serde(rename = "PendingSubmit")]
+    PendingSubmit,
+}
+
+impl OrderStatus {
+    /// 返回服务端数字码
+    pub fn code(&self) -> i32 {
+        match self {
+            OrderStatus::Invalid => -2,
+            OrderStatus::Initial => -1,
+            OrderStatus::PendingCancel => 3,
+            OrderStatus::Cancelled => 4,
+            OrderStatus::Submitted => 5,
+            OrderStatus::Filled => 6,
+            OrderStatus::Inactive => 7,
+            OrderStatus::PendingSubmit => 8,
+        }
+    }
 }
 
 /// K 线周期枚举
@@ -154,6 +180,89 @@ pub enum License {
     Tbau,
     #[serde(rename = "TBUS")]
     Tbus,
+    #[serde(rename = "TBMS")]
+    Tbms,
+}
+
+/// 订单排序字段枚举
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum OrderSortBy {
+    #[serde(rename = "LATEST_CREATED")]
+    LatestCreated,
+    #[serde(rename = "LATEST_STATUS_UPDATED")]
+    LatestStatusUpdated,
+}
+
+/// 账户分部类型枚举
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SegmentType {
+    #[serde(rename = "ALL")]
+    All,
+    #[serde(rename = "SEC")]
+    Sec,
+    #[serde(rename = "FUT")]
+    Fut,
+    #[serde(rename = "FUND")]
+    Fund,
+}
+
+/// 公司行动类型枚举
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CorporateActionType {
+    #[serde(rename = "split")]
+    Split,
+    #[serde(rename = "dividend")]
+    Dividend,
+    #[serde(rename = "earning")]
+    Earning,
+}
+
+/// 行业级别枚举（1~4 级）
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum IndustryLevel {
+    #[serde(rename = "GSECTOR")]
+    GSector,
+    #[serde(rename = "GGROUP")]
+    GGroup,
+    #[serde(rename = "GIND")]
+    GInd,
+    #[serde(rename = "GSUBIND")]
+    GSubInd,
+}
+
+/// 排序方向枚举
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SortDirection {
+    #[serde(rename = "SortDir_No")]
+    No,
+    #[serde(rename = "SortDir_Ascend")]
+    Ascend,
+    #[serde(rename = "SortDir_Descend")]
+    Descend,
+}
+
+/// 期权分析周期枚举
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum OptionAnalysisPeriod {
+    #[serde(rename = "3year")]
+    ThreeYear,
+    #[serde(rename = "52week")]
+    FiftyTwoWeek,
+    #[serde(rename = "26week")]
+    TwentySixWeek,
+    #[serde(rename = "13week")]
+    ThirteenWeek,
+}
+
+/// 财报类型枚举
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum FinancialReportPeriod {
+    #[serde(rename = "Annual")]
+    Annual,
+    #[serde(rename = "Quarterly")]
+    Quarterly,
+    #[serde(rename = "LTM")]
+    Ltm,
 }
 
 /// 订单有效期枚举
@@ -259,22 +368,38 @@ mod tests {
 
     #[test]
     fn test_order_status_serialize() {
-        assert_eq!(serde_json::to_string(&OrderStatus::PendingNew).unwrap(), "\"PendingNew\"");
-        assert_eq!(serde_json::to_string(&OrderStatus::Initial).unwrap(), "\"Initial\"");
-        assert_eq!(serde_json::to_string(&OrderStatus::Submitted).unwrap(), "\"Submitted\"");
-        assert_eq!(serde_json::to_string(&OrderStatus::PartiallyFilled).unwrap(), "\"PartiallyFilled\"");
-        assert_eq!(serde_json::to_string(&OrderStatus::Filled).unwrap(), "\"Filled\"");
-        assert_eq!(serde_json::to_string(&OrderStatus::Cancelled).unwrap(), "\"Cancelled\"");
-        assert_eq!(serde_json::to_string(&OrderStatus::PendingCancel).unwrap(), "\"PendingCancel\"");
-        assert_eq!(serde_json::to_string(&OrderStatus::Inactive).unwrap(), "\"Inactive\"");
         assert_eq!(serde_json::to_string(&OrderStatus::Invalid).unwrap(), "\"Invalid\"");
+        assert_eq!(serde_json::to_string(&OrderStatus::Initial).unwrap(), "\"Initial\"");
+        assert_eq!(serde_json::to_string(&OrderStatus::PendingCancel).unwrap(), "\"PendingCancel\"");
+        assert_eq!(serde_json::to_string(&OrderStatus::Cancelled).unwrap(), "\"Cancelled\"");
+        assert_eq!(serde_json::to_string(&OrderStatus::Submitted).unwrap(), "\"Submitted\"");
+        assert_eq!(serde_json::to_string(&OrderStatus::Filled).unwrap(), "\"Filled\"");
+        assert_eq!(serde_json::to_string(&OrderStatus::Inactive).unwrap(), "\"Inactive\"");
+        assert_eq!(serde_json::to_string(&OrderStatus::PendingSubmit).unwrap(), "\"PendingSubmit\"");
     }
 
     #[test]
     fn test_order_status_deserialize() {
-        assert_eq!(serde_json::from_str::<OrderStatus>("\"PendingNew\"").unwrap(), OrderStatus::PendingNew);
-        assert_eq!(serde_json::from_str::<OrderStatus>("\"Filled\"").unwrap(), OrderStatus::Filled);
+        assert_eq!(serde_json::from_str::<OrderStatus>("\"Invalid\"").unwrap(), OrderStatus::Invalid);
+        assert_eq!(serde_json::from_str::<OrderStatus>("\"Initial\"").unwrap(), OrderStatus::Initial);
+        assert_eq!(serde_json::from_str::<OrderStatus>("\"PendingCancel\"").unwrap(), OrderStatus::PendingCancel);
         assert_eq!(serde_json::from_str::<OrderStatus>("\"Cancelled\"").unwrap(), OrderStatus::Cancelled);
+        assert_eq!(serde_json::from_str::<OrderStatus>("\"Submitted\"").unwrap(), OrderStatus::Submitted);
+        assert_eq!(serde_json::from_str::<OrderStatus>("\"Filled\"").unwrap(), OrderStatus::Filled);
+        assert_eq!(serde_json::from_str::<OrderStatus>("\"Inactive\"").unwrap(), OrderStatus::Inactive);
+        assert_eq!(serde_json::from_str::<OrderStatus>("\"PendingSubmit\"").unwrap(), OrderStatus::PendingSubmit);
+    }
+
+    #[test]
+    fn test_order_status_code() {
+        assert_eq!(OrderStatus::Invalid.code(), -2);
+        assert_eq!(OrderStatus::Initial.code(), -1);
+        assert_eq!(OrderStatus::PendingCancel.code(), 3);
+        assert_eq!(OrderStatus::Cancelled.code(), 4);
+        assert_eq!(OrderStatus::Submitted.code(), 5);
+        assert_eq!(OrderStatus::Filled.code(), 6);
+        assert_eq!(OrderStatus::Inactive.code(), 7);
+        assert_eq!(OrderStatus::PendingSubmit.code(), 8);
     }
 
     // ========== BarPeriod 枚举测试 ==========
@@ -337,12 +462,46 @@ mod tests {
         assert_eq!(serde_json::to_string(&License::Tbhk).unwrap(), "\"TBHK\"");
         assert_eq!(serde_json::to_string(&License::Tbau).unwrap(), "\"TBAU\"");
         assert_eq!(serde_json::to_string(&License::Tbus).unwrap(), "\"TBUS\"");
+        assert_eq!(serde_json::to_string(&License::Tbms).unwrap(), "\"TBMS\"");
     }
 
     #[test]
     fn test_license_deserialize() {
         assert_eq!(serde_json::from_str::<License>("\"TBNZ\"").unwrap(), License::Tbnz);
         assert_eq!(serde_json::from_str::<License>("\"TBHK\"").unwrap(), License::Tbhk);
+        assert_eq!(serde_json::from_str::<License>("\"TBMS\"").unwrap(), License::Tbms);
+    }
+
+    // ========== 新增枚举测试 ==========
+
+    #[test]
+    fn test_new_enums_serialize() {
+        assert_eq!(serde_json::to_string(&OrderSortBy::LatestCreated).unwrap(), "\"LATEST_CREATED\"");
+        assert_eq!(serde_json::to_string(&OrderSortBy::LatestStatusUpdated).unwrap(), "\"LATEST_STATUS_UPDATED\"");
+        assert_eq!(serde_json::to_string(&SegmentType::Sec).unwrap(), "\"SEC\"");
+        assert_eq!(serde_json::to_string(&SegmentType::Fund).unwrap(), "\"FUND\"");
+        assert_eq!(serde_json::to_string(&CorporateActionType::Split).unwrap(), "\"split\"");
+        assert_eq!(serde_json::to_string(&CorporateActionType::Dividend).unwrap(), "\"dividend\"");
+        assert_eq!(serde_json::to_string(&IndustryLevel::GSector).unwrap(), "\"GSECTOR\"");
+        assert_eq!(serde_json::to_string(&IndustryLevel::GSubInd).unwrap(), "\"GSUBIND\"");
+        assert_eq!(serde_json::to_string(&SortDirection::No).unwrap(), "\"SortDir_No\"");
+        assert_eq!(serde_json::to_string(&SortDirection::Ascend).unwrap(), "\"SortDir_Ascend\"");
+        assert_eq!(serde_json::to_string(&SortDirection::Descend).unwrap(), "\"SortDir_Descend\"");
+        assert_eq!(serde_json::to_string(&OptionAnalysisPeriod::ThreeYear).unwrap(), "\"3year\"");
+        assert_eq!(serde_json::to_string(&OptionAnalysisPeriod::FiftyTwoWeek).unwrap(), "\"52week\"");
+        assert_eq!(serde_json::to_string(&FinancialReportPeriod::Annual).unwrap(), "\"Annual\"");
+        assert_eq!(serde_json::to_string(&FinancialReportPeriod::Ltm).unwrap(), "\"LTM\"");
+    }
+
+    #[test]
+    fn test_new_enums_deserialize() {
+        assert_eq!(serde_json::from_str::<OrderSortBy>("\"LATEST_CREATED\"").unwrap(), OrderSortBy::LatestCreated);
+        assert_eq!(serde_json::from_str::<SegmentType>("\"SEC\"").unwrap(), SegmentType::Sec);
+        assert_eq!(serde_json::from_str::<CorporateActionType>("\"split\"").unwrap(), CorporateActionType::Split);
+        assert_eq!(serde_json::from_str::<IndustryLevel>("\"GSECTOR\"").unwrap(), IndustryLevel::GSector);
+        assert_eq!(serde_json::from_str::<SortDirection>("\"SortDir_Descend\"").unwrap(), SortDirection::Descend);
+        assert_eq!(serde_json::from_str::<OptionAnalysisPeriod>("\"52week\"").unwrap(), OptionAnalysisPeriod::FiftyTwoWeek);
+        assert_eq!(serde_json::from_str::<FinancialReportPeriod>("\"LTM\"").unwrap(), FinancialReportPeriod::Ltm);
     }
 
     // ========== TimeInForce 枚举测试 ==========

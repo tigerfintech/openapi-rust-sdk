@@ -5,7 +5,11 @@ pub mod contract;
 pub mod order;
 pub mod position;
 pub mod quote;
+pub mod quote_requests;
 pub mod trade;
+pub mod trade_requests;
+pub use quote_requests::*;
+pub use trade_requests::*;
 
 // Re-export commonly used types at the model module root.
 pub use contract::{
@@ -19,15 +23,28 @@ pub use order::{
 };
 pub use position::Position;
 pub use quote::{
-    Brief, CapitalDistribution, CapitalFlow, CapitalFlowItem, CorporateAction, CorporateActionRequest,
-    Depth, DepthLevel, FinancialDailyItem, FinancialDailyRequest, FinancialReportItem,
-    FinancialReportRequest, FutureContractInfo, FutureExchange, FutureKline, FutureKlineItem,
-    FutureKlineRequest, FutureQuote, Kline, KlineItem, MarketScannerRequest, MarketState,
-    OptionBrief, OptionChain, OptionChainRow, OptionExpiration, OptionKline, OptionLeg as OptionChainLeg,
-    QuotePermission, ScannerDataRow, ScannerResult, ScannerResultItem, Timeline, TimelineBucket,
-    TimelineItem, TradeTick, TradeTickItem,
+    Brief, BrokerDetail, CapitalDistribution, CapitalFlow, CapitalFlowItem, CorporateAction,
+    CorporateActionRequest, Depth, DepthLevel, ExchangeRate, FinancialCurrency,
+    FinancialDailyItem, FinancialDailyRequest, FinancialReportItem, FinancialReportRequest,
+    FundContractInfo, FundHistoryQuote, FundQuote,
+    FutureContractInfo, FutureDepth, FutureExchange, FutureKline, FutureKlineItem,
+    FutureKlineRequest, FutureMainContractHistory, FutureQuote,
+    FutureTradingSegment, FutureTradingTime, FutureTradeTickItem,
+    IndustryItem, IndustryStock,
+    Kline, KlineItem, KlineQuota, KlineQuotaDetail,
+    MarketScannerRequest, MarketScannerTag, MarketScannerTags, MarketState,
+    OptionAnalysis, OptionBrief, OptionChain, OptionChainRow, OptionExpiration, OptionKline,
+    OptionLeg as OptionChainLeg, OptionSymbol, OptionVolatilityPoint,
+    QuoteOvernight, QuotePermission,
+    ScannerDataRow, ScannerResult, ScannerResultItem,
+    ShortInterest, StockBroker, StockBrokerItem, StockDetail, StockFundamental, StockIndustry,
+    SymbolName, Timeline, TimelineBucket, TimelineItem, TradeTick, TradeRankItem, TradeTickItem,
+    TradingCalendarItem, WarrantBrief, WarrantFilterResult,
 };
 pub use trade::{
-    Asset, AssetSegment, CurrencyAsset, OrderIdResult, PlaceOrderResult, PreviewResult, PrimeAsset,
-    PrimeAssetSegment, Transaction,
+    AggregateAssets, AnalyticsAsset, Asset, AssetSegment, CurrencyAsset, EstimateTradableQuantity,
+    ForexOrderResult, FundDetails, FundingHistoryItem, ManagedAccount, OrderIdResult,
+    PlaceOrderResult, PositionTransferDetail, PositionTransferExternalRecord,
+    PositionTransferRecord, PreviewResult, PrimeAsset, PrimeAssetSegment, SegmentFund,
+    SegmentFundHistoryItem, Transaction, TransferItemResponse,
 };

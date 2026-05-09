@@ -235,6 +235,275 @@ pub struct Transaction {
     pub time: i64,
 }
 
+/// 机构子账户信息（来自 /accounts）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ManagedAccount {
+    #[serde(default)]
+    pub account: String,
+    #[serde(default)]
+    pub account_type: String,
+    #[serde(default)]
+    pub capability: String,
+    #[serde(default)]
+    pub status: String,
+}
+
+/// 资产分析（按日）条目。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalyticsAsset {
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub holding_value: f64,
+    #[serde(default)]
+    pub cash_balance: f64,
+    #[serde(default)]
+    pub pnl: f64,
+    #[serde(default)]
+    pub pnl_rate: f64,
+    #[serde(default)]
+    pub net_value_index: f64,
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub seg_type: String,
+}
+
+/// 综合账户总览。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AggregateAssets {
+    #[serde(default)]
+    pub account_id: String,
+    #[serde(default)]
+    pub net_liquidation: f64,
+    #[serde(default)]
+    pub gross_position_value: f64,
+    #[serde(default)]
+    pub cash_balance: f64,
+    #[serde(default)]
+    pub base_currency: String,
+    #[serde(default)]
+    pub currency_assets: Vec<CurrencyAsset>,
+}
+
+/// 可交易数量估算结果。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EstimateTradableQuantity {
+    #[serde(default)]
+    pub tradable_quantity: f64,
+    #[serde(default)]
+    pub max_cash_buy_quantity: f64,
+    #[serde(default)]
+    pub max_margin_buy_quantity: f64,
+    #[serde(default)]
+    pub max_short_sell_quantity: f64,
+    #[serde(default)]
+    pub max_position_sell_quantity: f64,
+    #[serde(default)]
+    pub cash_buying_power: f64,
+    #[serde(default)]
+    pub currency: String,
+}
+
+/// 外汇下单返回结果。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ForexOrderResult {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub source_currency: String,
+    #[serde(default)]
+    pub target_currency: String,
+    #[serde(default)]
+    pub source_amount: f64,
+    #[serde(default)]
+    pub target_amount: f64,
+    #[serde(default)]
+    pub rate: f64,
+    #[serde(default)]
+    pub submit_time: i64,
+}
+
+/// 子账户资金调拨（查询可用 / 执行转账 的共用响应结构）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SegmentFund {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub from_segment: String,
+    #[serde(default)]
+    pub to_segment: String,
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub amount: f64,
+    #[serde(default)]
+    pub available_amount: f64,
+    #[serde(default)]
+    pub submit_time: i64,
+}
+
+/// 资金调拨历史条目。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SegmentFundHistoryItem {
+    #[serde(default)]
+    pub id: Option<i64>,
+    #[serde(default)]
+    pub from_segment: String,
+    #[serde(default)]
+    pub to_segment: String,
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub amount: f64,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub submit_time: i64,
+    #[serde(default)]
+    pub update_time: i64,
+}
+
+/// 资金明细条目（/fund_details）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FundDetails {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub account: String,
+    #[serde(default)]
+    pub seg_type: String,
+    #[serde(default)]
+    pub fund_type: String,
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub amount: f64,
+    #[serde(default)]
+    pub balance: f64,
+    #[serde(default)]
+    pub occur_time: i64,
+    #[serde(default)]
+    pub remark: String,
+    #[serde(default)]
+    pub external_id: String,
+}
+
+/// 调拨记录（/transfer_fund）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FundingHistoryItem {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub seg_type: String,
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub amount: f64,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub submit_time: i64,
+    #[serde(default)]
+    pub update_time: i64,
+}
+
+/// 内部转股单项（响应结构，含 camelCase 反序列化）。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct TransferItemResponse {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub quantity: i64,
+    #[serde(default)]
+    pub expiry: String,
+    #[serde(default)]
+    pub strike: String,
+    #[serde(default)]
+    pub right: String,
+    #[serde(default)]
+    pub sec_type: String,
+}
+
+/// 内部转股记录。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionTransferRecord {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub from_account: String,
+    #[serde(default)]
+    pub to_account: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub submit_time: i64,
+    #[serde(default)]
+    pub transfers: Option<Vec<TransferItemResponse>>,
+}
+
+/// 内部转股详情。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionTransferDetail {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub from_account: String,
+    #[serde(default)]
+    pub to_account: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub submit_time: i64,
+    #[serde(default)]
+    pub update_time: i64,
+    #[serde(default)]
+    pub transfers: Vec<TransferItemResponse>,
+    #[serde(default)]
+    pub remark: String,
+}
+
+/// 外部转股记录。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionTransferExternalRecord {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub quantity: i64,
+    #[serde(default)]
+    pub direction: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub submit_time: i64,
+    #[serde(default)]
+    pub update_time: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

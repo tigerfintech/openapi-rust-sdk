@@ -16,7 +16,10 @@ use tigeropen::push::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ClientConfig::builder().build()?; // auto-discovers config
+    let config = match std::env::var("TIGER_CONFIG_PATH") {
+        Ok(path) => ClientConfig::builder().properties_file(&path).build()?,
+        Err(_) => ClientConfig::builder().build()?,
+    };
     println!("tiger_id: {}, account: {}", config.tiger_id, config.account);
 
     let account = config.account.clone();

@@ -16,6 +16,9 @@ use crate::model::quote::{
     CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest, FutureKlineRequest,
     MarketScannerRequest,
 };
+use crate::model::quote_requests::{
+    BriefRequest, DepthQuoteRequest, FutureBriefRequest, TradeTickRequest,
+};
 
 fn cached_test_private_key() -> &'static str {
     static KEY: OnceLock<String> = OnceLock::new();
@@ -105,7 +108,13 @@ async fn test_get_brief_parses_typed() {
     let http = HttpClient::new(test_config(&server.uri()));
     let qc = QuoteClient::new(&http);
 
-    let briefs = qc.get_brief(&["AAPL"]).await.unwrap();
+    let briefs = qc
+        .get_brief(BriefRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     assert_eq!(briefs.len(), 1);
     assert_eq!(briefs[0].symbol, "AAPL");
     assert_eq!(briefs[0].latest_price, 150.0);
@@ -137,7 +146,14 @@ async fn test_get_quote_depth_parses_typed() {
     let http = HttpClient::new(test_config(&server.uri()));
     let qc = QuoteClient::new(&http);
 
-    let d = qc.get_quote_depth("AAPL", "US").await.unwrap();
+    let d = qc
+        .get_quote_depth(DepthQuoteRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            market: Some("US".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     assert_eq!(d.len(), 1);
     assert_eq!(d[0].symbol, "AAPL");
     assert_eq!(d[0].asks[0].price, 150.0);
@@ -240,11 +256,16 @@ async fn test_get_brief_uses_method_brief() {
     let server = mock_success_server(r#"[]"#).await;
     let http = HttpClient::new(test_config(&server.uri()));
     let qc = QuoteClient::new(&http);
-    let _ = qc.get_brief(&["AAPL"]).await;
+    let _ = qc
+        .get_brief(BriefRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
 
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
-    assert_eq!(req["method"].as_str().unwrap(), "brief");
+    assert_eq!(req["method"].as_str().unwrap(), "quote_real_time");
 }
 
 #[tokio::test]
@@ -266,7 +287,12 @@ async fn test_get_future_real_time_quote_sends_contract_codes() {
     let server = mock_success_server(r#"[]"#).await;
     let http = HttpClient::new(test_config(&server.uri()));
     let qc = QuoteClient::new(&http);
-    let _ = qc.get_future_real_time_quote(&["CL2609"]).await;
+    let _ = qc
+        .get_future_real_time_quote(FutureBriefRequest {
+            contract_codes: Some(vec!["CL2609".into()]),
+            ..Default::default()
+        })
+        .await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);

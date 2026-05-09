@@ -3,16 +3,26 @@
 //! Config is auto-discovered from:
 //!   1. ./tiger_openapi_config.properties
 //!   2. ~/.tigeropen/tiger_openapi_config.properties
+//!   TIGER_CONFIG_PATH env var overrides both.
 //!
 //! Individual failures do not abort subsequent calls; a final PASS/FAIL/SKIP summary is printed.
 //!
-//! Run: `cargo run --example quote_example`
+//! Run: `TIGER_CONFIG_PATH=~/.tigeropen/tiger_openapi_config.properties cargo run --example quote_example`
 
 use tigeropen::client::http_client::HttpClient;
 use tigeropen::config::ClientConfig;
 use tigeropen::model::quote::{
     CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest, FutureKlineRequest,
     MarketScannerRequest,
+};
+use tigeropen::model::quote_requests::{
+    AllFutureContractsRequest, BarsRequest, BriefRequest, DepthQuoteRequest,
+    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureBarsRequest, FutureBriefRequest,
+    FutureContractSingleRequest, FutureDepthRequest, FutureTradingTimesRequest,
+    FundSymbolsRequest, IndustryListRequest, KlineQuotaRequest,
+    QuoteOvernightRequest, QuotePermissionRequest, StockDetailsRequest, StockIndustryRequest,
+    TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
+    TradingCalendarRequest,
 };
 use tigeropen::quote::QuoteClient;
 
@@ -30,19 +40,19 @@ struct RunResult {
 
 fn ok(results: &mut Vec<RunResult>, name: &str, note: impl Into<String>) {
     let note = note.into();
-    println!("[ OK ] {:<36} {}", name, truncate(&note, 140));
+    println!("[ OK ] {:<42} {}", name, truncate(&note, 140));
     results.push(RunResult { name: name.into(), outcome: Outcome::Pass, detail: note });
 }
 
 fn fail(results: &mut Vec<RunResult>, name: &str, err: impl std::fmt::Display) {
     let detail = format!("{}", err);
-    println!("[FAIL] {:<36} {}", name, detail);
+    println!("[FAIL] {:<42} {}", name, detail);
     results.push(RunResult { name: name.into(), outcome: Outcome::Fail, detail });
 }
 
 fn skip(results: &mut Vec<RunResult>, name: &str, reason: impl Into<String>) {
     let reason = reason.into();
-    println!("[SKIP] {:<36} {}", name, reason);
+    println!("[SKIP] {:<42} {}", name, reason);
     results.push(RunResult { name: name.into(), outcome: Outcome::Skip, detail: reason });
 }
 
@@ -80,7 +90,10 @@ fn print_summary(results: &[RunResult]) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ClientConfig::builder().build()?;
+    let config = match std::env::var("TIGER_CONFIG_PATH") {
+        Ok(path) => ClientConfig::builder().properties_file(&path).build()?,
+        Err(_) => ClientConfig::builder().build()?,
+    };
     println!("tiger_id={} account={}\n", config.tiger_id, config.account);
 
     let http = HttpClient::with_quote_server(config);
@@ -102,7 +115,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "GetMarketState(US)", e),
     }
 
-    match qc.get_brief(&["AAPL", "TSLA"]).await {
+    // v0.4.0 new signature: BriefRequest
+    match qc
+        .get_brief(BriefRequest {
+            symbols: Some(vec!["AAPL".to_string(), "TSLA".to_string()]),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(briefs) => {
             let s: Vec<String> = briefs
                 .iter()
@@ -136,7 +156,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "GetTimeline", e),
     }
 
-    match qc.get_trade_tick(&["AAPL"]).await {
+    // v0.4.0 new signature: TradeTickRequest
+    match qc
+        .get_trade_tick(TradeTickRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(tt) if !tt.is_empty() => ok(
             &mut results,
             "GetTradeTick",
@@ -146,7 +173,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "GetTradeTick", e),
     }
 
-    match qc.get_quote_depth("AAPL", "US").await {
+    // v0.4.0 new signature: DepthQuoteRequest
+    match qc
+        .get_quote_depth(DepthQuoteRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            market: Some("US".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(d) if !d.is_empty() => ok(
             &mut results,
             "GetQuoteDepth(AAPL)",
@@ -154,6 +189,157 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
         Ok(_) => ok(&mut results, "GetQuoteDepth(AAPL)", "(empty)"),
         Err(e) => fail(&mut results, "GetQuoteDepth(AAPL)", e),
+    }
+
+    println!("\n=== v0.4.0 股票基础 smoke ===");
+
+    match qc
+        .get_symbols(tigeropen::model::quote_requests::SymbolsRequest {
+            market: Some("US".to_string()),
+            sec_type: Some("STK".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(syms) => ok(&mut results, "GetSymbols(US STK)", format!("count={}", syms.len())),
+        Err(e) => fail(&mut results, "GetSymbols(US STK)", e),
+    }
+
+    match qc
+        .get_symbol_names(tigeropen::model::quote_requests::SymbolsRequest {
+            market: Some("US".to_string()),
+            sec_type: Some("STK".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(names) => ok(&mut results, "GetSymbolNames(US STK)", format!("count={}", names.len())),
+        Err(e) => fail(&mut results, "GetSymbolNames(US STK)", e),
+    }
+
+    match qc
+        .get_trade_metas(TradeMetasRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(metas) => ok(&mut results, "GetTradeMetas(AAPL)", format!("count={}", metas.len())),
+        Err(e) => fail(&mut results, "GetTradeMetas(AAPL)", e),
+    }
+
+    match qc
+        .get_stock_details(StockDetailsRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(details) if !details.is_empty() => ok(
+            &mut results,
+            "GetStockDetails(AAPL)",
+            format!("symbol={}", details[0].symbol),
+        ),
+        Ok(_) => ok(&mut results, "GetStockDetails(AAPL)", "(empty)"),
+        Err(e) => fail(&mut results, "GetStockDetails(AAPL)", e),
+    }
+
+    match qc
+        .get_stock_delay_briefs(tigeropen::model::quote_requests::StockDelayBriefsRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(briefs) => ok(
+            &mut results,
+            "GetStockDelayBriefs(AAPL)",
+            format!("count={}", briefs.len()),
+        ),
+        Err(e) => fail(&mut results, "GetStockDelayBriefs(AAPL)", e),
+    }
+
+    match qc
+        .get_bars(BarsRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            period: Some("day".to_string()),
+            limit: Some(5),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(ks) if !ks.is_empty() => ok(
+            &mut results,
+            "GetBars(AAPL day)",
+            format!("bars={}", ks[0].items.len()),
+        ),
+        Ok(_) => ok(&mut results, "GetBars(AAPL day)", "(empty)"),
+        Err(e) => fail(&mut results, "GetBars(AAPL day)", e),
+    }
+
+    match qc
+        .get_timeline_history(TimelineHistoryRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            date: Some("2026-05-06".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(tl) if !tl.is_empty() => ok(
+            &mut results,
+            "GetTimelineHistory(AAPL)",
+            format!("count={}", tl.len()),
+        ),
+        Ok(_) => ok(&mut results, "GetTimelineHistory(AAPL)", "(empty)"),
+        Err(e) => fail(&mut results, "GetTimelineHistory(AAPL)", e),
+    }
+
+    match qc
+        .get_trade_rank(TradeRankRequest {
+            market: Some("US".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(&mut results, "GetTradeRank(US)", format!("count={}", items.len())),
+        Err(e) => fail(&mut results, "GetTradeRank(US)", e),
+    }
+
+    match qc
+        .get_stock_industry(StockIndustryRequest {
+            symbol: Some("AAPL".to_string()),
+            market: Some("US".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(industries) => ok(
+            &mut results,
+            "GetStockIndustry(AAPL)",
+            format!("count={}", industries.len()),
+        ),
+        Err(e) => fail(&mut results, "GetStockIndustry(AAPL)", e),
+    }
+
+    match qc
+        .get_quote_permission(QuotePermissionRequest {
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(perms) => ok(&mut results, "GetQuotePermission", format!("count={}", perms.len())),
+        Err(e) => fail(&mut results, "GetQuotePermission", e),
+    }
+
+    match qc
+        .get_kline_quota(KlineQuotaRequest {
+            with_details: Some(false),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(quotas) => ok(&mut results, "GetKlineQuota", format!("count={}", quotas.len())),
+        Err(e) => fail(&mut results, "GetKlineQuota", e),
     }
 
     println!("\n=== Options ===");
@@ -272,8 +458,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if contract_code.is_empty() {
         skip(&mut results, "GetFutureRealTimeQuote", "no contract");
         skip(&mut results, "GetFutureKline", "no contract");
+        skip(&mut results, "GetFutureContract", "no contract");
+        skip(&mut results, "GetAllFutureContracts", "no contract");
+        skip(&mut results, "GetCurrentFutureContract", "no contract");
+        skip(&mut results, "GetFutureBars", "no contract");
+        skip(&mut results, "GetFutureDepth", "no contract");
+        skip(&mut results, "GetFutureTradingTimes", "no contract");
     } else {
-        match qc.get_future_real_time_quote(&[contract_code.as_str()]).await {
+        // v0.4.0 new signature: FutureBriefRequest
+        match qc
+            .get_future_real_time_quote(FutureBriefRequest {
+                contract_codes: Some(vec![contract_code.clone()]),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(q) if !q.is_empty() => ok(
                 &mut results,
                 "GetFutureRealTimeQuote",
@@ -310,6 +509,131 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 e,
             ),
         }
+
+        // GetFutureContract (single by contract_code)
+        match qc
+            .get_future_contract(FutureContractSingleRequest {
+                contract_code: Some(contract_code.clone()),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(cs) => ok(
+                &mut results,
+                &format!("GetFutureContract({})", contract_code),
+                format!("count={}", cs.len()),
+            ),
+            Err(e) => fail(&mut results, &format!("GetFutureContract({})", contract_code), e),
+        }
+
+        // GetAllFutureContracts — type is the product code e.g. "MEUR" extracted from contract_code
+        let product_code: String = contract_code
+            .trim_end_matches(|c: char| c.is_ascii_digit())
+            .to_string();
+        match qc.get_all_future_contracts(AllFutureContractsRequest {
+            contract_type: Some(product_code.clone()),
+            ..Default::default()
+        }).await {
+            Ok(cs) => ok(&mut results, "GetAllFutureContracts", format!("count={}", cs.len())),
+            Err(e) => fail(&mut results, "GetAllFutureContracts", e),
+        }
+
+        // GetCurrentFutureContract
+        match qc
+            .get_current_future_contract(FutureContractSingleRequest {
+                contract_code: Some(contract_code.clone()),
+                contract_type: Some(product_code.clone()),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(Some(c)) => ok(
+                &mut results,
+                "GetCurrentFutureContract",
+                format!("code={}", c.contract_code),
+            ),
+            Ok(None) => ok(&mut results, "GetCurrentFutureContract", "(empty)"),
+            Err(e) => fail(&mut results, "GetCurrentFutureContract", e),
+        }
+
+        // GetFutureBars
+        match qc
+            .get_future_bars(FutureBarsRequest {
+                contract_codes: Some(vec![contract_code.clone()]),
+                period: Some("day".to_string()),
+                begin_time: Some(-1),
+                end_time: Some(-1),
+                limit: Some(5),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(ks) if !ks.is_empty() => ok(
+                &mut results,
+                &format!("GetFutureBars({})", contract_code),
+                format!("bars={}", ks[0].items.len()),
+            ),
+            Ok(_) => ok(&mut results, &format!("GetFutureBars({})", contract_code), "(empty)"),
+            Err(e) => fail(&mut results, &format!("GetFutureBars({})", contract_code), e),
+        }
+
+        // GetFutureDepth
+        match qc
+            .get_future_depth(FutureDepthRequest {
+                contract_codes: Some(vec![contract_code.clone()]),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(ds) => ok(
+                &mut results,
+                "GetFutureDepth",
+                format!("count={}", ds.len()),
+            ),
+            Err(e) => fail(&mut results, "GetFutureDepth", e),
+        }
+
+        // GetFutureTradingTimes
+        match qc
+            .get_future_trading_times(FutureTradingTimesRequest {
+                contract_code: Some(contract_code.clone()),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(Some(t)) => ok(
+                &mut results,
+                "GetFutureTradingTimes",
+                format!("segments={}", t.trading_times.len()),
+            ),
+            Ok(None) => ok(&mut results, "GetFutureTradingTimes", "(empty)"),
+            Err(e) => fail(&mut results, "GetFutureTradingTimes", e),
+        }
+    }
+
+    println!("\n=== v0.4.0 期货扩展 smoke ===");
+    // (contract_code already set above; skip if empty was already handled)
+
+    println!("\n=== Fund ===");
+    match qc.get_fund_symbols(FundSymbolsRequest::default()).await {
+        Ok(syms) => ok(&mut results, "GetFundSymbols", format!("count={}", syms.len())),
+        Err(e) => fail(&mut results, "GetFundSymbols", e),
+    }
+
+    println!("\n=== Industry ===");
+    match qc
+        .get_industry_list(IndustryListRequest {
+            industry_level: Some("GSECTOR".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(industries) => ok(
+            &mut results,
+            "GetIndustryList(GSECTOR)",
+            format!("count={}", industries.len()),
+        ),
+        Err(e) => fail(&mut results, "GetIndustryList(GSECTOR)", e),
     }
 
     println!("\n=== Fundamentals & capital flow ===");
@@ -351,6 +675,97 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
         Ok(_) => ok(&mut results, "GetFinancialReport(AAPL)", "(empty)"),
         Err(e) => fail(&mut results, "GetFinancialReport(AAPL)", e),
+    }
+
+    // Financial currency
+    match qc
+        .get_financial_currency(FinancialCurrencyRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            market: Some("US".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(
+            &mut results,
+            "GetFinancialCurrency(AAPL)",
+            format!("count={}", items.len()),
+        ),
+        Err(e) => fail(&mut results, "GetFinancialCurrency(AAPL)", e),
+    }
+
+    // Financial exchange rate
+    match qc
+        .get_financial_exchange_rate(FinancialExchangeRateRequest {
+            currency_list: Some(vec!["USD".to_string(), "HKD".to_string()]),
+            begin_date: Some("2026-05-01".to_string()),
+            end_date: Some("2026-05-07".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(rates) => ok(
+            &mut results,
+            "GetFinancialExchangeRate",
+            format!("count={}", rates.len()),
+        ),
+        Err(e) => fail(&mut results, "GetFinancialExchangeRate", e),
+    }
+
+    // Trading calendar
+    match qc
+        .get_trading_calendar(TradingCalendarRequest {
+            market: Some("US".to_string()),
+            begin_date: Some("2026-05-01".to_string()),
+            end_date: Some("2026-05-31".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(
+            &mut results,
+            "GetTradingCalendar(US May)",
+            format!("count={}", items.len()),
+        ),
+        Err(e) => fail(&mut results, "GetTradingCalendar(US May)", e),
+    }
+
+    // Corporate split
+    match qc
+        .get_corporate_split(CorporateActionRequest {
+            symbols: vec!["AAPL".into()],
+            market: "US".into(),
+            action_type: "split".into(),
+            begin_date: "2020-01-01".into(),
+            end_date: "2026-05-07".into(),
+        })
+        .await
+    {
+        Ok(items) => ok(
+            &mut results,
+            "GetCorporateSplit(AAPL)",
+            format!("rows={}", items.len()),
+        ),
+        Err(e) => fail(&mut results, "GetCorporateSplit(AAPL)", e),
+    }
+
+    // Corporate dividend
+    match qc
+        .get_corporate_dividend(CorporateActionRequest {
+            symbols: vec!["AAPL".into()],
+            market: "US".into(),
+            action_type: "dividend".into(),
+            begin_date: "2024-01-01".into(),
+            end_date: "2024-12-31".into(),
+        })
+        .await
+    {
+        Ok(items) => ok(
+            &mut results,
+            "GetCorporateDividend(AAPL)",
+            format!("rows={}", items.len()),
+        ),
+        Err(e) => fail(&mut results, "GetCorporateDividend(AAPL)", e),
     }
 
     match qc
@@ -423,6 +838,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             format!("permissions={}", perms.len()),
         ),
         Err(e) => fail(&mut results, "GrabQuotePermission", e),
+    }
+
+    // GetQuoteOvernight
+    match qc
+        .get_quote_overnight(QuoteOvernightRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(&mut results, "GetQuoteOvernight(AAPL)", format!("count={}", items.len())),
+        Err(e) => fail(&mut results, "GetQuoteOvernight(AAPL)", e),
     }
 
     print_summary(&results);

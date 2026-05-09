@@ -13,6 +13,9 @@ use rsa::RsaPrivateKey;
 use crate::client::http_client::HttpClient;
 use crate::config::client_config::ClientConfig;
 use crate::model::order::limit_order;
+use crate::model::trade_requests::{
+    AssetsRequest, OrderTransactionsRequest, OrdersRequest, PositionsRequest,
+};
 
 fn cached_test_private_key() -> &'static str {
     static KEY: OnceLock<String> = OnceLock::new();
@@ -167,7 +170,7 @@ async fn test_get_orders_unwraps_items_typed() {
     let http = HttpClient::new(test_config(&server.uri()));
     let tc = TradeClient::new(&http, "test_account");
 
-    let orders = tc.get_orders().await.unwrap();
+    let orders = tc.get_orders(OrdersRequest::default()).await.unwrap();
     assert_eq!(orders.len(), 1);
     assert_eq!(orders[0].id, 1);
     assert_eq!(orders[0].order_id, 100);
@@ -181,7 +184,12 @@ async fn test_get_filled_orders_unwraps_items_typed() {
     let http = HttpClient::new(test_config(&server.uri()));
     let tc = TradeClient::new(&http, "test_account");
 
-    let orders = tc.get_filled_orders(0, 0).await.unwrap();
+    let req = OrdersRequest {
+        start_date: Some(0),
+        end_date: Some(0),
+        ..Default::default()
+    };
+    let orders = tc.get_filled_orders(req).await.unwrap();
     assert_eq!(orders.len(), 1);
     assert_eq!(orders[0].status, "Filled");
 }
@@ -195,7 +203,7 @@ async fn test_get_positions_unwraps_items_typed() {
     let http = HttpClient::new(test_config(&server.uri()));
     let tc = TradeClient::new(&http, "test_account");
 
-    let ps = tc.get_positions().await.unwrap();
+    let ps = tc.get_positions(PositionsRequest::default()).await.unwrap();
     assert_eq!(ps.len(), 1);
     assert_eq!(ps[0].symbol, Some("AAPL".to_string()));
     assert_eq!(ps[0].position, Some(100));
@@ -210,7 +218,7 @@ async fn test_get_assets_unwraps_items_typed() {
     let http = HttpClient::new(test_config(&server.uri()));
     let tc = TradeClient::new(&http, "test_account");
 
-    let assets = tc.get_assets().await.unwrap();
+    let assets = tc.get_assets(AssetsRequest::default()).await.unwrap();
     assert_eq!(assets.len(), 1);
     assert_eq!(assets[0].account, "DU123");
     assert_eq!(assets[0].buying_power, 10000.0);
@@ -225,7 +233,7 @@ async fn test_get_prime_assets_typed_no_items_wrap() {
     let http = HttpClient::new(test_config(&server.uri()));
     let tc = TradeClient::new(&http, "test_account");
 
-    let pa = tc.get_prime_assets().await.unwrap().expect("prime_assets");
+    let pa = tc.get_prime_assets(AssetsRequest::default()).await.unwrap().expect("prime_assets");
     assert_eq!(pa.account_id, "acc1");
     assert_eq!(pa.segments.len(), 1);
     assert_eq!(pa.segments[0].buying_power, 10000.0);
@@ -240,7 +248,13 @@ async fn test_get_order_transactions_unwraps_items_typed() {
     let http = HttpClient::new(test_config(&server.uri()));
     let tc = TradeClient::new(&http, "test_account");
 
-    let txs = tc.get_order_transactions(2, "AAPL", "STK").await.unwrap();
+    let req = OrderTransactionsRequest {
+        order_id: Some(2),
+        symbol: Some("AAPL".to_string()),
+        sec_type: Some("STK".to_string()),
+        ..Default::default()
+    };
+    let txs = tc.get_order_transactions(req).await.unwrap();
     assert_eq!(txs.len(), 1);
     assert_eq!(txs[0].order_id, 2);
     assert_eq!(txs[0].filled_quantity, 50);
@@ -344,7 +358,13 @@ async fn test_get_filled_orders_wire_snake_case_dates() {
     let server = mock_success_server(r#"{"items":[]}"#).await;
     let http = HttpClient::new(test_config(&server.uri()));
     let tc = TradeClient::new(&http, "test_account");
-    let _ = tc.get_filled_orders(1700000000000, 1710000000000).await;
+
+    let req = OrdersRequest {
+        start_date: Some(1700000000000),
+        end_date: Some(1710000000000),
+        ..Default::default()
+    };
+    let _ = tc.get_filled_orders(req).await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
@@ -358,7 +378,14 @@ async fn test_get_order_transactions_wire_snake_case() {
     let server = mock_success_server(r#"{"items":[]}"#).await;
     let http = HttpClient::new(test_config(&server.uri()));
     let tc = TradeClient::new(&http, "test_account");
-    let _ = tc.get_order_transactions(12345, "AAPL", "STK").await;
+
+    let req = OrderTransactionsRequest {
+        order_id: Some(12345),
+        symbol: Some("AAPL".to_string()),
+        sec_type: Some("STK".to_string()),
+        ..Default::default()
+    };
+    let _ = tc.get_order_transactions(req).await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
@@ -373,5 +400,5 @@ async fn test_trade_api_error() {
     let server = mock_error_server(1100, "交易操作失败").await;
     let http = HttpClient::new(test_config(&server.uri()));
     let tc = TradeClient::new(&http, "test_account");
-    assert!(tc.get_orders().await.is_err());
+    assert!(tc.get_orders(OrdersRequest::default()).await.is_err());
 }

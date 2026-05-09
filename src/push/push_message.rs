@@ -20,4 +20,8 @@ pub enum SubjectType {
     Position,
     Order,
     Transaction,
+    /// 数字货币行情
+    Cc,
+    /// 市场状态推送
+    Market,
 }

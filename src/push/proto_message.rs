@@ -120,6 +120,10 @@ pub fn subject_to_data_type(subject: &SubjectType) -> i32 {
         SubjectType::OptionTop => DataType::OptionTop as i32,
         SubjectType::Kline => DataType::Kline as i32,
         SubjectType::QuoteBbo => DataType::Quote as i32,
+        // Cc 使用独立的 DataType::Cc
+        SubjectType::Cc => DataType::Cc as i32,
+        // Market 状态推送复用 Quote dataType，通过 market 字段区分
+        SubjectType::Market => DataType::Quote as i32,
     }
 }
 
@@ -230,6 +234,8 @@ mod tests {
         assert_eq!(subject_to_data_type(&SubjectType::StockTop), DataType::StockTop as i32);
         assert_eq!(subject_to_data_type(&SubjectType::OptionTop), DataType::OptionTop as i32);
         assert_eq!(subject_to_data_type(&SubjectType::Kline), DataType::Kline as i32);
+        assert_eq!(subject_to_data_type(&SubjectType::Cc), DataType::Cc as i32);
+        assert_eq!(subject_to_data_type(&SubjectType::Market), DataType::Quote as i32);
     }
 
     // ===== Property-based tests using proptest =====

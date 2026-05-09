@@ -3,19 +3,26 @@
 //! Config is auto-discovered from:
 //!   1. ./tiger_openapi_config.properties
 //!   2. ~/.tigeropen/tiger_openapi_config.properties
+//!   TIGER_CONFIG_PATH env var overrides both.
 //!
 //! Executes a real low-price limit order: BUY 1 AAPL @ $1.00 (will not fill),
 //! immediately modifies the price, then cancels.
 //!
 //! Individual failures do not abort subsequent calls; a final PASS/FAIL/SKIP summary is printed.
 //!
-//! Run: `cargo run --example trade_example`
+//! Run: `TIGER_CONFIG_PATH=~/.tigeropen/tiger_openapi_config.properties cargo run --example trade_example`
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tigeropen::client::http_client::HttpClient;
 use tigeropen::config::ClientConfig;
 use tigeropen::model::order::limit_order;
+use tigeropen::model::trade_requests::{
+    AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, EstimateTradableQuantityRequest,
+    GetOrderRequest, ManagedAccountsRequest, OrderTransactionsRequest, OrdersRequest,
+    PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest, PositionsRequest,
+    SegmentFundRequest,
+};
 use tigeropen::trade::TradeClient;
 
 enum Outcome {
@@ -32,19 +39,19 @@ struct RunResult {
 
 fn ok(results: &mut Vec<RunResult>, name: &str, note: impl Into<String>) {
     let note = note.into();
-    println!("[ OK ] {:<40} {}", name, note);
+    println!("[ OK ] {:<50} {}", name, note);
     results.push(RunResult { name: name.into(), outcome: Outcome::Pass, detail: note });
 }
 
 fn fail(results: &mut Vec<RunResult>, name: &str, err: impl std::fmt::Display) {
     let detail = format!("{}", err);
-    println!("[FAIL] {:<40} {}", name, detail);
+    println!("[FAIL] {:<50} {}", name, detail);
     results.push(RunResult { name: name.into(), outcome: Outcome::Fail, detail });
 }
 
 fn skip(results: &mut Vec<RunResult>, name: &str, reason: impl Into<String>) {
     let reason = reason.into();
-    println!("[SKIP] {:<40} {}", name, reason);
+    println!("[SKIP] {:<50} {}", name, reason);
     results.push(RunResult { name: name.into(), outcome: Outcome::Skip, detail: reason });
 }
 
@@ -79,7 +86,11 @@ fn now_ms() -> i64 {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ClientConfig::builder().build()?;
+    // Support TIGER_CONFIG_PATH env var to avoid copying config files into the repo
+    let config = match std::env::var("TIGER_CONFIG_PATH") {
+        Ok(path) => ClientConfig::builder().properties_file(&path).build()?,
+        Err(_) => ClientConfig::builder().build()?,
+    };
     println!("tiger_id={} account={}\n", config.tiger_id, config.account);
 
     let account = config.account.clone();
@@ -124,7 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("\n=== 账户/持仓 查询 ===");
-    match tc.get_assets().await {
+    match tc.get_assets(AssetsRequest::default()).await {
         Ok(assets) if !assets.is_empty() => {
             let a = &assets[0];
             ok(
@@ -143,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "Assets", e),
     }
 
-    match tc.get_prime_assets().await {
+    match tc.get_prime_assets(AssetsRequest::default()).await {
         Ok(Some(pa)) => {
             let total_bp: f64 = pa.segments.iter().map(|s| s.buying_power).sum();
             ok(
@@ -161,7 +172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "PrimeAssets", e),
     }
 
-    match tc.get_positions().await {
+    match tc.get_positions(PositionsRequest::default()).await {
         Ok(ps) => {
             let total_mv: f64 = ps
                 .iter()
@@ -177,20 +188,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("\n=== 订单 查询 ===");
-    match tc.get_orders().await {
+    match tc.get_orders(OrdersRequest::default()).await {
         Ok(os) => ok(&mut results, "Orders", format!("count={}", os.len())),
         Err(e) => fail(&mut results, "Orders", e),
     }
-    match tc.get_active_orders().await {
+    match tc.get_active_orders(OrdersRequest::default()).await {
         Ok(os) => ok(&mut results, "ActiveOrders", format!("count={}", os.len())),
         Err(e) => fail(&mut results, "ActiveOrders", e),
     }
-    match tc.get_inactive_orders().await {
+    match tc.get_inactive_orders(OrdersRequest::default()).await {
         Ok(os) => ok(&mut results, "InactiveOrders", format!("count={}", os.len())),
         Err(e) => fail(&mut results, "InactiveOrders", e),
     }
     let now = now_ms();
-    match tc.get_filled_orders(now - 30 * 24 * 3600 * 1000, now).await {
+    match tc
+        .get_filled_orders(OrdersRequest {
+            start_date: Some(now - 30 * 24 * 3600 * 1000),
+            end_date: Some(now),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(os) => ok(
             &mut results,
             "FilledOrders",
@@ -199,19 +217,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "FilledOrders", e),
     }
 
+    // Fetch an existing order id for subsequent tests
     let mut existing_order_id: i64 = 0;
-    if let Ok(orders) = tc.get_orders().await {
+    if let Ok(orders) = tc.get_orders(OrdersRequest::default()).await {
         if !orders.is_empty() {
             existing_order_id = orders[0].id;
         }
     }
+
     if existing_order_id != 0 {
+        let name = format!("GetOrder({})", existing_order_id);
+        match tc
+            .get_order(GetOrderRequest {
+                id: Some(existing_order_id),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(Some(o)) => ok(&mut results, &name, format!("symbol={} status={:?}", o.symbol, o.status)),
+            Ok(None) => ok(&mut results, &name, "(empty)"),
+            Err(e) => fail(&mut results, &name, e),
+        }
+
         let name = format!("OrderTransactions({})", existing_order_id);
-        match tc.get_order_transactions(existing_order_id, "AAPL", "STK").await {
+        match tc
+            .get_order_transactions(OrderTransactionsRequest {
+                order_id: Some(existing_order_id),
+                symbol: Some("AAPL".to_string()),
+                sec_type: Some("STK".to_string()),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(txs) => ok(&mut results, &name, format!("count={}", txs.len())),
             Err(e) => fail(&mut results, &name, e),
         }
     } else {
+        skip(&mut results, "GetOrder", "no existing order");
         skip(&mut results, "OrderTransactions", "no existing order");
     }
 
@@ -268,6 +310,120 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             skip(&mut results, "ModifyOrder", "PlaceOrder failed");
             skip(&mut results, "CancelOrder", "PlaceOrder failed");
         }
+    }
+
+    println!("\n=== v0.4.0 新增 smoke tests ===");
+
+    // ManagedAccounts
+    match tc.get_managed_accounts(ManagedAccountsRequest::default()).await {
+        Ok(accs) => ok(&mut results, "ManagedAccounts", format!("count={}", accs.len())),
+        Err(e) => fail(&mut results, "ManagedAccounts", e),
+    }
+
+    // AnalyticsAsset (seg_type=SEC, date range last week)
+    match tc
+        .get_analytics_asset(AnalyticsAssetRequest {
+            seg_type: Some("SEC".to_string()),
+            start_date: Some("2025-05-01".to_string()),
+            end_date: Some("2025-05-07".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(&mut results, "AnalyticsAsset", format!("count={}", items.len())),
+        Err(e) => fail(&mut results, "AnalyticsAsset", e),
+    }
+
+    // AggregateAssets
+    match tc.get_aggregate_assets(AggregateAssetsRequest::default()).await {
+        Ok(Some(a)) => ok(
+            &mut results,
+            "AggregateAssets",
+            format!("netLiquidation={:.2}", a.net_liquidation),
+        ),
+        Ok(None) => ok(&mut results, "AggregateAssets", "(empty)"),
+        Err(e) => fail(&mut results, "AggregateAssets", e),
+    }
+
+    // EstimateTradableQuantity
+    match tc
+        .get_estimate_tradable_quantity(EstimateTradableQuantityRequest {
+            symbol: Some("AAPL".to_string()),
+            sec_type: Some("STK".to_string()),
+            action: Some("BUY".to_string()),
+            order_type: Some("LMT".to_string()),
+            limit_price: Some(200.0),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(Some(q)) => ok(
+            &mut results,
+            "EstimateTradableQuantity",
+            format!("tradable={} cashBuy={}", q.tradable_quantity, q.max_cash_buy_quantity),
+        ),
+        Ok(None) => ok(&mut results, "EstimateTradableQuantity", "(empty)"),
+        Err(e) => fail(&mut results, "EstimateTradableQuantity", e),
+    }
+
+    // SegmentFundAvailable
+    match tc
+        .get_segment_fund_available(SegmentFundRequest {
+            from_segment: Some("SEC".to_string()),
+            to_segment: Some("FUT".to_string()),
+            currency: Some("USD".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(funds) => ok(&mut results, "SegmentFundAvailable", format!("count={}", funds.len())),
+        Err(e) => fail(&mut results, "SegmentFundAvailable", e),
+    }
+
+    // SegmentFundHistory
+    match tc
+        .get_segment_fund_history(SegmentFundRequest {
+            limit: Some(10),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(&mut results, "SegmentFundHistory", format!("count={}", items.len())),
+        Err(e) => fail(&mut results, "SegmentFundHistory", e),
+    }
+
+    // PositionTransferRecords
+    match tc
+        .get_position_transfer_records(PositionTransferRecordsRequest {
+            since_date: Some("2025-01-01".to_string()),
+            to_date: Some("2025-05-07".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(records) => ok(
+            &mut results,
+            "PositionTransferRecords",
+            format!("count={}", records.len()),
+        ),
+        Err(e) => fail(&mut results, "PositionTransferRecords", e),
+    }
+
+    // PositionTransferExternalRecords
+    match tc
+        .get_position_transfer_external_records(PositionTransferExternalRecordsRequest {
+            since_date: Some("2025-01-01".to_string()),
+            to_date: Some("2025-05-07".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(records) => ok(
+            &mut results,
+            "PositionTransferExternalRecords",
+            format!("count={}", records.len()),
+        ),
+        Err(e) => fail(&mut results, "PositionTransferExternalRecords", e),
     }
 
     print_summary(&results);
