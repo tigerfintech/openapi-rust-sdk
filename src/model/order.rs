@@ -98,11 +98,23 @@ pub struct Order {
     pub commission: f64,
     #[serde(default)]
     pub realized_pnl: f64,
-    #[serde(default)]
+    // Defensive: Tiger has been observed returning these as
+    // "YYYY-MM-DD HH:MM:SS" strings on the transactions endpoint;
+    // accept the same shape here in case Order ever follows.
+    #[serde(
+        default,
+        deserialize_with = "crate::model::serde_helpers::deserialize_lenient_timestamp"
+    )]
     pub open_time: i64,
-    #[serde(default)]
+    #[serde(
+        default,
+        deserialize_with = "crate::model::serde_helpers::deserialize_lenient_timestamp"
+    )]
     pub update_time: i64,
-    #[serde(default)]
+    #[serde(
+        default,
+        deserialize_with = "crate::model::serde_helpers::deserialize_lenient_timestamp"
+    )]
     pub latest_time: i64,
     #[serde(default)]
     pub remark: String,

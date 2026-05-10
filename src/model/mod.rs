@@ -6,6 +6,7 @@ pub mod order;
 pub mod position;
 pub mod quote;
 pub mod quote_requests;
+pub mod serde_helpers;
 pub mod trade;
 pub mod trade_requests;
 pub use quote_requests::*;

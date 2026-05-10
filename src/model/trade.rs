@@ -229,9 +229,18 @@ pub struct Transaction {
     pub amount: f64,
     #[serde(default)]
     pub commission: f64,
-    #[serde(default)]
+    // Tiger paper has been observed returning these as
+    // "YYYY-MM-DD HH:MM:SS" date strings instead of epoch ms.
+    // The lenient deserializer accepts both shapes.
+    #[serde(
+        default,
+        deserialize_with = "crate::model::serde_helpers::deserialize_lenient_timestamp"
+    )]
     pub transacted_at: i64,
-    #[serde(default)]
+    #[serde(
+        default,
+        deserialize_with = "crate::model::serde_helpers::deserialize_lenient_timestamp"
+    )]
     pub time: i64,
 }
 
@@ -559,5 +568,33 @@ mod tests {
         assert_eq!(t.order_id, 2);
         assert_eq!(t.sec_type, "STK");
         assert_eq!(t.price, 150.0);
+    }
+
+    /// Regression: Tiger paper has been observed returning `transactedAt`
+    /// and `time` as "YYYY-MM-DD HH:MM:SS" strings (no timezone) instead
+    /// of epoch ms. Without the lenient deserializer, decoding a
+    /// `Vec<Transaction>` with one such entry fails the entire batch
+    /// with `invalid type: string ..., expected i64`.
+    #[test]
+    fn test_transaction_string_timestamp_deserializes() {
+        let json = r#"{"id":1,"orderId":2,"symbol":"AAPL","secType":"STK","price":150.0,"quantity":100,"filledQuantity":100,"transactedAt":"2026-05-08 22:57:14","time":"2026-05-08 22:57:14"}"#;
+        let t: Transaction = serde_json::from_str(json).unwrap();
+        assert_eq!(t.transacted_at, 1_778_281_034_000);
+        assert_eq!(t.time, 1_778_281_034_000);
+    }
+
+    /// Regression: a `Vec<Transaction>` with a mix of epoch-ms and
+    /// string-formatted entries must decode end-to-end. This is the
+    /// exact shape `call_into_items::<Transaction>` chokes on.
+    #[test]
+    fn test_vec_transaction_mixed_timestamp_shapes() {
+        let json = r#"[
+            {"id":1,"orderId":10,"transactedAt":1700000000000,"time":1700000000000},
+            {"id":2,"orderId":11,"transactedAt":"2026-05-08 22:57:14","time":"2026-05-08 22:57:14"}
+        ]"#;
+        let v: Vec<Transaction> = serde_json::from_str(json).unwrap();
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0].transacted_at, 1_700_000_000_000);
+        assert_eq!(v[1].transacted_at, 1_778_281_034_000);
     }
 }
