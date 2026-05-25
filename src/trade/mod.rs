@@ -6,6 +6,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::client::api_request::ApiRequest;
+use crate::client::decode::decode_value;
 use crate::client::http_client::HttpClient;
 use crate::error::TigerError;
 use crate::model::contract::Contract;
@@ -15,7 +16,7 @@ use crate::model::trade::{
     AggregateAssets, AnalyticsAsset, Asset, EstimateTradableQuantity, ForexOrderResult,
     FundDetails, FundingHistoryItem, ManagedAccount, OrderIdResult, PlaceOrderResult,
     PositionTransferDetail, PositionTransferExternalRecord, PositionTransferRecord, PreviewResult,
-    PrimeAsset, SegmentFund, SegmentFundHistoryItem, Transaction,
+    PrimeAsset, SegmentFund, SegmentFundAvailableItem, SegmentFundHistoryItem, Transaction,
 };
 use crate::model::trade_requests::{
     AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, DerivativeContractsRequest,
@@ -360,11 +361,11 @@ impl<'a> TradeClient<'a> {
 
     // ========== 资金调拨 ==========
 
-    /// 查询可调拨金额（wire: segment_fund_available，返回数组）
+    /// 查询可调拨金额（wire: segment_fund_available，返回裸数组，每项含 fromSegment/currency/amount）
     pub async fn get_segment_fund_available(
         &self,
         req: SegmentFundRequest,
-    ) -> Result<Vec<SegmentFund>, TigerError> {
+    ) -> Result<Vec<SegmentFundAvailableItem>, TigerError> {
         let mut req = req;
         if req.account.is_none() {
             req.account = Some(self.account.clone());
@@ -422,7 +423,7 @@ impl<'a> TradeClient<'a> {
         self.call_into_items("fund_details", req).await
     }
 
-    /// 查询调拨记录（wire: transfer_fund，`{items:[]}` 外壳）
+    /// 查询调拨记录（wire: transfer_fund，服务端直接返回裸 list，不带 items 包装）
     pub async fn get_funding_history(
         &self,
         req: FundingHistoryRequest,
@@ -481,23 +482,6 @@ impl<'a> TradeClient<'a> {
     }
 }
 
-fn decode_value<T>(v: Value) -> Result<T, TigerError>
-where
-    T: serde::de::DeserializeOwned,
-{
-    match serde_json::from_value::<T>(v.clone()) {
-        Ok(out) => Ok(out),
-        Err(_) => {
-            if let Value::String(s) = &v {
-                return serde_json::from_str::<T>(s).map_err(|e| {
-                    TigerError::Config(format!("decode data (double-encoded) failed: {}", e))
-                });
-            }
-            serde_json::from_value::<T>(v)
-                .map_err(|e| TigerError::Config(format!("decode data failed: {}", e)))
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests;

@@ -39,6 +39,10 @@ fn test_trade_operations_skip_retry() {
     assert!(!policy.should_retry("place_order"));
     assert!(!policy.should_retry("modify_order"));
     assert!(!policy.should_retry("cancel_order"));
+    assert!(!policy.should_retry("place_forex_order"));
+    assert!(!policy.should_retry("transfer_segment_fund"));
+    assert!(!policy.should_retry("cancel_segment_fund"));
+    assert!(!policy.should_retry("position_transfer"));
 }
 
 #[test]
@@ -54,6 +58,11 @@ fn test_is_trade_operation() {
     assert!(is_trade_operation("place_order"));
     assert!(is_trade_operation("modify_order"));
     assert!(is_trade_operation("cancel_order"));
+    // newly added non-idempotent operations
+    assert!(is_trade_operation("place_forex_order"));
+    assert!(is_trade_operation("transfer_segment_fund"));
+    assert!(is_trade_operation("cancel_segment_fund"));
+    assert!(is_trade_operation("position_transfer"));
     assert!(!is_trade_operation("market_state"));
     assert!(!is_trade_operation(""));
 }

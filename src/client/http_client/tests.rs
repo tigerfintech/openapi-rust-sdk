@@ -36,6 +36,9 @@ fn test_config(server_url: &str) -> ClientConfig {
         timeout: Duration::from_secs(5),
         token: None,
         token_refresh_duration: None,
+        token_check_interval: None,
+        token_writer: None,
+        token_loader: None,
         server_url: server_url.to_string(),
         quote_server_url: server_url.to_string(),
         tiger_public_key: "".to_string(),
@@ -47,7 +50,7 @@ fn test_config(server_url: &str) -> ClientConfig {
 
 #[test]
 fn test_user_agent() {
-    assert_eq!(HttpClient::user_agent(), "openapi-rust-sdk-0.3.0");
+    assert_eq!(HttpClient::user_agent(), format!("openapi-rust-sdk-{}", crate::VERSION));
 }
 
 #[test]
@@ -368,4 +371,217 @@ async fn test_no_authorization_header_without_token() {
         received[0].headers.get(&auth_header).is_none(),
         "未设置 Token 时不应携带 Authorization 头"
     );
+}
+
+// ========== Token Refresh 测试 ==========
+
+#[tokio::test]
+async fn test_query_token_success() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"code":0,"message":"success","data":{"token":"new_token_abc123"}}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let config = test_config(&mock_server.uri());
+    let client = HttpClient::new(config);
+    let token = client.query_token().await.unwrap();
+    assert_eq!(token, "new_token_abc123");
+}
+
+#[tokio::test]
+async fn test_query_token_api_error() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"code":40001,"message":"unauthorized","data":null}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let config = test_config(&mock_server.uri());
+    let client = HttpClient::new(config);
+    assert!(client.query_token().await.is_err());
+}
+
+#[tokio::test]
+async fn test_query_token_empty_token() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"code":0,"message":"success","data":{"token":""}}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let config = test_config(&mock_server.uri());
+    let client = HttpClient::new(config);
+    assert!(client.query_token().await.is_err());
+}
+
+#[tokio::test]
+async fn test_refresh_token_updates_config() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"code":0,"message":"success","data":{"token":"refreshed_xyz"}}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = test_config(&mock_server.uri());
+    config.token = Some("old_token".to_string());
+    let client = HttpClient::new(config);
+    client.refresh_token(None).await.unwrap();
+    assert_eq!(client.config.read().unwrap().token, Some("refreshed_xyz".to_string()));
+}
+
+#[tokio::test]
+async fn test_refresh_token_persists_to_file() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"code":0,"message":"success","data":{"token":"persisted_token"}}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let tmpdir = std::env::temp_dir();
+    let token_file = tmpdir.join("rust_http_client_token_test.properties");
+    let tm = crate::config::token_manager::TokenManager::with_file_path(token_file.to_str().unwrap());
+
+    let config = test_config(&mock_server.uri());
+    let client = HttpClient::new(config);
+    client.refresh_token(Some(&tm)).await.unwrap();
+
+    let content = std::fs::read_to_string(&token_file).unwrap();
+    assert_eq!(content, "token=persisted_token\n");
+    std::fs::remove_file(&token_file).ok();
+}
+
+#[tokio::test]
+async fn test_refresh_token_triggers_writer() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"code":0,"message":"success","data":{"token":"callback_token"}}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    use std::sync::{Arc, Mutex};
+    let captured: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+    let captured_clone = Arc::clone(&captured);
+
+    let tmpdir = std::env::temp_dir();
+    let token_file = tmpdir.join("rust_http_client_writer_test.properties");
+    let mut tm = crate::config::token_manager::TokenManager::with_file_path(token_file.to_str().unwrap());
+    tm.set_token_writer(move |t| {
+        *captured_clone.lock().unwrap() = t;
+    });
+
+    let config = test_config(&mock_server.uri());
+    let client = HttpClient::new(config);
+    client.refresh_token(Some(&tm)).await.unwrap();
+
+    assert_eq!(*captured.lock().unwrap(), "callback_token");
+    std::fs::remove_file(&token_file).ok();
+}
+
+/// Build a base64 token whose gen_ts is `seconds_ago` seconds in the past.
+fn make_expired_token(seconds_ago: i64) -> String {
+    use base64::Engine;
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let gen_ts_ms = now_ms - seconds_ago * 1000;
+    let expire_ts_ms = gen_ts_ms + 3_600_000;
+    let payload = format!("{:013},{:013}some_extra_payload_data", gen_ts_ms, expire_ts_ms);
+    base64::engine::general_purpose::STANDARD.encode(payload.as_bytes())
+}
+
+#[tokio::test]
+async fn test_new_http_client_auto_refresh_on_creation() {
+    use std::sync::{Arc, Mutex};
+    let call_count: Arc<Mutex<u32>> = Arc::new(Mutex::new(0));
+    let call_count_clone = Arc::clone(&call_count);
+
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"code":0,"message":"success","data":{"token":"auto_created_token"}}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = test_config(&mock_server.uri());
+    config.token = Some(make_expired_token(100)); // already expired
+    config.token_refresh_duration = Some(Duration::from_secs(30));
+    config.token_check_interval = Some(Duration::from_millis(100));
+
+    // Wrap call_count into token_writer for verification
+    config.token_writer = Some(std::sync::Arc::new(move |_t: String| {
+        *call_count_clone.lock().unwrap() += 1;
+    }));
+
+    let client = HttpClient::new(config);
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    client.close();
+
+    // config.token should have been updated
+    let token = client.config.read().unwrap().token.clone();
+    assert_eq!(token, Some("auto_created_token".to_string()));
+}
+
+#[tokio::test]
+async fn test_new_http_client_no_auto_refresh_when_zero() {
+    let mock_server = MockServer::start().await;
+    // If any request is made it fails the test by not returning valid data
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"code":0,"message":"success","data":{"token":"should_not_appear"}}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = test_config(&mock_server.uri());
+    config.token = Some(make_expired_token(100));
+    // token_refresh_duration is None → no auto-refresh
+
+    let _client = HttpClient::new(config);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // The mock server should have received zero token-refresh requests
+    // (test requests from other tests won't reach this mock server because it's unique)
+    let received = mock_server.received_requests().await.unwrap();
+    assert_eq!(received.len(), 0, "no refresh should have been triggered");
+}
+
+#[tokio::test]
+async fn test_close_stops_background_task() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"code":0,"message":"success","data":{"token":"stopped_token"}}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = test_config(&mock_server.uri());
+    config.token = Some(make_expired_token(100));
+    config.token_refresh_duration = Some(Duration::from_secs(30));
+    config.token_check_interval = Some(Duration::from_millis(100));
+
+    let client = HttpClient::new(config);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    client.close();
+
+    let count_after_close = mock_server.received_requests().await.unwrap().len();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let count_final = mock_server.received_requests().await.unwrap().len();
+
+    assert_eq!(count_after_close, count_final, "no more requests after close()");
 }

@@ -419,6 +419,9 @@ pub struct FutureKlineItem {
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FutureKline {
+    /// 合约代码（服务端字段名 contractCode）
+    #[serde(default)]
+    pub contract_code: String,
     #[serde(default)]
     pub next_page_token: String,
     #[serde(default)]
