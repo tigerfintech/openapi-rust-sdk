@@ -7,6 +7,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::client::api_request::ApiRequest;
+use crate::client::decode::decode_value;
 use crate::client::http_client::HttpClient;
 use crate::error::TigerError;
 use crate::model::quote::{
@@ -492,8 +493,29 @@ impl<'a> QuoteClient<'a> {
     }
 
     /// 期货逐笔。wire: future_tick (API version 3.0)
+    /// 服务端返回 {contractCode, items:[...]} 对象，需解包 items 并回填 contractCode。
     pub async fn get_future_trade_ticks(&self, req: FutureTradeTicksRequest) -> Result<Vec<FutureTradeTickItem>, TigerError> {
-        self.call_into_versioned("future_tick", req, Some(VERSION_V3)).await
+        let mut req = req;
+        // end_index 服务端要求 >= 0；未设置时默认 30（与 Python/Go SDK 一致）
+        if req.end_index.is_none() {
+            req.end_index = Some(30);
+        }
+        #[derive(serde::Deserialize, Default)]
+        #[serde(rename_all = "camelCase")]
+        struct FutureTickWrap {
+            #[serde(default)]
+            contract_code: String,
+            #[serde(default)]
+            items: Vec<FutureTradeTickItem>,
+        }
+        let wrap: FutureTickWrap = self.call_into_versioned("future_tick", req, Some(VERSION_V3)).await?;
+        let mut items = wrap.items;
+        for item in &mut items {
+            if item.contract_code.is_empty() {
+                item.contract_code = wrap.contract_code.clone();
+            }
+        }
+        Ok(items)
     }
 
     /// 期货盘口。wire: future_depth
@@ -733,25 +755,6 @@ where
     }
 }
 
-fn decode_value<T>(v: Value) -> Result<T, TigerError>
-where
-    T: serde::de::DeserializeOwned,
-{
-    // 先按原值解码
-    match serde_json::from_value::<T>(v.clone()) {
-        Ok(out) => Ok(out),
-        Err(_) => {
-            // 如果 data 是 JSON 字符串（双重编码），先解一层
-            if let Value::String(s) = &v {
-                return serde_json::from_str::<T>(s).map_err(|e| {
-                    TigerError::Config(format!("decode data (double-encoded) failed: {}", e))
-                });
-            }
-            serde_json::from_value::<T>(v)
-                .map_err(|e| TigerError::Config(format!("decode data failed: {}", e)))
-        }
-    }
-}
 
 // ========== 期权 identifier 辅助 ==========
 

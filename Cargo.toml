@@ -1,6 +1,6 @@
 [package]
 name = "tigeropen"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 rust-version = "1.70"
 description = "老虎证券 OpenAPI Rust SDK"

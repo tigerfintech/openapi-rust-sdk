@@ -5,3 +5,4 @@ pub mod api_response;
 pub mod retry;
 pub mod api_request;
 pub mod http_client;
+pub mod decode;

@@ -3,8 +3,16 @@
 
 use std::time::Duration;
 
-/// 交易操作方法名，这些操作不应自动重试
-const TRADE_OPERATIONS: &[&str] = &["place_order", "modify_order", "cancel_order"];
+/// 交易操作方法名，这些操作不应自动重试（非幂等写操作）
+const TRADE_OPERATIONS: &[&str] = &[
+    "place_order",
+    "modify_order",
+    "cancel_order",
+    "place_forex_order",
+    "transfer_segment_fund",
+    "cancel_segment_fund",
+    "position_transfer",
+];
 
 /// 重试策略
 pub struct RetryPolicy {

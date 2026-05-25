@@ -1,6 +1,7 @@
 //! 交易响应模型：Asset、PrimeAsset、PreviewResult、PlaceOrderResult、OrderIdResult、Transaction。
 
 use serde::Deserialize;
+use serde_json::Value;
 
 /// 资产分段（securities / commodities 等）
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -205,6 +206,9 @@ pub struct Transaction {
     pub id: i64,
     #[serde(default)]
     pub order_id: i64,
+    /// 账户 ID（数字型）
+    #[serde(default)]
+    pub account_id: i64,
     #[serde(default)]
     pub account: String,
     #[serde(default)]
@@ -219,18 +223,33 @@ pub struct Transaction {
     pub identifier: String,
     #[serde(default)]
     pub action: String,
+    /// 委托价
     #[serde(default)]
     pub price: f64,
+    /// 成交价（服务端字段名 filledPrice）
+    #[serde(default)]
+    pub filled_price: f64,
     #[serde(default)]
     pub quantity: i64,
     #[serde(default)]
     pub filled_quantity: i64,
     #[serde(default)]
+    pub filled_quantity_scale: i32,
+    /// 委托金额
+    #[serde(default)]
     pub amount: f64,
+    /// 成交金额（服务端字段名 filledAmount）
+    #[serde(default)]
+    pub filled_amount: f64,
     #[serde(default)]
     pub commission: f64,
+    /// 成交时间字符串，格式 "YYYY-MM-DD HH:MM:SS"（服务端返回字符串，非时间戳）
     #[serde(default)]
-    pub transacted_at: i64,
+    pub transacted_at: String,
+    /// 成交时间毫秒时间戳
+    #[serde(default)]
+    pub transaction_time: i64,
+    /// 兼容旧字段
     #[serde(default)]
     pub time: i64,
 }
@@ -331,14 +350,15 @@ pub struct ForexOrderResult {
     pub submit_time: i64,
 }
 
-/// 子账户资金调拨（查询可用 / 执行转账 的共用响应结构）。
+/// 子账户资金调拨响应（transfer_segment_fund / cancel_segment_fund 共用）。
+///
+/// `id` 使用 [`serde_json::Value`] 因为服务端可能返回数字或字符串（与 Go SDK 保持一致）。
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SegmentFund {
+    /// 调拨单 ID（服务端可能返回数字或字符串）
     #[serde(default)]
-    pub id: String,
-    #[serde(default)]
-    pub status: String,
+    pub id: Value,
     #[serde(default)]
     pub from_segment: String,
     #[serde(default)]
@@ -348,9 +368,29 @@ pub struct SegmentFund {
     #[serde(default)]
     pub amount: f64,
     #[serde(default)]
-    pub available_amount: f64,
+    pub status: String,
     #[serde(default)]
-    pub submit_time: i64,
+    pub status_desc: String,
+    #[serde(default)]
+    pub message: String,
+    #[serde(default)]
+    pub settled_at: i64,
+    #[serde(default)]
+    pub created_at: i64,
+    #[serde(default)]
+    pub updated_at: i64,
+}
+
+/// 可调拨资金条目（segment_fund_available 响应）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SegmentFundAvailableItem {
+    #[serde(default)]
+    pub from_segment: String,
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub amount: f64,
 }
 
 /// 资金调拨历史条目。
@@ -358,7 +398,7 @@ pub struct SegmentFund {
 #[serde(rename_all = "camelCase")]
 pub struct SegmentFundHistoryItem {
     #[serde(default)]
-    pub id: Option<i64>,
+    pub id: i64,
     #[serde(default)]
     pub from_segment: String,
     #[serde(default)]
@@ -370,9 +410,13 @@ pub struct SegmentFundHistoryItem {
     #[serde(default)]
     pub status: String,
     #[serde(default)]
-    pub submit_time: i64,
+    pub status_desc: String,
     #[serde(default)]
-    pub update_time: i64,
+    pub settled_at: i64,
+    #[serde(default)]
+    pub created_at: i64,
+    #[serde(default)]
+    pub updated_at: i64,
 }
 
 /// 资金明细条目（/fund_details）。
@@ -406,19 +450,30 @@ pub struct FundDetails {
 #[serde(rename_all = "camelCase")]
 pub struct FundingHistoryItem {
     #[serde(default)]
-    pub id: Option<String>,
+    pub id: i64,
     #[serde(default)]
-    pub seg_type: String,
+    pub ref_id: String,
+    /// 资金类型编码
+    #[serde(default, rename = "type")]
+    pub fund_type: i32,
+    #[serde(default)]
+    pub type_desc: String,
     #[serde(default)]
     pub currency: String,
     #[serde(default)]
     pub amount: f64,
     #[serde(default)]
+    pub business_date: String,
+    #[serde(default)]
     pub status: String,
     #[serde(default)]
-    pub submit_time: i64,
+    pub status_desc: String,
     #[serde(default)]
-    pub update_time: i64,
+    pub completed_status: bool,
+    #[serde(default)]
+    pub created_at: i64,
+    #[serde(default)]
+    pub updated_at: i64,
 }
 
 /// 内部转股单项（响应结构，含 camelCase 反序列化）。
@@ -553,11 +608,16 @@ mod tests {
 
     #[test]
     fn test_transaction_deserialize() {
-        let json = r#"{"id":1,"orderId":2,"symbol":"AAPL","secType":"STK","price":150.0,"quantity":100,"filledQuantity":100,"transactedAt":1700000000}"#;
+        let json = r#"{"id":1,"orderId":2,"accountId":99,"symbol":"AAPL","secType":"STK","price":150.0,"filledPrice":149.5,"quantity":100,"filledQuantity":100,"filledQuantityScale":0,"amount":15000.0,"filledAmount":14950.0,"transactedAt":"2024-01-15 10:30:00","transactionTime":1705314600000}"#;
         let t: Transaction = serde_json::from_str(json).unwrap();
         assert_eq!(t.id, 1);
         assert_eq!(t.order_id, 2);
+        assert_eq!(t.account_id, 99);
         assert_eq!(t.sec_type, "STK");
         assert_eq!(t.price, 150.0);
+        assert_eq!(t.filled_price, 149.5);
+        assert_eq!(t.filled_amount, 14950.0);
+        assert_eq!(t.transacted_at, "2024-01-15 10:30:00");
+        assert_eq!(t.transaction_time, 1705314600000);
     }
 }

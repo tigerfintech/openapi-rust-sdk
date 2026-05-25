@@ -46,5 +46,5 @@ pub use trade::{
     ForexOrderResult, FundDetails, FundingHistoryItem, ManagedAccount, OrderIdResult,
     PlaceOrderResult, PositionTransferDetail, PositionTransferExternalRecord,
     PositionTransferRecord, PreviewResult, PrimeAsset, PrimeAssetSegment, SegmentFund,
-    SegmentFundHistoryItem, Transaction, TransferItemResponse,
+    SegmentFundAvailableItem, SegmentFundHistoryItem, Transaction, TransferItemResponse,
 };

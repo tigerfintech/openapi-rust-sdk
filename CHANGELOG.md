@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-05-25
+
+### Added
+
+- **Token 自动刷新**：新增 `TokenManager`（`tokio::spawn` + oneshot channel 停止、`Drop` 自动清理）、`token_loader` / `token_writer` 回调、`sync_token()` 内存同步方法，与 Go SDK v0.3.6 / TypeScript SDK v0.4.3 功能对齐。
+- **`HttpClient::close()` / `Drop`**：停止后台 token 刷新 goroutine，避免长期运行服务中的泄漏。
+- **`file_enabled` 标志**：`TokenManager::set_token()` 仅在显式调用 `with_token_file_path()` 后才写文件，防止意外写入默认路径。
+- **`Arc<RwLock<ClientConfig>>`**：`HttpClient` 将 config 包裹为共享引用，支持后台任务安全更新 token。
+- **`HttpClient::query_token()` / `refresh_token()` / `start_token_auto_refresh()`**：手动刷新与自动刷新控制接口。
+- **`src/client/decode.rs`**：提取共用 `decode_value<T>()` 函数，消除 quote/trade 模块重复代码。
+
+### Fixed
+
+- **Push 死锁修正**：`Connected` case 下 `callbacks` 与 `state` 互斥锁获取顺序颠倒导致死锁；重构为提前写状态后再获取 callbacks 锁。
+- **`Transaction` 响应模型修正**（对应 Go SDK v0.3.1）：`transacted_at` 类型 `i64` → `String`；新增 `account_id`、`filled_price`、`filled_amount`、`filled_quantity_scale`、`transaction_time` 字段。
+- **`FundingHistoryItem` 字段修正**（对应 Go SDK v0.3.4）：`id` 类型 `String` → `i64`，`submit_time`/`update_time` → `created_at`/`updated_at`，移除不存在字段，新增 `ref_id`/`type_`/`type_desc`/`business_date`/`status_desc`/`completed_status`。
+- **`SegmentFund.id` 类型修正**（对应 Go SDK v0.3.2）：改为 `serde_json::Value` 兼容服务端可能返回数字或字符串。
+- **`FutureKline` 补充 `contract_code` 字段**：服务端实际返回 `contractCode`，原结构体缺失。
+- **`get_future_trade_ticks` 响应解包修正**（对应 Go SDK v0.3.3）：服务端返回 `{contractCode, items:[...]}` 包装，使用 `FutureTickWrap` 先解包再回填 `contract_code`。
+- **`get_funding_history` 反序列化修正**（对应 Go SDK v0.3.3）：服务端返回裸 list，从 `decode_items` 改为 `decode_value`。
+- **重试非幂等写操作**：`TRADE_OPERATIONS` 补充 `place_order`/`modify_order`/`cancel_order`/`place_forex_order` 四个方法，防止误触发重试。
+- **`max_retry_time` deadline 实际生效**：原实现未在循环中检查 deadline，修正为每次 retry 前检查。
+- **`eprintln!` 替换为 `tracing::info!`**：token 刷新日志改用结构化日志。
+
 ## [0.4.0] - 2026-05-09
 
 本次发布达到与 Python / Java / Go / TypeScript SDK **100% API 覆盖**。新增约 65 个方法，重构 12 个方法签名，OrderStatus 枚举对齐 Java SDK。包含多处 breaking change。

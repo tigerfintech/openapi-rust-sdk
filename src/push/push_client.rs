@@ -234,17 +234,23 @@ impl PushClient {
 
     /// Dispatch a deserialized Response to the appropriate callback
     fn dispatch_response(&self, response: &pb::Response) {
-        let cbs = self.callbacks.read().unwrap();
-
         if response.command == Command::Connected as i32 {
-            // CONNECTED -> mark connection successful
+            // CONNECTED -> mark connection successful.
+            // Update state BEFORE acquiring callbacks lock to avoid a lock-order
+            // inversion between `state` (write) and `callbacks` (read).
             *self.state.write().unwrap() = ConnectionState::Connected;
             // Notify connect() that authentication is complete
             self.connected_notify.notify_one();
+            let cbs = self.callbacks.read().unwrap();
             if let Some(cb) = &cbs.on_connect {
                 cb();
             }
-        } else if response.command == Command::Heartbeat as i32 {
+            return;
+        }
+
+        let cbs = self.callbacks.read().unwrap();
+
+        if response.command == Command::Heartbeat as i32 {
             // HEARTBEAT -> ignore
         } else if response.command == Command::Message as i32 {
             // MESSAGE -> extract PushData and dispatch
