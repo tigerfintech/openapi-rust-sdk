@@ -12,6 +12,8 @@ const TRADE_OPERATIONS: &[&str] = &[
     "transfer_segment_fund",
     "cancel_segment_fund",
     "position_transfer",
+    "option_exercise_submit",
+    "option_exercise_cancel",
 ];
 
 /// 重试策略

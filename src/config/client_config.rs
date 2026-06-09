@@ -33,6 +33,8 @@ pub struct ClientConfig {
     pub tiger_id: String,
     pub private_key: String,
     pub account: String,
+    /// 机构账户交易密钥（Prime 账户期权行权等高风险操作必填）
+    pub secret_key: Option<String>,
     pub license: Option<String>,
     pub language: Language,
     pub timezone: Option<String>,
@@ -60,6 +62,7 @@ impl std::fmt::Debug for ClientConfig {
             .field("tiger_id", &self.tiger_id)
             .field("private_key", &"[redacted]")
             .field("account", &self.account)
+            .field("secret_key", &self.secret_key.as_deref().map(|_| "[set]"))
             .field("license", &self.license)
             .field("language", &self.language)
             .field("timezone", &self.timezone)
@@ -82,6 +85,7 @@ pub struct ClientConfigBuilder {
     tiger_id: Option<String>,
     private_key: Option<String>,
     account: Option<String>,
+    secret_key: Option<String>,
     license: Option<String>,
     language: Option<Language>,
     timezone: Option<String>,
@@ -116,6 +120,7 @@ impl ClientConfigBuilder {
             tiger_id: None,
             private_key: None,
             account: None,
+            secret_key: None,
             license: None,
             language: None,
             timezone: None,
@@ -149,6 +154,12 @@ impl ClientConfigBuilder {
     /// Set trading account
     pub fn account(mut self, account: impl Into<String>) -> Self {
         self.account = Some(account.into());
+        self
+    }
+
+    /// Set secret key for institutional accounts (required for option exercise and other high-risk operations)
+    pub fn secret_key(mut self, key: impl Into<String>) -> Self {
+        self.secret_key = Some(key.into());
         self
     }
 
@@ -224,6 +235,12 @@ impl ClientConfigBuilder {
         self
     }
 
+    /// Set server URL (trade gateway)
+    pub fn server_url(mut self, url: impl Into<String>) -> Self {
+        self.server_url = Some(url.into());
+        self
+    }
+
     /// Set quote server URL (separate gateway for quote requests)
     pub fn quote_server_url(mut self, url: impl Into<String>) -> Self {
         self.quote_server_url = Some(url.into());
@@ -266,6 +283,11 @@ impl ClientConfigBuilder {
         if self.account.is_none() {
             if let Some(v) = props.get("account") {
                 self.account = Some(v.clone());
+            }
+        }
+        if self.secret_key.is_none() {
+            if let Some(v) = props.get("secret_key") {
+                self.secret_key = Some(v.clone());
             }
         }
         if self.license.is_none() {
@@ -424,6 +446,7 @@ impl ClientConfigBuilder {
             tiger_id,
             private_key,
             account: self.account.unwrap_or_default(),
+            secret_key: self.secret_key,
             license: self.license,
             language: self.language.unwrap_or(Language::ZhCn),
             timezone: self.timezone,

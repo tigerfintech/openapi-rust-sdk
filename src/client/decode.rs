@@ -15,14 +15,13 @@ where
 {
     match serde_json::from_value::<T>(v.clone()) {
         Ok(out) => Ok(out),
-        Err(_) => {
+        Err(original_err) => {
             if let Value::String(s) = &v {
                 return serde_json::from_str::<T>(s).map_err(|e| {
                     TigerError::Config(format!("decode data (double-encoded) failed: {}", e))
                 });
             }
-            serde_json::from_value::<T>(v)
-                .map_err(|e| TigerError::Config(format!("decode data failed: {}", e)))
+            Err(TigerError::Config(format!("decode data failed: {}", original_err)))
         }
     }
 }
