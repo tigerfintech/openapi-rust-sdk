@@ -406,3 +406,119 @@ pub struct PositionTransferExternalRecordsRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
 }
+/// OptionExerciseCheckRequest — 行权检验请求。
+/// wire method: option_exercise_check
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OptionExerciseCheckRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_key: Option<String>,
+    /// 期权合约 ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contract_id: Option<i64>,
+    /// Exercise | Expire
+    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
+    pub exercise_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<f64>,
+    /// yyyy-MM-dd，Exercise 类型建议填
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executing_date: Option<String>,
+    /// Exercise 类型建议填
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_force: Option<bool>,
+    /// 0–10，Expire 类型专用
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub itm_rate: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+}
+
+/// OptionExercisePositionRequest — 查询可行权持仓请求。
+/// wire method: option_exercise_position
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OptionExercisePositionRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_key: Option<String>,
+    /// Exercise | Expire
+    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
+    pub exercise_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+}
+
+/// OptionExerciseSubmitRequest — 提交行权申请请求。
+/// wire method: option_exercise_submit
+/// Exercise 类型：executing_date 和 is_force 为必填。
+/// Expire 类型：itm_rate 可选（0–10）。
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OptionExerciseSubmitRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contract_id: Option<i64>,
+    /// Exercise | Expire
+    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
+    pub exercise_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<f64>,
+    /// Exercise 必填，yyyy-MM-dd
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executing_date: Option<String>,
+    /// Exercise 必填
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_force: Option<bool>,
+    /// 0–10，Expire 专用
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub itm_rate: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+}
+
+/// OptionExerciseRecordsRequest — 分页查询行权记录请求。
+/// wire method: option_exercise_record
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OptionExerciseRecordsRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_key: Option<String>,
+    /// 从 1 开始，默认 1
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<i32>,
+    /// 1–100，默认 20
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<i32>,
+    /// New | Cancel | Success | Fail
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Exercise | Expire
+    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
+    pub exercise_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+    /// symbol | expire_date | strike | is_call
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_by: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+}
+
+/// OptionExerciseCancelRequest — 撤销行权申请请求。
+/// wire method: option_exercise_cancel
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OptionExerciseCancelRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+}

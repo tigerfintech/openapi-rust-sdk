@@ -14,14 +14,18 @@ use crate::model::order::{Order, OrderRequest};
 use crate::model::position::Position;
 use crate::model::trade::{
     AggregateAssets, AnalyticsAsset, Asset, EstimateTradableQuantity, ForexOrderResult,
-    FundDetails, FundingHistoryItem, ManagedAccount, OrderIdResult, PlaceOrderResult,
-    PositionTransferDetail, PositionTransferExternalRecord, PositionTransferRecord, PreviewResult,
-    PrimeAsset, SegmentFund, SegmentFundAvailableItem, SegmentFundHistoryItem, Transaction,
+    FundDetails, FundingHistoryItem, ManagedAccount, OptionExerciseCheckResult,
+    OptionExercisePositionPageResult, OptionExerciseRecordPageResult, OrderIdResult,
+    PlaceOrderResult, PositionTransferDetail, PositionTransferExternalRecord,
+    PositionTransferRecord, PreviewResult, PrimeAsset, SegmentFund, SegmentFundAvailableItem,
+    SegmentFundHistoryItem, Transaction,
 };
 use crate::model::trade_requests::{
     AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, DerivativeContractsRequest,
     EstimateTradableQuantityRequest, ForexOrderRequest, FundDetailsRequest, FundingHistoryRequest,
-    GetOrderRequest, ManagedAccountsRequest, OrderTransactionsRequest, OrdersRequest,
+    GetOrderRequest, ManagedAccountsRequest, OptionExerciseCancelRequest,
+    OptionExerciseCheckRequest, OptionExerciseRecordsRequest, OptionExercisePositionRequest,
+    OptionExerciseSubmitRequest, OrderTransactionsRequest, OrdersRequest,
     PositionTransferDetailRequest, PositionTransferExternalRecordsRequest,
     PositionTransferRecordsRequest, PositionTransferRequest, PositionsRequest, SegmentFundRequest,
 };
@@ -30,6 +34,8 @@ use crate::model::trade_requests::{
 pub struct TradeClient<'a> {
     http_client: &'a HttpClient,
     account: String,
+    /// 机构账户交易密钥（期权行权等高风险操作使用）
+    secret_key: Option<String>,
 }
 
 impl<'a> TradeClient<'a> {
@@ -38,6 +44,20 @@ impl<'a> TradeClient<'a> {
         Self {
             http_client,
             account: account.into(),
+            secret_key: None,
+        }
+    }
+
+    /// 创建交易客户端（带 secret_key，适用于机构账户）
+    pub fn with_secret_key(
+        http_client: &'a HttpClient,
+        account: impl Into<String>,
+        secret_key: impl Into<String>,
+    ) -> Self {
+        Self {
+            http_client,
+            account: account.into(),
+            secret_key: Some(secret_key.into()),
         }
     }
 
@@ -479,6 +499,78 @@ impl<'a> TradeClient<'a> {
             req.account_id = Some(self.account.clone());
         }
         self.call_into_items("position_transfer_external_records", req).await
+    }
+
+    /// 行权检验：预估行权/作废后正股持仓变化（wire: option_exercise_check）
+    pub async fn option_exercise_check(
+        &self,
+        mut req: OptionExerciseCheckRequest,
+    ) -> Result<Option<OptionExerciseCheckResult>, TigerError> {
+        if req.account.is_none() {
+            req.account = Some(self.account.clone());
+        }
+        if req.secret_key.is_none() {
+            req.secret_key = self.secret_key.clone();
+        }
+        self.call_optional("option_exercise_check", req).await
+    }
+
+    /// 查询可行权持仓列表（wire: option_exercise_position）
+    pub async fn get_option_exercise_positions(
+        &self,
+        mut req: OptionExercisePositionRequest,
+    ) -> Result<Option<OptionExercisePositionPageResult>, TigerError> {
+        if req.account.is_none() {
+            req.account = Some(self.account.clone());
+        }
+        if req.secret_key.is_none() {
+            req.secret_key = self.secret_key.clone();
+        }
+        self.call_optional("option_exercise_position", req).await
+    }
+
+    /// 提交行权/作废申请（wire: option_exercise_submit）
+    /// Exercise 类型：executing_date 和 is_force 为必填。
+    /// Expire 类型：itm_rate 可选（0–10）。
+    pub async fn submit_option_exercise(
+        &self,
+        mut req: OptionExerciseSubmitRequest,
+    ) -> Result<Option<bool>, TigerError> {
+        if req.account.is_none() {
+            req.account = Some(self.account.clone());
+        }
+        if req.secret_key.is_none() {
+            req.secret_key = self.secret_key.clone();
+        }
+        self.call_optional("option_exercise_submit", req).await
+    }
+
+    /// 分页查询已提交的行权记录（wire: option_exercise_record）
+    pub async fn get_option_exercise_records(
+        &self,
+        mut req: OptionExerciseRecordsRequest,
+    ) -> Result<Option<OptionExerciseRecordPageResult>, TigerError> {
+        if req.account.is_none() {
+            req.account = Some(self.account.clone());
+        }
+        if req.secret_key.is_none() {
+            req.secret_key = self.secret_key.clone();
+        }
+        self.call_optional("option_exercise_record", req).await
+    }
+
+    /// 撤销行权申请（wire: option_exercise_cancel）
+    pub async fn cancel_option_exercise(
+        &self,
+        mut req: OptionExerciseCancelRequest,
+    ) -> Result<Option<bool>, TigerError> {
+        if req.account.is_none() {
+            req.account = Some(self.account.clone());
+        }
+        if req.secret_key.is_none() {
+            req.secret_key = self.secret_key.clone();
+        }
+        self.call_optional("option_exercise_cancel", req).await
     }
 }
 

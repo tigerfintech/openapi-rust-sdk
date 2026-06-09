@@ -19,9 +19,10 @@ use tigeropen::config::ClientConfig;
 use tigeropen::model::order::limit_order;
 use tigeropen::model::trade_requests::{
     AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, EstimateTradableQuantityRequest,
-    GetOrderRequest, ManagedAccountsRequest, OrderTransactionsRequest, OrdersRequest,
-    PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest, PositionsRequest,
-    SegmentFundRequest,
+    GetOrderRequest, ManagedAccountsRequest, OptionExerciseCheckRequest,
+    OptionExercisePositionRequest, OptionExerciseRecordsRequest, OrderTransactionsRequest,
+    OrdersRequest, PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest,
+    PositionsRequest, SegmentFundRequest,
 };
 use tigeropen::trade::TradeClient;
 
@@ -392,11 +393,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "SegmentFundHistory", e),
     }
 
-    // PositionTransferRecords
+    // PositionTransferRecords (7-day window to avoid max_date.limit)
     match tc
         .get_position_transfer_records(PositionTransferRecordsRequest {
-            since_date: Some("2025-01-01".to_string()),
-            to_date: Some("2025-05-07".to_string()),
+            since_date: Some("2026-06-01".to_string()),
+            to_date: Some("2026-06-09".to_string()),
             ..Default::default()
         })
         .await
@@ -409,11 +410,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "PositionTransferRecords", e),
     }
 
-    // PositionTransferExternalRecords
+    // PositionTransferExternalRecords (7-day window to avoid max_date.limit)
     match tc
         .get_position_transfer_external_records(PositionTransferExternalRecordsRequest {
-            since_date: Some("2025-01-01".to_string()),
-            to_date: Some("2025-05-07".to_string()),
+            since_date: Some("2026-06-01".to_string()),
+            to_date: Some("2026-06-09".to_string()),
             ..Default::default()
         })
         .await
@@ -424,6 +425,93 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             format!("count={}", records.len()),
         ),
         Err(e) => fail(&mut results, "PositionTransferExternalRecords", e),
+    }
+
+    // =========================================================================
+    // v0.4.2: 期权行权
+    // =========================================================================
+    // GetOptionExercisePositions (Exercise)
+    match tc
+        .get_option_exercise_positions(OptionExercisePositionRequest {
+            exercise_type: Some("Exercise".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(Some(r)) => ok(
+            &mut results,
+            "GetOptionExercisePositions(Exercise)",
+            format!("rows={} pageCount={}", r.items.len(), r.page_count),
+        ),
+        Ok(None) => ok(&mut results, "GetOptionExercisePositions(Exercise)", "(empty)"),
+        Err(e) => fail(&mut results, "GetOptionExercisePositions(Exercise)", e),
+    }
+
+    // GetOptionExercisePositions (Expire)
+    let exercise_positions = match tc
+        .get_option_exercise_positions(OptionExercisePositionRequest {
+            exercise_type: Some("Expire".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(Some(r)) => {
+            ok(
+                &mut results,
+                "GetOptionExercisePositions(Expire)",
+                format!("rows={} pageCount={}", r.items.len(), r.page_count),
+            );
+            r.items
+        }
+        Ok(None) => {
+            ok(&mut results, "GetOptionExercisePositions(Expire)", "(empty)");
+            vec![]
+        }
+        Err(e) => {
+            fail(&mut results, "GetOptionExercisePositions(Expire)", e);
+            vec![]
+        }
+    };
+
+    // GetOptionExerciseRecords
+    match tc
+        .get_option_exercise_records(OptionExerciseRecordsRequest {
+            page: Some(1),
+            size: Some(10),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(Some(r)) => ok(
+            &mut results,
+            "GetOptionExerciseRecords",
+            format!("rows={} itemCount={}", r.items.len(), r.item_count),
+        ),
+        Ok(None) => ok(&mut results, "GetOptionExerciseRecords", "(empty)"),
+        Err(e) => fail(&mut results, "GetOptionExerciseRecords", e),
+    }
+
+    // CheckOptionExercise (conditional — needs an exercisable position)
+    if let Some(p) = exercise_positions.first() {
+        match tc
+            .option_exercise_check(OptionExerciseCheckRequest {
+                contract_id: Some(p.contract_id),
+                exercise_type: Some("Expire".to_string()),
+                quantity: Some(p.available_quantity),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(Some(r)) => ok(
+                &mut results,
+                "CheckOptionExercise",
+                format!("symbol={} availableQty={}", r.symbol, r.available_quantity),
+            ),
+            Ok(None) => ok(&mut results, "CheckOptionExercise", "(empty)"),
+            Err(e) => fail(&mut results, "CheckOptionExercise", e),
+        }
+    } else {
+        skip(&mut results, "CheckOptionExercise", "no exercisable positions");
     }
 
     print_summary(&results);

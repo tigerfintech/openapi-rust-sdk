@@ -559,6 +559,124 @@ pub struct PositionTransferExternalRecord {
     pub update_time: i64,
 }
 
+/// 行权检验结果
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionExerciseCheckResult {
+    #[serde(default)]
+    pub available_quantity: f64,
+    #[serde(default)]
+    pub position: f64,
+    #[serde(default)]
+    pub stk_position: f64,
+    #[serde(default)]
+    pub stk_position_change: f64,
+    #[serde(default)]
+    pub stk_position_before: f64,
+    #[serde(default)]
+    pub stk_position_after: f64,
+    #[serde(default)]
+    pub symbol: String,
+}
+
+/// 可行权期权持仓条目
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionExercisePosition {
+    #[serde(default)]
+    pub contract_id: i64,
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub stk_symbol: String,
+    #[serde(default)]
+    pub expire_date: String,
+    #[serde(default)]
+    pub strike: String,
+    #[serde(default)]
+    pub call_put: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub account_id: i64,
+    #[serde(default)]
+    pub position: f64,
+    #[serde(default)]
+    pub available_quantity: f64,
+}
+
+/// 可行权持仓分页结果
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionExercisePositionPageResult {
+    #[serde(default)]
+    pub page_num: i32,
+    #[serde(default)]
+    pub page_size: i32,
+    #[serde(default)]
+    pub item_count: i32,
+    #[serde(default)]
+    pub page_count: i32,
+    #[serde(default)]
+    pub items: Vec<OptionExercisePosition>,
+}
+
+/// 行权申请记录条目
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionExerciseRecord {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub contract_id: i64,
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub stk_symbol: String,
+    #[serde(default)]
+    pub expire_date: String,
+    #[serde(default)]
+    pub strike: String,
+    #[serde(default)]
+    pub call_put: String,
+    /// Exercise | Expire
+    #[serde(default, rename = "type")]
+    pub exercise_type: String,
+    #[serde(default)]
+    pub request_quantity: f64,
+    #[serde(default)]
+    pub quantity: f64,
+    /// New | Cancel | Success | Fail
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub executing_date: String,
+    #[serde(default)]
+    pub itm_rate: i32,
+    #[serde(default)]
+    pub is_force: bool,
+    #[serde(default)]
+    pub reason: String,
+    #[serde(default)]
+    pub account_id: i64,
+}
+
+/// 行权记录分页结果
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionExerciseRecordPageResult {
+    #[serde(default)]
+    pub page_num: i32,
+    #[serde(default)]
+    pub page_size: i32,
+    #[serde(default)]
+    pub item_count: i32,
+    #[serde(default)]
+    pub page_count: i32,
+    #[serde(default)]
+    pub items: Vec<OptionExerciseRecord>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
