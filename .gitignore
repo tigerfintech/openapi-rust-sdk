@@ -11,6 +11,9 @@ Cargo.lock
 *.swp
 *.swo
 
+# Claude Code（本地 skill 软链等）
+.claude/
+
 # OS
 .DS_Store
 

@@ -23,6 +23,7 @@ pub use order::{
 };
 pub use position::Position;
 pub use quote::{
+    AddonActivePlan, AddonEffectiveEntitlement, AddonEntitlement, AddonInfo,
     Brief, BrokerDetail, CapitalDistribution, CapitalFlow, CapitalFlowItem, CorporateAction,
     CorporateActionRequest, Depth, DepthLevel, ExchangeRate, FinancialCurrency,
     FinancialDailyItem, FinancialDailyRequest, FinancialReportItem, FinancialReportRequest,

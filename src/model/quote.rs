@@ -781,6 +781,28 @@ mod tests {
         assert_eq!(ps[0].name, "usStockQuote");
         assert_eq!(ps[0].expire_at, 1700000000);
     }
+
+    #[test]
+    fn test_addon_entitlement_deserialize() {
+        let json = r#"{
+            "userLevel":"PRO",
+            "activePlan":{"planType":"LV2","expireTime":1700000000},
+            "addons":[{"planType":"DEPTH","active":true,"startTime":1690000000,"expireTime":1700000000}],
+            "effectiveEntitlement":{"subscribeLimit":100,"subscribeRemaining":80,"rateMultiple":2}
+        }"#;
+        let e: AddonEntitlement = serde_json::from_str(json).unwrap();
+        assert_eq!(e.user_level, "PRO");
+        assert_eq!(e.active_plan.as_ref().unwrap().plan_type, "LV2");
+        assert_eq!(e.active_plan.as_ref().unwrap().expire_time, Some(1700000000));
+        assert_eq!(e.addons.len(), 1);
+        assert!(e.addons[0].active);
+        assert_eq!(e.addons[0].plan_type, "DEPTH");
+        let ent = e.effective_entitlement.as_ref().unwrap();
+        assert_eq!(ent.subscribe_limit, Some(100));
+        assert_eq!(ent.subscribe_remaining, Some(80));
+        assert_eq!(ent.rate_multiple, Some(2));
+        assert_eq!(ent.high_freq_limit, None);
+    }
 }
 
 // ============================================================================
@@ -1311,5 +1333,77 @@ pub struct QuoteOvernight {
     pub begin_time: i64,
     #[serde(default)]
     pub end_time: i64,
+}
+
+/// 当前生效的附加套餐（addon_entitlements）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AddonActivePlan {
+    #[serde(default)]
+    pub plan_type: String,
+    #[serde(default)]
+    pub expire_time: Option<i64>,
+}
+
+/// 单个附加套餐订阅信息（addon_entitlements）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AddonInfo {
+    #[serde(default)]
+    pub plan_type: String,
+    #[serde(default)]
+    pub active: bool,
+    #[serde(default)]
+    pub start_time: Option<i64>,
+    #[serde(default)]
+    pub expire_time: Option<i64>,
+}
+
+/// 生效的行情权益额度（addon_entitlements）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AddonEffectiveEntitlement {
+    #[serde(default)]
+    pub history_stock_limit: Option<i32>,
+    #[serde(default)]
+    pub history_stock_remaining: Option<i32>,
+    #[serde(default)]
+    pub history_future_limit: Option<i32>,
+    #[serde(default)]
+    pub history_future_remaining: Option<i32>,
+    #[serde(default)]
+    pub history_option_limit: Option<i32>,
+    #[serde(default)]
+    pub history_option_remaining: Option<i32>,
+    #[serde(default)]
+    pub subscribe_limit: Option<i32>,
+    #[serde(default)]
+    pub subscribe_remaining: Option<i32>,
+    #[serde(default)]
+    pub subscribe_depth_limit: Option<i32>,
+    #[serde(default)]
+    pub subscribe_depth_remaining: Option<i32>,
+    #[serde(default)]
+    pub high_freq_limit: Option<i32>,
+    #[serde(default)]
+    pub mid_freq_limit: Option<i32>,
+    #[serde(default)]
+    pub low_freq_limit: Option<i32>,
+    #[serde(default)]
+    pub rate_multiple: Option<i32>,
+}
+
+/// 附加套餐权益查询结果（addon_entitlements）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AddonEntitlement {
+    #[serde(default)]
+    pub user_level: String,
+    #[serde(default)]
+    pub active_plan: Option<AddonActivePlan>,
+    #[serde(default)]
+    pub addons: Vec<AddonInfo>,
+    #[serde(default)]
+    pub effective_entitlement: Option<AddonEffectiveEntitlement>,
 }
 

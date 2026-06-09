@@ -11,7 +11,7 @@ use crate::client::decode::decode_value;
 use crate::client::http_client::HttpClient;
 use crate::error::TigerError;
 use crate::model::quote::{
-    Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest, Depth,
+    AddonEntitlement, Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest, Depth,
     ExchangeRate, FinancialCurrency, FinancialDailyItem, FinancialDailyRequest,
     FinancialReportItem, FinancialReportRequest, FundContractInfo, FundHistoryQuote, FundQuote,
     FutureContractInfo, FutureDepth, FutureExchange, FutureKline, FutureKlineRequest,
@@ -702,6 +702,11 @@ impl<'a> QuoteClient<'a> {
     /// 隔夜行情。wire: quote_overnight
     pub async fn get_quote_overnight(&self, req: QuoteOvernightRequest) -> Result<Vec<QuoteOvernight>, TigerError> {
         self.call_into("quote_overnight", req).await
+    }
+
+    /// 附加套餐权益查询（订阅套餐与行情额度）。wire: addon_entitlements
+    pub async fn get_addon_entitlement(&self) -> Result<Option<AddonEntitlement>, TigerError> {
+        self.call_optional("addon_entitlements", serde_json::json!({})).await
     }
 
     // ========== 内部辅助 ==========
