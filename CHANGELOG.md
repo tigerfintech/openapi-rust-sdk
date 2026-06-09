@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-06-09
+
+### Added
+
+- **期权行权 5 个接口**：新增 `option_exercise_check`、`get_option_exercise_positions`、`submit_option_exercise`（返回 `Result<Option<bool>>`）、`get_option_exercise_records`、`cancel_option_exercise`（返回 `Result<Option<bool>>`）。
+- **`TradeClient::with_secret_key()`**：机构账户可通过新构造器传入 `secret_key`，期权行权方法自动注入。
+- **`ClientConfig::secret_key`**：支持从 `.properties` 文件读取 `secret_key`，通过 `ClientConfigBuilder::secret_key()` 显式设置。
+- **`option_exercise_submit`/`option_exercise_cancel` 加入 `TRADE_OPERATIONS`**：非幂等行权写操作不参与自动重试。
+
+### Fixed
+
+- **`decode_value` 保留原始错误**：fallback 分支不再重复执行 `from_value` 调用，改为直接返回 `original_err`，错误信息不丢失。
+
 ## [0.4.1] - 2026-05-25
 
 ### Added
