@@ -269,7 +269,7 @@ openapi-rust-sdk/
 
 ## API Reference
 
-- [Tiger OpenAPI Documentation](https://quant.itigerup.com/openapi/zh/python/overview/introduction.html)
+- [Tiger OpenAPI Documentation](https://docs-en.itigerup.com/docs/)
 - [crates.io](https://crates.io/crates/tigeropen)
 - [docs.rs](https://docs.rs/tigeropen)
 
@@ -550,7 +550,7 @@ openapi-rust-sdk/
 
 ## API 参考
 
-- [老虎证券 OpenAPI 文档](https://quant.itigerup.com/openapi/zh/python/overview/introduction.html)
+- [老虎证券 OpenAPI 文档](https://docs.itigerup.com/docs/)
 - [crates.io 包主页](https://crates.io/crates/tigeropen)
 - [docs.rs 文档](https://docs.rs/tigeropen)
 
