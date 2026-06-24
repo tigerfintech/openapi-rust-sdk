@@ -146,6 +146,24 @@ pub struct Order {
     pub trading_session_type: String,
     #[serde(default)]
     pub latest_price: f64,
+    /// 冰山单：展示数量
+    #[serde(default)]
+    pub display_size: i64,
+    /// 冰山单：最小展示数量
+    #[serde(default)]
+    pub min_display_size: i64,
+    /// 冰山单：价检间隔（秒）
+    #[serde(default)]
+    pub check_intervals: i64,
+    /// 冰山单：价格类型（LIMIT_PRICE / OPPONENT_PRICE）
+    #[serde(default)]
+    pub price_type: String,
+    /// 冰山单：生效开始时间（epoch ms）
+    #[serde(default)]
+    pub start_time: i64,
+    /// 冰山单：生效结束时间（epoch ms）
+    #[serde(default)]
+    pub end_time: i64,
 }
 
 // ========== 自定义反序列化器 ==========
@@ -261,6 +279,27 @@ pub struct OrderRequest {
     pub remark: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_mark: Option<String>,
+    /// 冰山单：展示数量
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_size: Option<i64>,
+    /// 冰山单：最小展示数量
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_display_size: Option<i64>,
+    /// 冰山单：价检间隔（秒）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub check_intervals: Option<i64>,
+    /// 冰山单：价格类型（LIMIT_PRICE / OPPONENT_PRICE）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_type: Option<String>,
+    /// 冰山单：生效开始时间（epoch ms）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<i64>,
+    /// 冰山单：生效结束时间（epoch ms）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_time: Option<i64>,
+    /// 机构账户交易密钥（client 层自动填充默认值）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_key: Option<String>,
 }
 
 // ========== 订单请求构造工具函数 ==========
@@ -397,6 +436,59 @@ pub fn algo_order(
     }
 }
 
+/// 构造冰山单（最简参数）
+pub fn iceberg_order(
+    account: &str, symbol: &str, sec_type: &str, action: &str,
+    quantity: i64, limit_price: f64, display_size: i64,
+) -> OrderRequest {
+    OrderRequest {
+        account: Some(account.to_string()),
+        symbol: Some(symbol.to_string()),
+        sec_type: Some(sec_type.to_string()),
+        action: Some(action.to_string()),
+        order_type: Some("ICEBERG".to_string()),
+        total_quantity: Some(quantity),
+        limit_price: Some(limit_price),
+        time_in_force: Some("DAY".to_string()),
+        display_size: Some(display_size),
+        price_type: Some("LIMIT_PRICE".to_string()),
+        ..OrderRequest::default()
+    }
+}
+
+/// 构造冰山单（完整参数）
+///
+/// `price_type` 传 `None` 使用服务端默认值（LIMIT_PRICE）。
+/// `start_time` / `end_time` 传 `None` 不限制生效时间范围。
+pub fn iceberg_order_full(
+    account: &str, symbol: &str, sec_type: &str, action: &str,
+    quantity: i64, limit_price: f64,
+    display_size: i64,
+    min_display_size: Option<i64>,
+    check_intervals: Option<i64>,
+    price_type: Option<&str>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+) -> OrderRequest {
+    OrderRequest {
+        account: Some(account.to_string()),
+        symbol: Some(symbol.to_string()),
+        sec_type: Some(sec_type.to_string()),
+        action: Some(action.to_string()),
+        order_type: Some("ICEBERG".to_string()),
+        total_quantity: Some(quantity),
+        limit_price: Some(limit_price),
+        time_in_force: Some("DAY".to_string()),
+        display_size: Some(display_size),
+        min_display_size,
+        check_intervals,
+        price_type: price_type.map(|s| s.to_string()),
+        start_time,
+        end_time,
+        ..OrderRequest::default()
+    }
+}
+
 /// 构造附加订单（止盈/止损）
 pub fn new_order_leg(leg_type: &str, price: f64, time_in_force: &str) -> OrderLegRequest {
     OrderLegRequest {
@@ -521,6 +613,76 @@ mod tests {
         let leg = new_order_leg("PROFIT", 160.0, "GTC");
         assert_eq!(leg.leg_type, Some("PROFIT".to_string()));
         assert_eq!(leg.price, Some(160.0));
+    }
+
+    #[test]
+    fn test_iceberg_order_basic() {
+        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100);
+        assert_eq!(o.order_type, Some("ICEBERG".to_string()));
+        assert_eq!(o.total_quantity, Some(1000));
+        assert_eq!(o.limit_price, Some(180.0));
+        assert_eq!(o.display_size, Some(100));
+        assert_eq!(o.time_in_force, Some("DAY".to_string()));
+        assert_eq!(o.min_display_size, None);
+        assert_eq!(o.start_time, None);
+    }
+
+    #[test]
+    fn test_iceberg_order_full() {
+        let start_time: i64 = 1782293585902;
+        let end_time: i64 = 1782297185902;
+        let o = iceberg_order_full(
+            "ACC", "AAPL", "STK", "BUY", 1000, 180.0,
+            100, Some(50), Some(30), Some("LIMIT_PRICE"), Some(start_time), Some(end_time),
+        );
+        assert_eq!(o.order_type, Some("ICEBERG".to_string()));
+        assert_eq!(o.display_size, Some(100));
+        assert_eq!(o.min_display_size, Some(50));
+        assert_eq!(o.check_intervals, Some(30));
+        assert_eq!(o.price_type, Some("LIMIT_PRICE".to_string()));
+        assert_eq!(o.start_time, Some(start_time));
+        assert_eq!(o.end_time, Some(end_time));
+    }
+
+    #[test]
+    fn test_iceberg_order_full_no_time_window() {
+        let o = iceberg_order_full(
+            "ACC", "AAPL", "STK", "BUY", 1000, 180.0,
+            100, Some(50), Some(30), Some("OPPONENT_PRICE"), None, None,
+        );
+        assert_eq!(o.price_type, Some("OPPONENT_PRICE".to_string()));
+        assert_eq!(o.start_time, None);
+        assert_eq!(o.end_time, None);
+    }
+
+    #[test]
+    fn test_iceberg_request_serializes_snake_case() {
+        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100);
+        let json_value: serde_json::Value = serde_json::to_value(&o).unwrap();
+        let obj = json_value.as_object().unwrap();
+        assert!(obj.contains_key("display_size"), "should serialize display_size");
+        assert!(!obj.contains_key("min_display_size"), "None fields should be omitted");
+    }
+
+    #[test]
+    fn test_iceberg_response_deserializes() {
+        let json = r#"{
+            "orderType": "ICEBERG",
+            "displaySize": 100,
+            "minDisplaySize": 50,
+            "checkIntervals": 30,
+            "priceType": "LIMIT_PRICE",
+            "startTime": 1782293585902,
+            "endTime": 1782297185902
+        }"#;
+        let order: Order = serde_json::from_str(json).unwrap();
+        assert_eq!(order.order_type, "ICEBERG");
+        assert_eq!(order.display_size, 100);
+        assert_eq!(order.min_display_size, 50);
+        assert_eq!(order.check_intervals, 30);
+        assert_eq!(order.price_type, "LIMIT_PRICE");
+        assert_eq!(order.start_time, 1782293585902);
+        assert_eq!(order.end_time, 1782297185902);
     }
 
     #[test]
