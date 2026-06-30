@@ -155,7 +155,7 @@ pub struct Order {
     /// 冰山单：价检间隔（秒）
     #[serde(default)]
     pub check_intervals: i64,
-    /// 冰山单：价格类型（LIMIT_PRICE / OPPONENT_PRICE）
+    /// 冰山单：价格类型（LIMIT_PRICE / ASK_PRICE / BID_PRICE / LATEST_PRICE）
     #[serde(default)]
     pub price_type: String,
     /// 冰山单：生效开始时间（epoch ms）
@@ -288,7 +288,7 @@ pub struct OrderRequest {
     /// 冰山单：价检间隔（秒）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub check_intervals: Option<i64>,
-    /// 冰山单：价格类型（LIMIT_PRICE / OPPONENT_PRICE）
+    /// 冰山单：价格类型（LIMIT_PRICE / ASK_PRICE / BID_PRICE / LATEST_PRICE）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub price_type: Option<String>,
     /// 冰山单：生效开始时间（epoch ms）
@@ -648,9 +648,9 @@ mod tests {
     fn test_iceberg_order_full_no_time_window() {
         let o = iceberg_order_full(
             "ACC", "AAPL", "STK", "BUY", 1000, 180.0,
-            100, Some(50), Some(30), Some("OPPONENT_PRICE"), None, None,
+            100, Some(50), Some(30), Some("ASK_PRICE"), None, None,
         );
-        assert_eq!(o.price_type, Some("OPPONENT_PRICE".to_string()));
+        assert_eq!(o.price_type, Some("ASK_PRICE".to_string()));
         assert_eq!(o.start_time, None);
         assert_eq!(o.end_time, None);
     }
