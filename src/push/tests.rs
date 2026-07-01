@@ -13,6 +13,7 @@ fn test_config() -> crate::config::ClientConfig {
         tiger_id: "test_tiger_id".into(),
         private_key: "test_key".into(),
         account: "test_account".into(),
+        secret_key: None,
         license: None,
         language: crate::model::enums::Language::ZhCn,
         timezone: None,

@@ -187,6 +187,9 @@ impl<'a> TradeClient<'a> {
     ) -> Result<Option<PlaceOrderResult>, TigerError> {
         let mut order = order;
         order.account = Some(self.account.clone());
+        if order.secret_key.is_none() {
+            order.secret_key = self.secret_key.clone();
+        }
         self.call_optional("place_order", order).await
     }
 
@@ -199,14 +202,24 @@ impl<'a> TradeClient<'a> {
         let mut order = order;
         order.account = Some(self.account.clone());
         order.id = Some(id);
+        if order.secret_key.is_none() {
+            order.secret_key = self.secret_key.clone();
+        }
         self.call_optional("modify_order", order).await
     }
 
     /// 取消订单
     pub async fn cancel_order(&self, id: i64) -> Result<Option<OrderIdResult>, TigerError> {
+        #[derive(serde::Serialize)]
+        struct CancelParams {
+            account: String,
+            id: i64,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            secret_key: Option<String>,
+        }
         self.call_optional(
             "cancel_order",
-            serde_json::json!({ "account": self.account, "id": id }),
+            CancelParams { account: self.account.clone(), id, secret_key: self.secret_key.clone() },
         )
         .await
     }
