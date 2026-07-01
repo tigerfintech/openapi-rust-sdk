@@ -37,6 +37,7 @@ fn test_config(server_url: &str) -> ClientConfig {
         tiger_id: "test_tiger_id".to_string(),
         private_key: cached_test_private_key().to_string(),
         account: "DU123456".to_string(),
+        secret_key: None,
         license: None,
         language: crate::model::enums::Language::ZhCn,
         timezone: None,
