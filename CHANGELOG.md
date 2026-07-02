@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **冰山单支持**：新增 `iceberg_order()`（基础参数）和 `iceberg_order_full()`（完整参数，含 `min_display_size`、`check_intervals`、`price_type`、`start_time`、`end_time`）两个订单构造辅助函数。
+- **冰山单支持**：新增 `iceberg_order()` 订单构造辅助函数，支持通过 `OrderRequest` 字段设置 `min_display_size`、`check_intervals`、`price_type`、`start_time`、`end_time` 等可选参数。
 - **`Order` 结构体新增冰山单字段**：`display_size`、`min_display_size`、`check_intervals`、`price_type`、`start_time`、`end_time`。
 - **`TradeClient::preview_order()`**：新增预览下单接口，接受任意 `Order`，返回 `Result<OrderPreviewResult>`。
-- **单元测试**：`iceberg_order` / `iceberg_order_full` 覆盖基础构造、完整参数、零值省略及序列化字段名五个场景。
+- **单元测试**：`iceberg_order` 覆盖基础构造、可选参数、零值省略及序列化字段名五个场景。
 
 ## [0.4.2] - 2026-06-09
 
