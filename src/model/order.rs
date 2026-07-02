@@ -456,39 +456,6 @@ pub fn iceberg_order(
     }
 }
 
-/// 构造冰山单（完整参数）
-///
-/// `price_type` 传 `None` 使用服务端默认值（LIMIT_PRICE）。
-/// `start_time` / `end_time` 传 `None` 不限制生效时间范围。
-pub fn iceberg_order_full(
-    account: &str, symbol: &str, sec_type: &str, action: &str,
-    quantity: i64, limit_price: f64,
-    display_size: i64,
-    min_display_size: Option<i64>,
-    check_intervals: Option<i64>,
-    price_type: Option<&str>,
-    start_time: Option<i64>,
-    end_time: Option<i64>,
-) -> OrderRequest {
-    OrderRequest {
-        account: Some(account.to_string()),
-        symbol: Some(symbol.to_string()),
-        sec_type: Some(sec_type.to_string()),
-        action: Some(action.to_string()),
-        order_type: Some("ICEBERG".to_string()),
-        total_quantity: Some(quantity),
-        limit_price: Some(limit_price),
-        time_in_force: Some("DAY".to_string()),
-        display_size: Some(display_size),
-        min_display_size,
-        check_intervals,
-        price_type: price_type.map(|s| s.to_string()),
-        start_time,
-        end_time,
-        ..OrderRequest::default()
-    }
-}
-
 /// 构造附加订单（止盈/止损）
 pub fn new_order_leg(leg_type: &str, price: f64, time_in_force: &str) -> OrderLegRequest {
     OrderLegRequest {
@@ -628,13 +595,16 @@ mod tests {
     }
 
     #[test]
-    fn test_iceberg_order_full() {
+    fn test_iceberg_order_with_optional_fields() {
         let start_time: i64 = 1782293585902;
         let end_time: i64 = 1782297185902;
-        let o = iceberg_order_full(
-            "ACC", "AAPL", "STK", "BUY", 1000, 180.0,
-            100, Some(50), Some(30), Some("LIMIT_PRICE"), Some(start_time), Some(end_time),
-        );
+        let mut o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100);
+        o.min_display_size = Some(50);
+        o.check_intervals = Some(30);
+        o.price_type = Some("LIMIT_PRICE".to_string());
+        o.start_time = Some(start_time);
+        o.end_time = Some(end_time);
+
         assert_eq!(o.order_type, Some("ICEBERG".to_string()));
         assert_eq!(o.display_size, Some(100));
         assert_eq!(o.min_display_size, Some(50));
@@ -645,11 +615,12 @@ mod tests {
     }
 
     #[test]
-    fn test_iceberg_order_full_no_time_window() {
-        let o = iceberg_order_full(
-            "ACC", "AAPL", "STK", "BUY", 1000, 180.0,
-            100, Some(50), Some(30), Some("ASK_PRICE"), None, None,
-        );
+    fn test_iceberg_order_no_time_window() {
+        let mut o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100);
+        o.min_display_size = Some(50);
+        o.check_intervals = Some(30);
+        o.price_type = Some("ASK_PRICE".to_string());
+
         assert_eq!(o.price_type, Some("ASK_PRICE".to_string()));
         assert_eq!(o.start_time, None);
         assert_eq!(o.end_time, None);
