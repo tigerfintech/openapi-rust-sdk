@@ -95,8 +95,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("tiger_id={} account={}\n", config.tiger_id, config.account);
 
     let account = config.account.clone();
-    let http = HttpClient::new(config);
-    let tc = TradeClient::new(&http, &account);
+    let http = HttpClient::new(config.clone());
+    let tc = match &config.secret_key {
+        Some(sk) => TradeClient::with_secret_key(&http, &account, sk),
+        None => TradeClient::new(&http, &account),
+    };
 
     let mut results: Vec<RunResult> = Vec::new();
 
