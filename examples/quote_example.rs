@@ -11,12 +11,12 @@
 
 use tigeropen::config::ClientConfig;
 use tigeropen::model::quote::{
-    Brief, CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest, FutureKlineRequest,
+    Brief, CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest,
     MarketScannerRequest, MarketState,
 };
 use tigeropen::model::quote_requests::{
-    AllFutureContractsRequest, BarsRequest, BriefRequest, DepthQuoteRequest,
-    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureBarsRequest, FutureBriefRequest,
+    AllFutureContractsRequest, KlineRequest, BriefRequest, DepthQuoteRequest,
+    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest, FutureBriefRequest,
     FutureContractSingleRequest, FutureDepthRequest, FutureTradingTimesRequest,
     FundSymbolsRequest, IndustryListRequest, KlineQuotaRequest,
     QuoteOvernightRequest, QuotePermissionRequest, StockDetailsRequest, StockIndustryRequest,
@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "GetBrief", e),
     }
 
-    match qc.get_kline(&["AAPL"], "day").await {
+    match qc.get_kline(KlineRequest { symbols: Some(vec!["AAPL".to_string()]), period: Some("day".to_string()), ..Default::default() }).await {
         Ok(klines) if !klines.is_empty() => ok(
             &mut results,
             "GetKline(AAPL day)",
@@ -258,7 +258,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     match qc
-        .get_bars(BarsRequest {
+        .get_kline(KlineRequest {
             symbols: Some(vec!["AAPL".to_string()]),
             period: Some("day".to_string()),
             limit: Some(5),
@@ -268,11 +268,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(ks) if !ks.is_empty() => ok(
             &mut results,
-            "GetBars(AAPL day)",
+            "GetKline(AAPL day)",
             format!("bars={}", ks[0].items.len()),
         ),
-        Ok(_) => ok(&mut results, "GetBars(AAPL day)", "(empty)"),
-        Err(e) => fail(&mut results, "GetBars(AAPL day)", e),
+        Ok(_) => ok(&mut results, "GetKline(AAPL day)", "(empty)"),
+        Err(e) => fail(&mut results, "GetKline(AAPL day)", e),
     }
 
     match qc
@@ -482,12 +482,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match qc
             .get_future_kline(FutureKlineRequest {
-                contract_codes: vec![contract_code.clone()],
-                period: "day".into(),
-                begin_time: -1,
-                end_time: -1,
-                limit: None,
-                page_token: None,
+                contract_codes: Some(vec![contract_code.clone()]),
+                period: Some("day".to_string()),
+                begin_time: Some(-1),
+                end_time: Some(-1),
+                ..Default::default()
             })
             .await
         {
@@ -554,9 +553,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(e) => fail(&mut results, "GetCurrentFutureContract", e),
         }
 
-        // GetFutureBars
+        // GetFutureKline
         match qc
-            .get_future_bars(FutureBarsRequest {
+            .get_future_kline(FutureKlineRequest {
                 contract_codes: Some(vec![contract_code.clone()]),
                 period: Some("day".to_string()),
                 begin_time: Some(-1),
@@ -568,11 +567,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             Ok(ks) if !ks.is_empty() => ok(
                 &mut results,
-                &format!("GetFutureBars({})", contract_code),
+                &format!("GetFutureKline({})", contract_code),
                 format!("bars={}", ks[0].items.len()),
             ),
-            Ok(_) => ok(&mut results, &format!("GetFutureBars({})", contract_code), "(empty)"),
-            Err(e) => fail(&mut results, &format!("GetFutureBars({})", contract_code), e),
+            Ok(_) => ok(&mut results, &format!("GetFutureKline({})", contract_code), "(empty)"),
+            Err(e) => fail(&mut results, &format!("GetFutureKline({})", contract_code), e),
         }
 
         // GetFutureDepth

@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `get_option_chain(symbol: &str, expiry: &str)` → `get_option_chain(items: &[(&str, &str)])`（每项为 `(symbol, expiry)` 对）
   - `get_option_kline(identifier: &str, period: &str)` → `get_option_kline(identifiers: &[&str], period: &str)`
   - `BarsByPageRequest.symbol: Option<String>` → `symbols: Option<Vec<String>>`
+- **`get_kline` 签名变更（KlineRequest 结构体）**：`get_kline(symbols: &[&str], period: &str)` → `get_kline(req: KlineRequest)`；删除 `get_bars` 方法及 `BarsRequest` 类型（改名为 `KlineRequest`）。
+- **`get_kline_by_page` 重命名**：`get_bars_by_page(req: BarsByPageRequest)` → `get_kline_by_page(req: KlineByPageRequest)`；删除 `BarsByPageRequest` 类型。
+- **`get_option_bars` 删除**：改用 `get_option_kline`。
+- **`get_future_bars` 删除**：改用 `get_future_kline(req: FutureKlineRequest)`；`FutureBarsRequest` 重命名为 `FutureKlineRequest`（字段相同，全部 `Option`）。
+- **`get_future_kline_by_page` 重命名**：`get_future_bars_by_page(req: FutureBarsByPageRequest)` → `get_future_kline_by_page(req: FutureKlineByPageRequest)`。
 
 ## [0.4.4] - 2026-07-03
 

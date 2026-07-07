@@ -28,7 +28,7 @@ pub use quote::{
     FinancialDailyItem, FinancialDailyRequest, FinancialReportItem, FinancialReportRequest,
     FundContractInfo, FundHistoryQuote, FundQuote,
     FutureContractInfo, FutureDepth, FutureExchange, FutureKline, FutureKlineItem,
-    FutureKlineRequest, FutureMainContractHistory, FutureQuote,
+    FutureMainContractHistory, FutureQuote,
     FutureTradingSegment, FutureTradingTime, FutureTradeTickItem,
     IndustryItem, IndustryStock,
     Kline, KlineItem, KlineQuota, KlineQuotaDetail,

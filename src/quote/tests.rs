@@ -13,11 +13,11 @@ use rsa::RsaPrivateKey;
 use crate::client::http_client::HttpClient;
 use crate::config::client_config::ClientConfig;
 use crate::model::quote::{
-    CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest, FutureKlineRequest,
+    CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest,
     MarketScannerRequest,
 };
 use crate::model::quote_requests::{
-    BriefRequest, DepthQuoteRequest, FutureBriefRequest, TradeTickRequest,
+    BriefRequest, DepthQuoteRequest, FutureBriefRequest, FutureKlineRequest, KlineRequest, TradeTickRequest,
 };
 
 fn cached_test_private_key() -> &'static str {
@@ -131,7 +131,7 @@ async fn test_get_kline_parses_typed() {
     .await;
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
-    let kline = qc.get_kline(&["AAPL"], "day").await.unwrap();
+    let kline = qc.get_kline(KlineRequest { symbols: Some(vec!["AAPL".into()]), period: Some("day".into()), ..Default::default() }).await.unwrap();
     assert_eq!(kline.len(), 1);
     assert_eq!(kline[0].symbol, "AAPL");
     assert_eq!(kline[0].items.len(), 1);
@@ -297,12 +297,11 @@ async fn test_get_future_kline_snake_case_wire() {
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc
         .get_future_kline(FutureKlineRequest {
-            contract_codes: vec!["CL2609".into()],
-            period: "day".into(),
-            begin_time: -1,
-            end_time: -1,
-            limit: None,
-            page_token: None,
+            contract_codes: Some(vec!["CL2609".into()]),
+            period: Some("day".into()),
+            begin_time: Some(-1),
+            end_time: Some(-1),
+            ..Default::default()
         })
         .await;
 

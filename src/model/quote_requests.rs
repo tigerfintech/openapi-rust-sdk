@@ -80,7 +80,7 @@ pub struct DepthQuoteRequest {
 
 /// K 线查询请求。wire: kline
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct BarsRequest {
+pub struct KlineRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -113,7 +113,7 @@ pub struct BarsRequest {
 
 /// K 线分页包装请求（客户端分页）。
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct BarsByPageRequest {
+pub struct KlineByPageRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -276,7 +276,7 @@ pub struct OptionQueryItem {
 
 /// 期权 K 线请求。wire: option_kline
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct OptionBarsRequest {
+pub struct OptionKlineRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub option_query: Option<Vec<OptionQueryItem>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -399,7 +399,7 @@ pub struct FutureHistoryMainContractRequest {
 
 /// 期货 K 线请求（含索引分页）。wire: future_kline
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct FutureBarsRequest {
+pub struct FutureKlineRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contract_codes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -424,7 +424,7 @@ pub struct FutureBarsRequest {
 
 /// 期货 K 线分页包装请求（客户端分页）。
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct FutureBarsByPageRequest {
+pub struct FutureKlineByPageRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contract_code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
