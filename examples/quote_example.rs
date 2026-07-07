@@ -126,9 +126,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .iter()
                 .map(|b| format!("{}={:.2}", b.symbol, b.latest_price))
                 .collect();
-            ok(&mut results, "GetBrief", s.join(" "));
+            ok(&mut results, "GetRealTimeQuote", s.join(" "));
         }
-        Err(e) => fail(&mut results, "GetBrief", e),
+        Err(e) => fail(&mut results, "GetRealTimeQuote", e),
     }
 
     match qc.get_kline(KlineRequest { symbols: Some(vec!["AAPL".to_string()]), period: Some("day".to_string()), ..Default::default() }).await {
@@ -251,10 +251,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(briefs) => ok(
             &mut results,
-            "GetStockDelayBriefs(AAPL)",
+            "GetDelayedQuote(AAPL)",
             format!("count={}", briefs.len()),
         ),
-        Err(e) => fail(&mut results, "GetStockDelayBriefs(AAPL)", e),
+        Err(e) => fail(&mut results, "GetDelayedQuote(AAPL)", e),
     }
 
     match qc
@@ -360,7 +360,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if expiry_date.is_empty() {
         skip(&mut results, "GetOptionChain", "no expiry available");
-        skip(&mut results, "GetOptionBrief", "no expiry available");
+        skip(&mut results, "GetOptionQuote", "no expiry available");
         skip(&mut results, "GetOptionKline", "no expiry available");
     } else {
         match qc.get_option_chain(&[("AAPL", &expiry_date)]).await {
@@ -386,17 +386,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if opt_identifier.is_empty() {
-            skip(&mut results, "GetOptionBrief", "no identifier from chain");
+            skip(&mut results, "GetOptionQuote", "no identifier from chain");
             skip(&mut results, "GetOptionKline", "no identifier from chain");
         } else {
             match qc.get_option_quote(&[opt_identifier.as_str()]).await {
                 Ok(briefs) if !briefs.is_empty() => ok(
                     &mut results,
-                    "GetOptionBrief",
+                    "GetOptionQuote",
                     format!("{} latestPrice={:.4}", briefs[0].symbol, briefs[0].latest_price),
                 ),
-                Ok(_) => ok(&mut results, "GetOptionBrief", "(empty)"),
-                Err(e) => fail(&mut results, "GetOptionBrief", e),
+                Ok(_) => ok(&mut results, "GetOptionQuote", "(empty)"),
+                Err(e) => fail(&mut results, "GetOptionQuote", e),
             }
 
             match qc.get_option_kline(&[opt_identifier.as_str()], "day").await {
