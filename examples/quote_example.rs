@@ -9,11 +9,10 @@
 //!
 //! Run: `TIGER_CONFIG_PATH=~/.tigeropen/tiger_openapi_config.properties cargo run --example quote_example`
 
-use tigeropen::client::http_client::HttpClient;
 use tigeropen::config::ClientConfig;
 use tigeropen::model::quote::{
-    CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest, FutureKlineRequest,
-    MarketScannerRequest,
+    Brief, CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest, FutureKlineRequest,
+    MarketScannerRequest, MarketState,
 };
 use tigeropen::model::quote_requests::{
     AllFutureContractsRequest, BarsRequest, BriefRequest, DepthQuoteRequest,
@@ -96,8 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     println!("tiger_id={} account={}\n", config.tiger_id, config.account);
 
-    let http = HttpClient::with_quote_server(config);
-    let qc = QuoteClient::new(&http);
+    let qc = QuoteClient::from_config(config);
 
     let mut results: Vec<RunResult> = Vec::new();
 
@@ -133,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "GetBrief", e),
     }
 
-    match qc.get_kline("AAPL", "day").await {
+    match qc.get_kline(&["AAPL"], "day").await {
         Ok(klines) if !klines.is_empty() => ok(
             &mut results,
             "GetKline(AAPL day)",
@@ -346,7 +344,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut expiry_date = String::new();
     let mut opt_identifier = String::new();
 
-    match qc.get_option_expiration("AAPL").await {
+    match qc.get_option_expiration(&["AAPL"]).await {
         Ok(exps) if !exps.is_empty() && !exps[0].dates.is_empty() => {
             ok(
                 &mut results,
@@ -365,7 +363,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         skip(&mut results, "GetOptionBrief", "no expiry available");
         skip(&mut results, "GetOptionKline", "no expiry available");
     } else {
-        match qc.get_option_chain("AAPL", &expiry_date).await {
+        match qc.get_option_chain(&[("AAPL", &expiry_date)]).await {
             Ok(chain) if !chain.is_empty() && !chain[0].items.is_empty() => {
                 ok(
                     &mut results,
@@ -401,7 +399,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(e) => fail(&mut results, "GetOptionBrief", e),
             }
 
-            match qc.get_option_kline(&opt_identifier, "day").await {
+            match qc.get_option_kline(&[opt_identifier.as_str()], "day").await {
                 Ok(ks) if !ks.is_empty() => ok(
                     &mut results,
                     "GetOptionKline",
@@ -850,6 +848,74 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(items) => ok(&mut results, "GetQuoteOvernight(AAPL)", format!("count={}", items.len())),
         Err(e) => fail(&mut results, "GetQuoteOvernight(AAPL)", e),
+    }
+
+    // ── low-level call_* API ──────────────────────────────────────────────
+    println!("\n=== Low-level call_* API ===");
+
+    // call_into: raw method name + params, deserializes data directly into T
+    match qc
+        .call_into::<Vec<MarketState>, _>("market_state", serde_json::json!({"market": "US"}))
+        .await
+    {
+        Ok(states) if !states.is_empty() => ok(
+            &mut results,
+            "call_into(market_state)",
+            format!("market={} status={}", states[0].market, states[0].market_status),
+        ),
+        Ok(_) => ok(&mut results, "call_into(market_state)", "(empty)"),
+        Err(e) => fail(&mut results, "call_into(market_state)", e),
+    }
+
+    // call_into_versioned: same as call_into but with explicit API version
+    match qc
+        .call_into_versioned::<Vec<MarketState>, _>(
+            "market_state",
+            serde_json::json!({"market": "US"}),
+            Some("2.0"),
+        )
+        .await
+    {
+        Ok(states) => ok(
+            &mut results,
+            "call_into_versioned(market_state, v2.0)",
+            format!("count={}", states.len()),
+        ),
+        Err(e) => fail(&mut results, "call_into_versioned(market_state, v2.0)", e),
+    }
+
+    // call_into_items: unwraps {"items":[...]} envelope
+    match qc
+        .call_into_items::<Brief, _>(
+            "brief",
+            serde_json::json!({"symbols": ["AAPL"], "level": "basic"}),
+        )
+        .await
+    {
+        Ok(briefs) if !briefs.is_empty() => ok(
+            &mut results,
+            "call_into_items(brief)",
+            format!("symbol={} price={:?}", briefs[0].symbol, briefs[0].latest_price),
+        ),
+        Ok(_) => ok(&mut results, "call_into_items(brief)", "(empty)"),
+        Err(e) => fail(&mut results, "call_into_items(brief)", e),
+    }
+
+    // call_optional: returns None when data is absent
+    match qc
+        .call_optional::<Brief, _>(
+            "brief",
+            serde_json::json!({"symbols": ["AAPL"], "level": "basic"}),
+        )
+        .await
+    {
+        Ok(Some(b)) => ok(
+            &mut results,
+            "call_optional(brief)",
+            format!("symbol={}", b.symbol),
+        ),
+        Ok(None) => ok(&mut results, "call_optional(brief)", "(no data)"),
+        Err(e) => fail(&mut results, "call_optional(brief)", e),
     }
 
     print_summary(&results);

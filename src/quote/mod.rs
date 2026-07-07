@@ -9,6 +9,7 @@ use serde_json::Value;
 use crate::client::api_request::ApiRequest;
 use crate::client::decode::decode_value;
 use crate::client::http_client::HttpClient;
+use crate::config::client_config::ClientConfig;
 use crate::error::TigerError;
 use crate::model::quote::{
     Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest, Depth,
@@ -43,19 +44,24 @@ const VERSION_V2: &str = "2.0";
 const VERSION_V3: &str = "3.0";
 
 /// 行情客户端，封装所有行情 API。
-pub struct QuoteClient<'a> {
-    http_client: &'a HttpClient,
+pub struct QuoteClient {
+    http_client: HttpClient,
 }
 
-impl<'a> QuoteClient<'a> {
-    /// 创建行情客户端。调用方通常使用 [`HttpClient::with_quote_server`] 以便
-    /// 请求发往 `config.quote_server_url`。
-    pub fn new(http_client: &'a HttpClient) -> Self {
+impl QuoteClient {
+    /// 从 ClientConfig 自动构造（推荐）。内部使用 quote server URL。
+    pub fn from_config(config: ClientConfig) -> Self {
+        Self { http_client: HttpClient::with_quote_server(config) }
+    }
+
+    /// 使用已有的 HttpClient 创建行情客户端。调用方通常使用 [`HttpClient::with_quote_server`]
+    /// 以便请求发往 `config.quote_server_url`。
+    pub fn new(http_client: HttpClient) -> Self {
         Self { http_client }
     }
 
     /// 内部通用：构造请求、发送、把 data 解析为 T。
-    async fn call_into<T, P>(&self, method: &str, params: P) -> Result<T, TigerError>
+    pub async fn call_into<T, P>(&self, method: &str, params: P) -> Result<T, TigerError>
     where
         T: serde::de::DeserializeOwned + Default,
         P: Serialize,
@@ -63,7 +69,7 @@ impl<'a> QuoteClient<'a> {
         self.call_into_versioned(method, params, None).await
     }
 
-    async fn call_into_versioned<T, P>(
+    pub async fn call_into_versioned<T, P>(
         &self,
         method: &str,
         params: P,
@@ -84,7 +90,7 @@ impl<'a> QuoteClient<'a> {
     }
 
     /// 解包 {items:[...]} 外壳并返回 items 列表。
-    async fn call_into_items<T, P>(&self, method: &str, params: P) -> Result<Vec<T>, TigerError>
+    pub async fn call_into_items<T, P>(&self, method: &str, params: P) -> Result<Vec<T>, TigerError>
     where
         T: serde::de::DeserializeOwned,
         P: Serialize,
@@ -98,7 +104,7 @@ impl<'a> QuoteClient<'a> {
     }
 
     /// 解包可能返回数组或单对象的接口（统一成 Vec）。
-    async fn call_into_list_or_object<T, P>(
+    pub async fn call_into_list_or_object<T, P>(
         &self,
         method: &str,
         params: P,
@@ -144,9 +150,9 @@ impl<'a> QuoteClient<'a> {
         self.call_into("quote_real_time", req).await
     }
 
-    /// 获取 K 线（一个标的一组）
-    pub async fn get_kline(&self, symbol: &str, period: &str) -> Result<Vec<Kline>, TigerError> {
-        self.call_into("kline", serde_json::json!({ "symbols": [symbol], "period": period })).await
+    /// 获取 K 线
+    pub async fn get_kline(&self, symbols: &[&str], period: &str) -> Result<Vec<Kline>, TigerError> {
+        self.call_into("kline", serde_json::json!({ "symbols": symbols, "period": period })).await
     }
 
     /// 获取分时数据（v3.0）
@@ -211,7 +217,7 @@ impl<'a> QuoteClient<'a> {
 
         while (acc.len() as i32) < total_size {
             let sub = BarsRequest {
-                symbols: req.symbol.clone().map(|s| vec![s]),
+                symbols: req.symbols.clone(),
                 period: req.period.clone(),
                 right: req.right.clone(),
                 begin_time,
@@ -284,24 +290,25 @@ impl<'a> QuoteClient<'a> {
     // ========== 期权行情 ==========
 
     /// 获取期权到期日
-    pub async fn get_option_expiration(&self, symbol: &str) -> Result<Vec<OptionExpiration>, TigerError> {
+    pub async fn get_option_expiration(&self, symbols: &[&str]) -> Result<Vec<OptionExpiration>, TigerError> {
         self.call_into(
             "option_expiration",
-            serde_json::json!({ "symbols": [symbol] }),
+            serde_json::json!({ "symbols": symbols }),
         )
         .await
     }
 
-    /// 获取期权链（v3.0）。`expiry` 格式为 "YYYY-MM-DD"，内部转为毫秒时间戳。
+    /// 获取期权链（v3.0）。每个元素为 `(symbol, expiry)`，`expiry` 格式 "YYYY-MM-DD"，内部转为毫秒时间戳。
     pub async fn get_option_chain(
         &self,
-        symbol: &str,
-        expiry: &str,
+        items: &[(&str, &str)],
     ) -> Result<Vec<OptionChain>, TigerError> {
-        let expiry_ts = parse_expiry_to_ms(expiry)?;
-        let params = serde_json::json!({
-            "option_basic": [{ "symbol": symbol, "expiry": expiry_ts }]
-        });
+        let mut option_basics: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for (symbol, expiry) in items {
+            let expiry_ts = parse_expiry_to_ms(expiry)?;
+            option_basics.push(serde_json::json!({ "symbol": symbol, "expiry": expiry_ts }));
+        }
+        let params = serde_json::json!({ "option_basic": option_basics });
         self.call_into_versioned("option_chain", params, Some(VERSION_V3)).await
     }
 
@@ -324,22 +331,24 @@ impl<'a> QuoteClient<'a> {
         self.call_into_versioned("option_brief", params, Some(VERSION_V2)).await
     }
 
-    /// 获取期权 K 线（v2.0）。
+    /// 获取期权 K 线（v2.0）。`identifiers` 为 OCC 格式，`period` 对所有 identifier 生效。
     pub async fn get_option_kline(
         &self,
-        identifier: &str,
+        identifiers: &[&str],
         period: &str,
     ) -> Result<Vec<OptionKline>, TigerError> {
-        let contract = parse_option_identifier(identifier)?;
-        let params = serde_json::json!({
-            "option_query": [{
+        let mut option_query: Vec<serde_json::Value> = Vec::with_capacity(identifiers.len());
+        for id in identifiers {
+            let contract = parse_option_identifier(id)?;
+            option_query.push(serde_json::json!({
                 "symbol": contract.symbol,
                 "expiry": contract.expiry,
                 "right": contract.right,
                 "strike": contract.strike,
                 "period": period,
-            }]
-        });
+            }));
+        }
+        let params = serde_json::json!({ "option_query": option_query });
         self.call_into_versioned("option_kline", params, Some(VERSION_V2)).await
     }
 
@@ -552,7 +561,7 @@ impl<'a> QuoteClient<'a> {
 
     // ========== 窝轮 ==========
 
-    /// 窝轮简要行情。wire: warrant_briefs
+    /// 窝轮实时行情。wire: warrant_briefs
     pub async fn get_warrant_briefs(&self, req: WarrantBriefsRequest) -> Result<Vec<WarrantBrief>, TigerError> {
         self.call_into("warrant_briefs", req).await
     }
@@ -706,7 +715,7 @@ impl<'a> QuoteClient<'a> {
 
     // ========== 内部辅助 ==========
 
-    async fn call_optional<T, P>(&self, method: &str, params: P) -> Result<Option<T>, TigerError>
+    pub async fn call_optional<T, P>(&self, method: &str, params: P) -> Result<Option<T>, TigerError>
     where
         T: serde::de::DeserializeOwned,
         P: Serialize,
@@ -714,7 +723,7 @@ impl<'a> QuoteClient<'a> {
         self.call_optional_versioned(method, params, None).await
     }
 
-    async fn call_optional_versioned<T, P>(
+    pub async fn call_optional_versioned<T, P>(
         &self,
         method: &str,
         params: P,

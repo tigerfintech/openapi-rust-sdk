@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-07
+
+### Breaking Changes
+
+- **`QuoteClient` / `TradeClient` 构造方式变更**：不再需要用户手动创建 `HttpClient`；新增 `from_config(config: ClientConfig)` 构造器，直接接受 `ClientConfig`，内部自动选择 trade/quote server。旧的 `new(http_client)` / `with_secret_key(http_client, ...)` 构造器继续可用，但参数从 `&HttpClient` 改为拥有所有权的 `HttpClient`（移除了 lifetime 参数 `<'a>`）。
+- **`call_*` 系列方法改为 `pub`**：`call_into`、`call_into_versioned`、`call_into_items`、`call_into_list_or_object`、`call_optional`、`call_optional_versioned` 现在均为 `pub`，可直接用于自定义请求。
+- **多 symbol 支持（行情接口签名变更）**：下列接口参数由单 symbol 改为 slice。调用方需更新：
+  - `get_kline(symbol: &str, ...)` → `get_kline(symbols: &[&str], ...)`
+  - `get_option_expiration(symbol: &str)` → `get_option_expiration(symbols: &[&str])`
+  - `get_option_chain(symbol: &str, expiry: &str)` → `get_option_chain(items: &[(&str, &str)])`（每项为 `(symbol, expiry)` 对）
+  - `get_option_kline(identifier: &str, period: &str)` → `get_option_kline(identifiers: &[&str], period: &str)`
+  - `BarsByPageRequest.symbol: Option<String>` → `symbols: Option<Vec<String>>`
+
 ## [0.4.4] - 2026-07-03
 
 ### Fixed

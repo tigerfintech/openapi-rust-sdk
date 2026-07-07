@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::client::api_request::ApiRequest;
 use crate::client::decode::decode_value;
 use crate::client::http_client::HttpClient;
+use crate::config::client_config::ClientConfig;
 use crate::error::TigerError;
 use crate::model::contract::Contract;
 use crate::model::order::{Order, OrderRequest};
@@ -31,16 +32,24 @@ use crate::model::trade_requests::{
 };
 
 /// 交易客户端
-pub struct TradeClient<'a> {
-    http_client: &'a HttpClient,
+pub struct TradeClient {
+    http_client: HttpClient,
     account: String,
     /// 机构账户交易密钥（期权行权等高风险操作使用）
     secret_key: Option<String>,
 }
 
-impl<'a> TradeClient<'a> {
-    /// 创建交易客户端
-    pub fn new(http_client: &'a HttpClient, account: impl Into<String>) -> Self {
+impl TradeClient {
+    /// 从 ClientConfig 自动构造（推荐）。account 从 config.account 读取。
+    pub fn from_config(config: ClientConfig) -> Self {
+        let account = config.account.clone();
+        let secret_key = config.secret_key.clone();
+        let http_client = HttpClient::new(config);
+        Self { http_client, account, secret_key }
+    }
+
+    /// 使用已有的 HttpClient 创建交易客户端。
+    pub fn new(http_client: HttpClient, account: impl Into<String>) -> Self {
         Self {
             http_client,
             account: account.into(),
@@ -50,7 +59,7 @@ impl<'a> TradeClient<'a> {
 
     /// 创建交易客户端（带 secret_key，适用于机构账户）
     pub fn with_secret_key(
-        http_client: &'a HttpClient,
+        http_client: HttpClient,
         account: impl Into<String>,
         secret_key: impl Into<String>,
     ) -> Self {
@@ -62,7 +71,7 @@ impl<'a> TradeClient<'a> {
     }
 
     /// call_into 的 Option 版本，没数据时返回 None 而不是 T::default()。
-    async fn call_optional<T, P>(&self, method: &str, params: P) -> Result<Option<T>, TigerError>
+    pub async fn call_optional<T, P>(&self, method: &str, params: P) -> Result<Option<T>, TigerError>
     where
         T: serde::de::DeserializeOwned,
         P: Serialize,
@@ -82,7 +91,7 @@ impl<'a> TradeClient<'a> {
     }
 
     /// 剥掉服务端 `{"items":[...]}` 外包装
-    async fn call_into_items<T, P>(&self, method: &str, params: P) -> Result<Vec<T>, TigerError>
+    pub async fn call_into_items<T, P>(&self, method: &str, params: P) -> Result<Vec<T>, TigerError>
     where
         T: serde::de::DeserializeOwned,
         P: Serialize,

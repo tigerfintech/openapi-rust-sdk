@@ -14,7 +14,6 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tigeropen::client::http_client::HttpClient;
 use tigeropen::config::ClientConfig;
 use tigeropen::model::order::limit_order;
 use tigeropen::model::trade_requests::{
@@ -95,11 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("tiger_id={} account={}\n", config.tiger_id, config.account);
 
     let account = config.account.clone();
-    let http = HttpClient::new(config.clone());
-    let tc = match &config.secret_key {
-        Some(sk) => TradeClient::with_secret_key(&http, &account, sk),
-        None => TradeClient::new(&http, &account),
-    };
+    let tc = TradeClient::from_config(config);
 
     let mut results: Vec<RunResult> = Vec::new();
 
@@ -515,6 +510,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         skip(&mut results, "CheckOptionExercise", "no exercisable positions");
+    }
+
+    // ── low-level call_* API ──────────────────────────────────────────────
+    println!("\n=== Low-level call_* API ===");
+
+    // call_into_items: raw method name + arbitrary JSON params, returns Vec<T>
+    match tc
+        .call_into_items::<tigeropen::model::contract::Contract, _>(
+            "contract",
+            serde_json::json!({"account": account, "symbol": "AAPL", "sec_type": "STK"}),
+        )
+        .await
+    {
+        Ok(cs) if !cs.is_empty() => ok(
+            &mut results,
+            "call_into_items(contract)",
+            format!("symbol={} secType={}", cs[0].symbol, cs[0].sec_type),
+        ),
+        Ok(_) => ok(&mut results, "call_into_items(contract)", "(empty)"),
+        Err(e) => fail(&mut results, "call_into_items(contract)", e),
+    }
+
+    // call_optional: returns None when data is absent, Some(T) otherwise
+    match tc
+        .call_optional::<tigeropen::model::trade::PreviewResult, _>(
+            "preview_order",
+            tigeropen::model::order::limit_order(&account, "AAPL", "STK", "BUY", 1, 1.00),
+        )
+        .await
+    {
+        Ok(Some(r)) => ok(
+            &mut results,
+            "call_optional(preview_order)",
+            format!("isPass={} commission={}", r.is_pass, r.commission),
+        ),
+        Ok(None) => ok(&mut results, "call_optional(preview_order)", "(no data)"),
+        Err(e) => fail(&mut results, "call_optional(preview_order)", e),
     }
 
     print_summary(&results);
