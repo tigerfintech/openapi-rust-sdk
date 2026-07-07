@@ -145,9 +145,14 @@ impl QuoteClient {
         self.call_into("market_state", serde_json::json!({ "market": market })).await
     }
 
-    /// 获取实时快照（v0.4.0 新签名：接受 BriefRequest）。wire: quote_real_time
-    pub async fn get_brief(&self, req: BriefRequest) -> Result<Vec<Brief>, TigerError> {
+    /// 获取实时行情。wire: quote_real_time
+    pub async fn get_real_time_quote(&self, req: BriefRequest) -> Result<Vec<Brief>, TigerError> {
         self.call_into("quote_real_time", req).await
+    }
+
+    #[deprecated(since = "0.5.0", note = "Use get_real_time_quote instead")]
+    pub async fn get_brief(&self, req: BriefRequest) -> Result<Vec<Brief>, TigerError> {
+        self.get_real_time_quote(req).await
     }
 
     /// 获取 K 线。wire: kline
@@ -198,8 +203,13 @@ impl QuoteClient {
     }
 
     /// 延时行情。wire: quote_delay
-    pub async fn get_stock_delay_briefs(&self, req: StockDelayBriefsRequest) -> Result<Vec<Brief>, TigerError> {
+    pub async fn get_delayed_quote(&self, req: StockDelayBriefsRequest) -> Result<Vec<Brief>, TigerError> {
         self.call_into("quote_delay", req).await
+    }
+
+    #[deprecated(since = "0.5.0", note = "Use get_delayed_quote instead")]
+    pub async fn get_stock_delay_briefs(&self, req: StockDelayBriefsRequest) -> Result<Vec<Brief>, TigerError> {
+        self.get_delayed_quote(req).await
     }
 
     /// 客户端分页 K 线。循环调用直到获得 total_size 条。
@@ -307,8 +317,8 @@ impl QuoteClient {
         self.call_into_versioned("option_chain", params, Some(VERSION_V3)).await
     }
 
-    /// 获取期权快照（v2.0）。`identifiers` 为 OCC 格式（如 "AAPL 240119C00150000"）。
-    pub async fn get_option_brief(
+    /// 获取期权实时行情（v2.0）。`identifiers` 为 OCC 格式（如 "AAPL 240119C00150000"）。
+    pub async fn get_option_quote(
         &self,
         identifiers: &[&str],
     ) -> Result<Vec<OptionBrief>, TigerError> {
@@ -324,6 +334,14 @@ impl QuoteClient {
         }
         let params = serde_json::json!({ "option_basic": option_basics });
         self.call_into_versioned("option_brief", params, Some(VERSION_V2)).await
+    }
+
+    #[deprecated(since = "0.5.0", note = "Use get_option_quote instead")]
+    pub async fn get_option_brief(
+        &self,
+        identifiers: &[&str],
+    ) -> Result<Vec<OptionBrief>, TigerError> {
+        self.get_option_quote(identifiers).await
     }
 
     /// 获取期权 K 线（v2.0）。`identifiers` 为 OCC 格式，`period` 对所有 identifier 生效。
@@ -538,8 +556,13 @@ impl QuoteClient {
     // ========== 窝轮 ==========
 
     /// 窝轮实时行情。wire: warrant_briefs
-    pub async fn get_warrant_briefs(&self, req: WarrantBriefsRequest) -> Result<Vec<WarrantBrief>, TigerError> {
+    pub async fn get_warrant_quote(&self, req: WarrantBriefsRequest) -> Result<Vec<WarrantBrief>, TigerError> {
         self.call_into("warrant_briefs", req).await
+    }
+
+    #[deprecated(since = "0.5.0", note = "Use get_warrant_quote instead")]
+    pub async fn get_warrant_briefs(&self, req: WarrantBriefsRequest) -> Result<Vec<WarrantBrief>, TigerError> {
+        self.get_warrant_quote(req).await
     }
 
     /// 窝轮筛选。wire: warrant_filter
