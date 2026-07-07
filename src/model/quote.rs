@@ -640,20 +640,6 @@ pub struct CorporateActionRequest {
     pub end_date: String,
 }
 
-/// 期货 K 线请求
-#[derive(Debug, Clone, Serialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct FutureKlineRequest {
-    pub contract_codes: Vec<String>,
-    pub period: String,
-    pub begin_time: i64,
-    pub end_time: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_token: Option<String>,
-}
-
 /// 选股扫描请求
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -733,13 +719,13 @@ mod tests {
 
     #[test]
     fn test_future_kline_request_serializes_to_snake_case() {
+        use crate::model::quote_requests::FutureKlineRequest;
         let req = FutureKlineRequest {
-            contract_codes: vec!["CL2609".into()],
-            period: "day".into(),
-            begin_time: -1,
-            end_time: -1,
-            limit: None,
-            page_token: None,
+            contract_codes: Some(vec!["CL2609".into()]),
+            period: Some("day".into()),
+            begin_time: Some(-1),
+            end_time: Some(-1),
+            ..Default::default()
         };
         let v: serde_json::Value = serde_json::to_value(&req).unwrap();
         let obj = v.as_object().unwrap();

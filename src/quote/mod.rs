@@ -15,7 +15,7 @@ use crate::model::quote::{
     Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest, Depth,
     ExchangeRate, FinancialCurrency, FinancialDailyItem, FinancialDailyRequest,
     FinancialReportItem, FinancialReportRequest, FundContractInfo, FundHistoryQuote, FundQuote,
-    FutureContractInfo, FutureDepth, FutureExchange, FutureKline, FutureKlineRequest,
+    FutureContractInfo, FutureDepth, FutureExchange, FutureKline,
     FutureMainContractHistory, FutureQuote, FutureTradingTime, FutureTradeTickItem,
     IndustryItem, IndustryStock, Kline, KlineItem, KlineQuota, MarketScannerRequest,
     MarketScannerTags, MarketState, OptionAnalysis, OptionBrief, OptionChain, OptionExpiration,
@@ -24,13 +24,13 @@ use crate::model::quote::{
     TradingCalendarItem, WarrantBrief, WarrantFilterResult, FutureKlineItem,
 };
 use crate::model::quote_requests::{
-    AllFutureContractsRequest, BarsRequest, BarsByPageRequest, BriefRequest, DepthQuoteRequest,
-    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureBarsRequest,
-    FutureBarsByPageRequest, FutureBriefRequest, FutureContinuousContractsRequest,
+    AllFutureContractsRequest, KlineRequest, KlineByPageRequest, BriefRequest, DepthQuoteRequest,
+    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest,
+    FutureKlineByPageRequest, FutureBriefRequest, FutureContinuousContractsRequest,
     FutureContractSingleRequest, FutureDepthRequest, FutureHistoryMainContractRequest,
     FutureTradingTimesRequest, FutureTradeTicksRequest, FundContractsRequest, FundHistoryQuoteRequest,
     FundQuoteRequest, FundSymbolsRequest, IndustryListRequest, IndustryStocksRequest,
-    KlineQuotaRequest, MarketScannerTagsRequest, OptionAnalysisRequest, OptionBarsRequest,
+    KlineQuotaRequest, MarketScannerTagsRequest, OptionAnalysisRequest,
     OptionDepthRequest, OptionSymbolsRequest, OptionTimelineRequest, OptionTradeTicksRequest,
     QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest, StockBrokerRequest,
     StockDelayBriefsRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
@@ -150,9 +150,9 @@ impl QuoteClient {
         self.call_into("quote_real_time", req).await
     }
 
-    /// 获取 K 线
-    pub async fn get_kline(&self, symbols: &[&str], period: &str) -> Result<Vec<Kline>, TigerError> {
-        self.call_into("kline", serde_json::json!({ "symbols": symbols, "period": period })).await
+    /// 获取 K 线。wire: kline
+    pub async fn get_kline(&self, req: KlineRequest) -> Result<Vec<Kline>, TigerError> {
+        self.call_into("kline", req).await
     }
 
     /// 获取分时数据（v3.0）
@@ -202,13 +202,8 @@ impl QuoteClient {
         self.call_into("quote_delay", req).await
     }
 
-    /// K 线（完整参数版）。wire: kline
-    pub async fn get_bars(&self, req: BarsRequest) -> Result<Vec<Kline>, TigerError> {
-        self.call_into("kline", req).await
-    }
-
     /// 客户端分页 K 线。循环调用直到获得 total_size 条。
-    pub async fn get_bars_by_page(&self, req: BarsByPageRequest) -> Result<Vec<KlineItem>, TigerError> {
+    pub async fn get_kline_by_page(&self, req: KlineByPageRequest) -> Result<Vec<KlineItem>, TigerError> {
         let page_size = req.page_size.unwrap_or(200);
         let total_size = req.total_size.unwrap_or(1000);
         let mut acc: Vec<KlineItem> = Vec::new();
@@ -216,7 +211,7 @@ impl QuoteClient {
         let begin_time = req.begin_time;
 
         while (acc.len() as i32) < total_size {
-            let sub = BarsRequest {
+            let sub = KlineRequest {
                 symbols: req.symbols.clone(),
                 period: req.period.clone(),
                 right: req.right.clone(),
@@ -352,11 +347,6 @@ impl QuoteClient {
         self.call_into_versioned("option_kline", params, Some(VERSION_V2)).await
     }
 
-    /// 期权 K 线（完整参数版）。wire: option_kline (v2.0)
-    pub async fn get_option_bars(&self, req: OptionBarsRequest) -> Result<Vec<Kline>, TigerError> {
-        self.call_into_versioned("option_kline", req, Some(VERSION_V2)).await
-    }
-
     /// 期权逐笔。wire: option_trade_tick
     pub async fn get_option_trade_ticks(&self, req: OptionTradeTicksRequest) -> Result<Vec<TradeTick>, TigerError> {
         self.call_into("option_trade_tick", req).await
@@ -406,16 +396,14 @@ impl QuoteClient {
         self.call_into("future_real_time_quote", req).await
     }
 
-    /// 获取期货 K 线（老接口，兼容）
-    pub async fn get_future_kline(
-        &self,
-        mut req: FutureKlineRequest,
-    ) -> Result<Vec<FutureKline>, TigerError> {
-        if req.begin_time == 0 {
-            req.begin_time = -1;
+    /// 获取期货 K 线。wire: future_kline
+    /// begin_time / end_time 为 0 时自动改为 -1（服务端要求字段必须存在）。
+    pub async fn get_future_kline(&self, mut req: FutureKlineRequest) -> Result<Vec<FutureKline>, TigerError> {
+        if req.begin_time == Some(0) {
+            req.begin_time = Some(-1);
         }
-        if req.end_time == 0 {
-            req.end_time = -1;
+        if req.end_time == Some(0) {
+            req.end_time = Some(-1);
         }
         self.call_into("future_kline", req).await
     }
@@ -447,20 +435,8 @@ impl QuoteClient {
         self.call_into("future_main_contract", req).await
     }
 
-    /// 期货 K 线（含索引分页）。wire: future_kline
-    /// begin_time / end_time 为 0 时自动改为 -1（服务端要求字段必须存在）。
-    pub async fn get_future_bars(&self, mut req: FutureBarsRequest) -> Result<Vec<FutureKline>, TigerError> {
-        if req.begin_time == Some(0) {
-            req.begin_time = Some(-1);
-        }
-        if req.end_time == Some(0) {
-            req.end_time = Some(-1);
-        }
-        self.call_into("future_kline", req).await
-    }
-
     /// 期货 K 线分页包装。
-    pub async fn get_future_bars_by_page(&self, req: FutureBarsByPageRequest) -> Result<Vec<FutureKlineItem>, TigerError> {
+    pub async fn get_future_kline_by_page(&self, req: FutureKlineByPageRequest) -> Result<Vec<FutureKlineItem>, TigerError> {
         let page_size = req.page_size.unwrap_or(200);
         let total_size = req.total_size.unwrap_or(1000);
         let mut acc: Vec<FutureKlineItem> = Vec::new();
@@ -476,7 +452,7 @@ impl QuoteClient {
         };
 
         while (acc.len() as i32) < total_size {
-            let sub = FutureBarsRequest {
+            let sub = FutureKlineRequest {
                 contract_code: req.contract_code.clone(),
                 period: req.period.clone(),
                 begin_time,
