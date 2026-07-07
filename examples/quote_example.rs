@@ -115,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // v0.4.0 new signature: BriefRequest
     match qc
-        .get_brief(BriefRequest {
+        .get_real_time_quote(BriefRequest {
             symbols: Some(vec!["AAPL".to_string(), "TSLA".to_string()]),
             ..Default::default()
         })
@@ -243,7 +243,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     match qc
-        .get_stock_delay_briefs(tigeropen::model::quote_requests::StockDelayBriefsRequest {
+        .get_delayed_quote(tigeropen::model::quote_requests::StockDelayBriefsRequest {
             symbols: Some(vec!["AAPL".to_string()]),
             ..Default::default()
         })
@@ -389,7 +389,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             skip(&mut results, "GetOptionBrief", "no identifier from chain");
             skip(&mut results, "GetOptionKline", "no identifier from chain");
         } else {
-            match qc.get_option_brief(&[opt_identifier.as_str()]).await {
+            match qc.get_option_quote(&[opt_identifier.as_str()]).await {
                 Ok(briefs) if !briefs.is_empty() => ok(
                     &mut results,
                     "GetOptionBrief",
