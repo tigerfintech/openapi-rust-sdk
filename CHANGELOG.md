@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`TradeClient::preview_order()`**：新增预览下单接口，接受任意 `Order`，返回 `Result<OrderPreviewResult>`。
 - **单元测试**：`iceberg_order` 覆盖基础构造、可选参数、零值省略及序列化字段名五个场景。
 
+### Deprecated
+
+- **`get_brief` → `get_real_time_quote`**：方法名与 wire method `quote_real_time` 不一致，现以 `get_real_time_quote` 为主，旧名保留并标记 `#[deprecated(since = "0.5.0")]`。
+- **`get_option_brief` → `get_option_quote`**：wire method 为 `option_brief`，更名为 `get_option_quote`。
+- **`get_stock_delay_briefs` → `get_delayed_quote`**：wire method 为 `quote_delay`，更名与之对齐。
+- **`get_warrant_briefs` → `get_warrant_quote`**：wire method 为 `warrant_briefs`，更名保持接口层风格一致。
+
 ## [0.4.2] - 2026-06-09
 
 ### Added
