@@ -103,7 +103,7 @@ async fn test_get_market_state_parses_typed() {
 }
 
 #[tokio::test]
-async fn test_get_brief_parses_typed() {
+async fn test_get_real_time_quote_parses_typed() {
     let server = mock_success_server(
         r#"[{"symbol":"AAPL","latestPrice":150.0,"askPrice":150.1,"askSize":100,"volume":1000000}]"#,
     )
@@ -111,7 +111,7 @@ async fn test_get_brief_parses_typed() {
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let briefs = qc
-        .get_brief(BriefRequest {
+        .get_real_time_quote(BriefRequest {
             symbols: Some(vec!["AAPL".into()]),
             ..Default::default()
         })
@@ -247,11 +247,11 @@ async fn test_get_market_state_sends_snake_case_and_method() {
 }
 
 #[tokio::test]
-async fn test_get_brief_uses_method_brief() {
+async fn test_get_real_time_quote_uses_wire_method() {
     let server = mock_success_server(r#"[]"#).await;
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc
-        .get_brief(BriefRequest {
+        .get_real_time_quote(BriefRequest {
             symbols: Some(vec!["AAPL".into()]),
             ..Default::default()
         })
@@ -370,10 +370,10 @@ async fn test_get_option_chain_sends_expiry_ms() {
 }
 
 #[tokio::test]
-async fn test_get_option_brief_parses_identifier() {
+async fn test_get_option_quote_parses_identifier() {
     let server = mock_success_server(r#"[]"#).await;
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc.get_option_brief(&["AAPL 240119C00150000"]).await;
+    let _ = qc.get_option_quote(&["AAPL 240119C00150000"]).await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
