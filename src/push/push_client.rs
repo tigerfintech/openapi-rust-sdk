@@ -35,7 +35,7 @@ const MAX_RECONNECT_INTERVAL_SECS: u64 = 60;
 /// Default connect timeout in seconds
 const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 30;
 /// SDK version string
-const SDK_VERSION: &str = "rust-sdk/0.4.0";
+const SDK_VERSION: &str = concat!("rust-sdk/", env!("CARGO_PKG_VERSION"));
 /// Protocol version
 const ACCEPT_VERSION: &str = "2";
 /// Default heartbeat send interval in milliseconds

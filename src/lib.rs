@@ -22,5 +22,5 @@ pub mod trade;
 pub mod push;
 pub mod logger;
 
-/// SDK 版本号
-pub const VERSION: &str = "0.4.1";
+/// SDK 版本号（与 Cargo.toml 保持一致）
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
