@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-07-07
+
+### Deprecated
+
+- **`get_brief` → `get_real_time_quote`**：方法名与 wire method `quote_real_time` 不一致，现以 `get_real_time_quote` 为主，旧名保留并标记 `#[deprecated(since = "0.5.1")]`。
+- **`get_option_brief` → `get_option_quote`**：wire method 为 `option_brief`，更名为 `get_option_quote`。
+- **`get_stock_delay_briefs` → `get_delayed_quote`**：wire method 为 `quote_delay`，更名与之对齐。
+- **`get_warrant_briefs` → `get_warrant_quote`**：wire method 为 `warrant_briefs`，更名保持接口层风格一致。
+
 ## [0.5.0] - 2026-07-07
 
 ### Breaking Changes

@@ -150,7 +150,7 @@ impl QuoteClient {
         self.call_into("quote_real_time", req).await
     }
 
-    #[deprecated(since = "0.5.0", note = "Use get_real_time_quote instead")]
+    #[deprecated(since = "0.5.1", note = "Use get_real_time_quote instead")]
     pub async fn get_brief(&self, req: BriefRequest) -> Result<Vec<Brief>, TigerError> {
         self.get_real_time_quote(req).await
     }
@@ -207,7 +207,7 @@ impl QuoteClient {
         self.call_into("quote_delay", req).await
     }
 
-    #[deprecated(since = "0.5.0", note = "Use get_delayed_quote instead")]
+    #[deprecated(since = "0.5.1", note = "Use get_delayed_quote instead")]
     pub async fn get_stock_delay_briefs(&self, req: StockDelayBriefsRequest) -> Result<Vec<Brief>, TigerError> {
         self.get_delayed_quote(req).await
     }
@@ -336,7 +336,7 @@ impl QuoteClient {
         self.call_into_versioned("option_brief", params, Some(VERSION_V2)).await
     }
 
-    #[deprecated(since = "0.5.0", note = "Use get_option_quote instead")]
+    #[deprecated(since = "0.5.1", note = "Use get_option_quote instead")]
     pub async fn get_option_brief(
         &self,
         identifiers: &[&str],
@@ -560,7 +560,7 @@ impl QuoteClient {
         self.call_into("warrant_briefs", req).await
     }
 
-    #[deprecated(since = "0.5.0", note = "Use get_warrant_quote instead")]
+    #[deprecated(since = "0.5.1", note = "Use get_warrant_quote instead")]
     pub async fn get_warrant_briefs(&self, req: WarrantBriefsRequest) -> Result<Vec<WarrantBrief>, TigerError> {
         self.get_warrant_quote(req).await
     }
