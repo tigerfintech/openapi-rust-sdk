@@ -17,7 +17,7 @@ use crate::model::quote::{
     MarketScannerRequest,
 };
 use crate::model::quote_requests::{
-    BriefRequest, QuoteDepthRequest, FutureRealTimeQuoteRequest, FutureKlineRequest, KlineRequest, TradeTickRequest,
+    BriefRequest, QuoteDepthRequest, FutureRealTimeQuoteRequest, FutureKlineRequest, KlineRequest,
     OptionChainItem, OptionChainRequest, OptionContractItem, OptionKlineItem, OptionKlineRequest, OptionQuoteRequest,
 };
 

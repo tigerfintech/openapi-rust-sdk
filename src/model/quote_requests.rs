@@ -458,7 +458,7 @@ fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
     // 2. HK compact (no space): "TCH.HK260710C00295000" — symbol ends where digits begin
     let (symbol, rest) = if trimmed.contains(' ') {
         // Space-delimited: symbol is everything before first space
-        let mut parts = trimmed.splitn(2, |c: char| c == ' ');
+        let mut parts = trimmed.splitn(2, ' ');
         let sym = parts.next().filter(|s| !s.is_empty())
             .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier: {:?}", identifier)))?
             .to_string();
@@ -467,8 +467,11 @@ fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
             .trim_start(); // strip OCC padding spaces between symbol and date
         (sym, rest.to_string())
     } else {
-        // No space: find where the suffix starts — 6 consecutive digits for YYMMDD
-        // Walk from the right; the suffix is always 15 chars: YYMMDD + C/P + 8 digits
+        // No space: find where the suffix starts — suffix is always 15 ASCII chars: YYMMDD + C/P + 8 digits
+        // Require ASCII so byte-offset slicing is safe (non-ASCII symbols are not valid OCC identifiers)
+        if !trimmed.is_ascii() {
+            return Err(TigerError::Config(format!("invalid OCC identifier (non-ASCII characters not supported): {:?}", identifier)));
+        }
         if trimmed.len() < 15 {
             return Err(TigerError::Config(format!("invalid OCC identifier (too short): {:?}", identifier)));
         }
