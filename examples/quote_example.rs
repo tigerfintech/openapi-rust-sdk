@@ -19,6 +19,7 @@ use tigeropen::model::quote_requests::{
     FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest, FutureBriefRequest,
     FutureContractSingleRequest, FutureDepthRequest, FutureTradingTimesRequest,
     FundSymbolsRequest, IndustryListRequest, KlineQuotaRequest,
+    OptionChainItem, OptionChainRequest, OptionContractItem, OptionKlineItem, OptionKlineRequest, OptionQuoteRequest,
     QuoteOvernightRequest, QuotePermissionRequest, StockDetailsRequest, StockIndustryRequest,
     TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
     TradingCalendarRequest,
@@ -363,7 +364,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         skip(&mut results, "GetOptionQuote", "no expiry available");
         skip(&mut results, "GetOptionKline", "no expiry available");
     } else {
-        match qc.get_option_chain(&[("AAPL", &expiry_date)]).await {
+        match OptionChainItem::from_date("AAPL", &expiry_date) {
+          Err(e) => fail(&mut results, &format!("GetOptionChain({})", expiry_date), e),
+          Ok(chain_item) => match qc.get_option_chain(OptionChainRequest::new(vec![chain_item])).await {
             Ok(chain) if !chain.is_empty() && !chain[0].items.is_empty() => {
                 ok(
                     &mut results,
@@ -383,13 +386,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "(empty items)",
             ),
             Err(e) => fail(&mut results, &format!("GetOptionChain({})", expiry_date), e),
-        }
+        }  // inner match get_option_chain
+        }  // outer match from_date
 
         if opt_identifier.is_empty() {
             skip(&mut results, "GetOptionQuote", "no identifier from chain");
             skip(&mut results, "GetOptionKline", "no identifier from chain");
         } else {
-            match qc.get_option_quote(&[opt_identifier.as_str()]).await {
+            match OptionContractItem::from_occ(opt_identifier.as_str()) {
+              Err(e) => fail(&mut results, "GetOptionQuote", e),
+              Ok(quote_item) => match qc.get_option_quote(OptionQuoteRequest::new(vec![quote_item])).await {
                 Ok(briefs) if !briefs.is_empty() => ok(
                     &mut results,
                     "GetOptionQuote",
@@ -397,9 +403,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ),
                 Ok(_) => ok(&mut results, "GetOptionQuote", "(empty)"),
                 Err(e) => fail(&mut results, "GetOptionQuote", e),
+              }
             }
 
-            match qc.get_option_kline(&[opt_identifier.as_str()], "day").await {
+            match OptionKlineItem::from_occ(opt_identifier.as_str(), "day") {
+              Err(e) => fail(&mut results, "GetOptionKline", e),
+              Ok(kline_item) => match qc.get_option_kline(OptionKlineRequest {
+                option_query: Some(vec![kline_item]),
+                ..Default::default()
+              }).await {
                 Ok(ks) if !ks.is_empty() => ok(
                     &mut results,
                     "GetOptionKline",
@@ -407,6 +419,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ),
                 Ok(_) => ok(&mut results, "GetOptionKline", "(empty)"),
                 Err(e) => fail(&mut results, "GetOptionKline", e),
+              }
             }
         }
     }

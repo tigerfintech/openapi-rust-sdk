@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-07-08
+
+### Added
+
+- **`OptionChainItem` / `OptionChainRequest`**：`get_option_chain` 签名由 `&[(&str, &str)]` 改为 `OptionChainRequest`，`OptionChainItem` 支持三种构造方式：
+  - `OptionChainItem::new(symbol, expiry_ms)` — 直接传毫秒时间戳
+  - `OptionChainItem::from_date(symbol, "YYYY-MM-DD")?` — 日期字符串，按 symbol 自动推断时区（US → `America/New_York`，HK → `Asia/Hong_Kong`，其余 → `Asia/Shanghai`）
+  - `OptionChainItem::from_date_tz(symbol, "YYYY-MM-DD", "America/New_York")?` — 显式指定时区
+
+- **`OptionContractItem` / `OptionQuoteRequest`**：`get_option_quote` 签名由 `&[&str]`（OCC 字符串）改为 `OptionQuoteRequest`，`OptionContractItem` 支持：
+  - `OptionContractItem::from_occ("AAPL 240119C00150000")?` — OCC 格式，按 symbol 推断时区
+  - `OptionContractItem::from_occ_tz(occ, timezone)?` — 显式指定时区
+  - `OptionContractItem::new(symbol, expiry_ms, right, strike)` — 直接构造
+
+- **`OptionKlineItem` / `OptionKlineRequest`**：`get_option_kline` 签名由 `(&[&str], period)` 改为 `OptionKlineRequest`，`OptionKlineItem` 支持 `from_occ` / `from_occ_tz` / `new`，并可设置 `begin_time` / `end_time` / `limit`。
+
+### Fixed
+
+- **期权 expiry 时区错误**：原 `parse_expiry_to_ms` 将日期字符串转为 UTC 午夜时间戳，导致 US 期权 expiry 偏差 4–5 小时、HK 期权偏差 8 小时。现在按 symbol 推断交易所时区（与 Java SDK `SymbolUtil.getZoneIdBySymbol` 对齐）。
+
 ## [0.5.1] - 2026-07-07
 
 ### Deprecated

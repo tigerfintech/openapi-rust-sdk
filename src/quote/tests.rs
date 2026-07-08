@@ -18,6 +18,7 @@ use crate::model::quote::{
 };
 use crate::model::quote_requests::{
     BriefRequest, DepthQuoteRequest, FutureBriefRequest, FutureKlineRequest, KlineRequest, TradeTickRequest,
+    OptionChainItem, OptionChainRequest, OptionContractItem, OptionKlineItem, OptionKlineRequest, OptionQuoteRequest,
 };
 
 fn cached_test_private_key() -> &'static str {
@@ -359,37 +360,46 @@ async fn test_get_financial_report_wire_snake_case() {
 async fn test_get_option_chain_sends_expiry_ms() {
     let server = mock_success_server(r#"[]"#).await;
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc.get_option_chain(&[("AAPL", "2024-01-19")]).await;
+    let _ = qc.get_option_chain(OptionChainRequest::new(vec![
+        OptionChainItem::from_date("AAPL", "2024-01-19").unwrap(),
+    ])).await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
     let basic = &biz["option_basic"][0];
     assert_eq!(basic["symbol"].as_str().unwrap(), "AAPL");
-    // 2024-01-19 UTC = 1705622400000
-    assert_eq!(basic["expiry"].as_i64().unwrap(), 1705622400000);
+    // 2024-01-19 00:00:00 America/New_York = 1705640400000
+    assert_eq!(basic["expiry"].as_i64().unwrap(), 1705640400000);
 }
 
 #[tokio::test]
 async fn test_get_option_quote_parses_identifier() {
     let server = mock_success_server(r#"[]"#).await;
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc.get_option_quote(&["AAPL 240119C00150000"]).await;
+    let _ = qc.get_option_quote(OptionQuoteRequest::new(vec![
+        OptionContractItem::from_occ("AAPL 240119C00150000").unwrap(),
+    ])).await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
     let basic = &biz["option_basic"][0];
     assert_eq!(basic["symbol"].as_str().unwrap(), "AAPL");
-    assert_eq!(basic["right"].as_str().unwrap(), "CALL");
-    assert_eq!(basic["strike"].as_f64().unwrap(), 150.0);
-    // 2024-01-19 UTC millis
-    assert_eq!(basic["expiry"].as_i64().unwrap(), 1705622400000);
+    assert_eq!(basic["right"].as_str().unwrap(), "Call");
+    assert_eq!(basic["strike"].as_str().unwrap(), "150.000");
+    // 2024-01-19 00:00:00 America/New_York = 1705640400000
+    assert_eq!(basic["expiry"].as_i64().unwrap(), 1705640400000);
 }
 
 #[tokio::test]
 async fn test_get_option_kline_uses_option_query_key() {
     let server = mock_success_server(r#"[]"#).await;
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc.get_option_kline(&["AAPL 240119C00150000"], "day").await;
+    let _ = qc.get_option_kline(OptionKlineRequest {
+        option_query: Some(vec![
+            OptionKlineItem::from_occ("AAPL 240119C00150000", "day").unwrap(),
+        ]),
+        ..Default::default()
+    }).await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
