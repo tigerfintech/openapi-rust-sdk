@@ -931,18 +931,118 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
 async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, results: &mut Vec<RunResult>) {
     use tigeropen::model::quote_requests::{OptionAnalysisRequest, OptionSymbolsRequest};
 
-    // HK options use get_option_symbols + get_option_analysis (no expiration endpoint for HK)
-    match qc.get_option_symbols(OptionSymbolsRequest {
+    // Step 1: get_option_symbols(HK) to discover tradable HK option symbols
+    let syms = match qc.get_option_symbols(OptionSymbolsRequest {
         market: Some("HK".to_string()),
         ..Default::default()
     }).await {
-        Ok(syms) => ok(results, "GetOptionSymbols(HK)", format!("count={}", syms.len())),
-        Err(e) if e.to_string().contains("does not support") || e.to_string().contains("code=4") => {
-            skip(results, "GetOptionSymbols(HK)", "not supported by this account tier")
+        Ok(s) if !s.is_empty() => {
+            ok(results, "GetOptionSymbols(HK)", format!("count={}", s.len()));
+            s
         }
-        Err(e) => fail(results, "GetOptionSymbols(HK)", e),
+        Ok(_) => { skip(results, "GetOptionSymbols(HK)", "empty result"); return; }
+        Err(e) if e.to_string().contains("does not support") || e.to_string().contains("code=4") => {
+            skip(results, "GetOptionSymbols(HK)", "not supported by this account tier");
+            return;
+        }
+        Err(e) => { fail(results, "GetOptionSymbols(HK)", e); return; }
+    };
+
+    // Step 2: get_option_expiration for the first HK option symbol
+    // Returns timestamps aligned with syms[0]; try up to 5 symbols
+    let hk_chain_input: Option<(String, i64)> = {
+        let mut result: Option<(String, i64)> = None;
+        for s in syms.iter().take(5) {
+            match qc.get_option_expiration(&[s.symbol.as_str()]).await {
+                Ok(exps) => {
+                    let ts = exps.iter()
+                        .filter_map(|e| e.timestamps.first())
+                        .next()
+                        .copied();
+                    if let Some(ts) = ts {
+                        ok(results, "GetOptionExpiration(HK syms)", format!("symbol={} ts={}", s.symbol, ts));
+                        result = Some((s.symbol.clone(), ts));
+                        break;
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+        if result.is_none() {
+            skip(results, "GetOptionExpiration(HK syms)", "option_expiration not available for HK symbols");
+        }
+        result
+    };
+
+    // Step 3: get_option_chain — only if we have a valid expiry
+    let (hk_opt_symbol, hk_expiry_ms) = match hk_chain_input {
+        Some(v) => v,
+        None => {
+            // No expiry → can't test chain/quote/kline; proceed to analysis
+            match qc.get_option_analysis(tigeropen::model::quote_requests::OptionAnalysisRequest {
+                symbols: Some(vec![symbol.to_string()]),
+                market: Some("HK".to_string()),
+                period: Some("day".to_string()),
+                ..Default::default()
+            }).await {
+                Ok(items) => ok(results, &format!("GetOptionAnalysis({} HK)", symbol), format!("count={}", items.len())),
+                Err(e) => fail(results, &format!("GetOptionAnalysis({} HK)", symbol), e),
+            }
+            return;
+        }
+    };
+    let hk_chain_tag = format!("GetOptionChain({} HK)", hk_opt_symbol);
+    let opt_identifier = match qc.get_option_chain(OptionChainRequest::new(vec![
+        OptionChainItem::new(hk_opt_symbol.as_str(), hk_expiry_ms),
+    ])).await {
+        Ok(chains) => {
+            let first_id = chains.iter()
+                .flat_map(|c| c.items.iter())
+                .find_map(|row| {
+                    row.call.as_ref().map(|l| l.identifier.clone())
+                        .or_else(|| row.put.as_ref().map(|l| l.identifier.clone()))
+                })
+                .filter(|id| !id.is_empty());
+            match first_id {
+                Some(id) => { ok(results, &hk_chain_tag, format!("identifier={}", id.trim())); id }
+                None => { ok(results, &hk_chain_tag, "(empty chain)"); return; }
+            }
+        }
+        Err(e) => { fail(results, &hk_chain_tag, e); return; }
+    };
+
+    // Step 4: get_option_quote using the identifier from chain
+    let opt_id_trimmed = opt_identifier.trim().to_string();
+    let quote_tag = format!("GetOptionQuote({} HK)", opt_id_trimmed);
+    match qc.get_option_quote(OptionQuoteRequest::new(vec![
+        OptionContractItem::from_occ(&opt_id_trimmed).unwrap(),
+    ])).await {
+        Ok(briefs) if !briefs.is_empty() => ok(
+            results, &quote_tag,
+            format!("{} latestPrice={:.4}", briefs[0].symbol, briefs[0].latest_price),
+        ),
+        Ok(_) => ok(results, &quote_tag, "(empty)"),
+        Err(e) => fail(results, &quote_tag, e),
     }
 
+    // Step 5: get_option_kline using same identifier, last 30 days
+    let kline_tag = format!("GetOptionKline({} HK)", opt_id_trimmed);
+    let end_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+    let begin_ms = end_ms - 30 * 86_400_000;
+    let mut kline_item = OptionKlineItem::from_occ(&opt_id_trimmed, "day").unwrap();
+    kline_item.begin_time = Some(begin_ms);
+    kline_item.end_time = Some(end_ms);
+    match qc.get_option_kline(OptionKlineRequest {
+        option_query: Some(vec![kline_item]),
+        ..Default::default()
+    }).await {
+        Ok(ks) if !ks.is_empty() => ok(results, &kline_tag, format!("bars={}", ks[0].items.len())),
+        Ok(_) => ok(results, &kline_tag, "(empty)"),
+        Err(e) => fail(results, &kline_tag, e),
+    }
+
+    // Step 6: get_option_analysis for the underlying symbol (HK)
     match qc.get_option_analysis(OptionAnalysisRequest {
         symbols: Some(vec![symbol.to_string()]),
         market: Some("HK".to_string()),

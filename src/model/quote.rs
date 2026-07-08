@@ -1015,7 +1015,7 @@ pub struct OptionAnalysis {
     pub volatility_list: Vec<OptionVolatilityPoint>,
 }
 
-/// 期权代码（option_symbol 返回）。
+/// 期权代码（all_hk_option_symbols 返回）。
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionSymbol {
@@ -1024,9 +1024,13 @@ pub struct OptionSymbol {
     #[serde(default)]
     pub market: String,
     #[serde(default)]
+    pub name: String,
+    #[serde(default)]
     pub name_cn: String,
     #[serde(default)]
     pub name_en: String,
+    #[serde(default)]
+    pub underlying_symbol: String,
 }
 
 /// 期货主力合约历史（future_main_contract）。

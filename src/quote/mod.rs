@@ -388,9 +388,9 @@ impl QuoteClient {
         self.call_into("option_depth", req).await
     }
 
-    /// 期权代码列表。wire: option_symbol
+    /// 期权代码列表（港股）。wire: all_hk_option_symbols
     pub async fn get_option_symbols(&self, req: OptionSymbolsRequest) -> Result<Vec<OptionSymbol>, TigerError> {
-        self.call_into("option_symbol", req).await
+        self.call_into("all_hk_option_symbols", req).await
     }
 
     /// 期权分析（隐含/历史波动率）。wire: option_analysis

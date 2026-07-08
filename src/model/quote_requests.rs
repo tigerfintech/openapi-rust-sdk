@@ -524,7 +524,7 @@ pub struct OptionDepthRequest {
     pub lang: Option<String>,
 }
 
-/// 期权代码列表请求。wire: option_symbol
+/// 港股期权代码列表请求。wire: all_hk_option_symbols
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct OptionSymbolsRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
