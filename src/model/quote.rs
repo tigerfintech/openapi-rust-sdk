@@ -3,7 +3,21 @@
 //! - 响应结构体使用 `#[serde(rename_all = "camelCase")]` 匹配服务端返回。
 //! - 请求结构体使用 `#[serde(rename_all = "snake_case")]` 匹配服务端约定。
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+fn deserialize_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde_json::Value;
+    let v = Value::deserialize(deserializer)?;
+    match v {
+        Value::String(s) => Ok(s),
+        Value::Number(n) => Ok(n.to_string()),
+        Value::Null => Ok(String::new()),
+        other => Ok(other.to_string()),
+    }
+}
 
 // ========== 响应模型 ==========
 
@@ -61,7 +75,7 @@ pub struct Brief {
     pub change_rate: f64,
     #[serde(default)]
     pub amplitude: f64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_or_number")]
     pub expiry: String,
     #[serde(default)]
     pub strike: String,
@@ -1001,7 +1015,7 @@ pub struct OptionAnalysis {
     pub volatility_list: Vec<OptionVolatilityPoint>,
 }
 
-/// 期权代码（option_symbol 返回）。
+/// 期权代码（all_hk_option_symbols 返回）。
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionSymbol {
@@ -1010,9 +1024,13 @@ pub struct OptionSymbol {
     #[serde(default)]
     pub market: String,
     #[serde(default)]
+    pub name: String,
+    #[serde(default)]
     pub name_cn: String,
     #[serde(default)]
     pub name_en: String,
+    #[serde(default)]
+    pub underlying_symbol: String,
 }
 
 /// 期货主力合约历史（future_main_contract）。
