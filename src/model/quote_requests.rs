@@ -328,18 +328,18 @@ impl OptionChainRequest {
 /// 构造方式：
 /// - `OptionContractItem::from_occ("AAPL 240119C00150000")?` — OCC 格式，按 symbol 推断时区
 /// - `OptionContractItem::from_occ_tz("AAPL 240119C00150000", "America/New_York")?` — 指定时区
-/// - `OptionContractItem::new("AAPL", 1705622400000, "Call", "150")` — 直接构造
+/// - `OptionContractItem::new("AAPL", 1705622400000, "CALL", 150.0)` — 直接构造
 #[derive(Debug, Clone, Serialize)]
 pub struct OptionContractItem {
     pub symbol: String,
     pub expiry: i64,
     pub right: String,
-    pub strike: String,
+    pub strike: f64,
 }
 
 impl OptionContractItem {
-    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into() }
+    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: f64) -> Self {
+        Self { symbol: symbol.into(), expiry, right: right.into(), strike }
     }
 
     pub fn from_occ(identifier: &str) -> Result<Self, TigerError> {
@@ -379,7 +379,7 @@ pub struct OptionKlineItem {
     pub symbol: String,
     pub expiry: i64,
     pub right: String,
-    pub strike: String,
+    pub strike: f64,
     pub period: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub begin_time: Option<i64>,
@@ -390,8 +390,8 @@ pub struct OptionKlineItem {
 }
 
 impl OptionKlineItem {
-    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: impl Into<String>, period: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into(), period: period.into(), begin_time: None, end_time: None, limit: None }
+    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: f64, period: impl Into<String>) -> Self {
+        Self { symbol: symbol.into(), expiry, right: right.into(), strike, period: period.into(), begin_time: None, end_time: None, limit: None }
     }
 
     pub fn from_occ(identifier: &str, period: impl Into<String>) -> Result<Self, TigerError> {
@@ -447,7 +447,7 @@ struct OccContract {
     symbol: String,
     expiry_date: String, // "YYYY-MM-DD"
     right: String,
-    strike: String,
+    strike: f64,
 }
 
 fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
@@ -493,12 +493,12 @@ fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
     let day = date_part[4..6].parse::<u32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
     let expiry_date = format!("{:04}-{:02}-{:02}", year, month, day);
     let right = match right_char {
-        "C" => "Call".to_string(),
-        "P" => "Put".to_string(),
+        "C" => "CALL".to_string(),
+        "P" => "PUT".to_string(),
         _ => return Err(TigerError::Config(format!("invalid OCC right {:?}: {:?}", right_char, identifier))),
     };
     let strike_int: u64 = strike_raw.parse().map_err(|_| TigerError::Config(format!("invalid OCC strike: {:?}", identifier)))?;
-    let strike = format!("{:.3}", strike_int as f64 / 1000.0);
+    let strike = strike_int as f64 / 1000.0;
     Ok(OccContract { symbol, expiry_date, right, strike })
 }
 

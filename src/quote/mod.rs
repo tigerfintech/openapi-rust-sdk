@@ -89,14 +89,19 @@ impl QuoteClient {
         let resp = self.http_client.execute_request(&req).await?;
         unmarshal_data(resp.data)
     }
-
-    /// 解包 {items:[...]} 外壳并返回 items 列表。
     pub async fn call_into_items<T, P>(&self, method: &str, params: P) -> Result<Vec<T>, TigerError>
     where
         T: serde::de::DeserializeOwned,
         P: Serialize,
     {
-        let wrap: serde_json::Value = self.call_into(method, params).await?;
+        let raw: serde_json::Value = self.call_into(method, params).await?;
+        // Some endpoints (e.g. stock_detail) return data as a JSON-encoded string rather than
+        // a nested object; unwrap one level if so.
+        let wrap = match raw {
+            serde_json::Value::String(s) => serde_json::from_str::<serde_json::Value>(&s)
+                .map_err(|e| TigerError::Config(format!("decode items string failed: {}", e)))?,
+            v => v,
+        };
         match wrap.get("items") {
             None | Some(Value::Null) => Ok(vec![]),
             Some(items) => serde_json::from_value(items.clone())
