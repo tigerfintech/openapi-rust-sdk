@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.2] - 2026-07-08
+## [0.5.3] - 2026-07-08
 
 ### Breaking Changes
 
@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `WarrantBriefsRequest` → `WarrantQuoteRequest`（对应 `get_warrant_quote`）
 - **`get_option_expiration` 签名变更**：新增 `market: Option<&str>` 参数；查 HK 期权到期日需传 `Some("HK")`。
 - **`get_option_chain` / `get_option_quote` / `get_option_kline` 签名变更**：参数改为结构体（`OptionChainRequest` / `OptionQuoteRequest` / `OptionKlineRequest`），支持 `begin_time` / `end_time`。
+- **`OptionContractItem::new` / `OptionKlineItem::new` `strike` 参数类型**：`f64` → `impl Into<String>`；直接构造时请传字符串，如 `"150.0"`。
 
 ### Added
 
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`Brief.expiry` 反序列化**：服务器对部分期权接口返回 `i64` 时间戳而非字符串；现在两种格式均可解析。
 - **OCC 双空格解析**：`"AAPL  260918C00275000"` 等 OCC 填充空格格式不再 panic。
 - **`get_option_kline` 必填字段**：服务器要求 `begin_time` / `end_time` 同时存在（`code=1010`）。
+- **`OptionContractItem` / `OptionKlineItem` strike 类型**：从 `f64` 改回 `String`，与 Java/Go/TypeScript SDK 保持一致；从 OCC identifier 解析时自动去掉末尾多余的零（`"310.000"` → `"310.0"`）。
 
 ## [0.5.1] - 2026-07-07
 
