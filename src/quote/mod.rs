@@ -339,7 +339,7 @@ impl QuoteClient {
     ///
     /// // 直接传时间戳
     /// qc.get_option_quote(OptionQuoteRequest::new(vec![
-    ///     OptionContractItem::new("AAPL", 1705622400000, "CALL", 150.0),
+    ///     OptionContractItem::new("AAPL", 1705622400000, "CALL", "150.0"),
     /// ])).await?;
     /// ```
     pub async fn get_option_quote(
