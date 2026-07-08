@@ -15,8 +15,8 @@ use tigeropen::model::quote::{
     MarketScannerRequest, MarketState,
 };
 use tigeropen::model::quote_requests::{
-    AllFutureContractsRequest, KlineRequest, BriefRequest, DepthQuoteRequest,
-    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest, FutureBriefRequest,
+    AllFutureContractsRequest, KlineRequest, BriefRequest, QuoteDepthRequest,
+    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest, FutureRealTimeQuoteRequest,
     FutureContractSingleRequest, FutureDepthRequest, FutureTradingTimesRequest,
     FundSymbolsRequest, IndustryListRequest, KlineQuotaRequest,
     OptionChainItem, OptionChainRequest, OptionContractItem, OptionKlineItem, OptionKlineRequest,
@@ -174,7 +174,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // v0.4.0 new signature: DepthQuoteRequest
     match qc
-        .get_quote_depth(DepthQuoteRequest {
+        .get_quote_depth(QuoteDepthRequest {
             symbols: Some(vec!["AAPL".to_string()]),
             market: Some("US".to_string()),
             ..Default::default()
@@ -244,7 +244,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     match qc
-        .get_delayed_quote(tigeropen::model::quote_requests::StockDelayBriefsRequest {
+        .get_delayed_quote(tigeropen::model::quote_requests::DelayedQuoteRequest {
             symbols: Some(vec!["AAPL".to_string()]),
             ..Default::default()
         })
@@ -401,7 +401,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         // v0.4.0 new signature: FutureBriefRequest
         match qc
-            .get_future_real_time_quote(FutureBriefRequest {
+            .get_future_real_time_quote(FutureRealTimeQuoteRequest {
                 contract_codes: Some(vec![contract_code.clone()]),
                 ..Default::default()
             })

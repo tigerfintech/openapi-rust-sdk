@@ -57,7 +57,7 @@ pub struct StockDetailsRequest {
 
 /// 延时行情请求。wire: quote_delay
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct StockDelayBriefsRequest {
+pub struct DelayedQuoteRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -66,9 +66,9 @@ pub struct StockDelayBriefsRequest {
     pub lang: Option<String>,
 }
 
-/// 盘口深度请求。wire: quote_depth
+/// 深度报价请求。wire: quote_depth
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct DepthQuoteRequest {
+pub struct QuoteDepthRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -574,7 +574,7 @@ pub struct OptionAnalysisRequest {
 
 /// 期货实时行情请求。wire: future_real_time_quote
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct FutureBriefRequest {
+pub struct FutureRealTimeQuoteRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contract_codes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -748,9 +748,9 @@ pub struct FundHistoryQuoteRequest {
     pub lang: Option<String>,
 }
 
-/// 窝轮简要报价请求。wire: warrant_briefs
+/// 权证行情请求。wire: warrant_briefs
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct WarrantBriefsRequest {
+pub struct WarrantQuoteRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]

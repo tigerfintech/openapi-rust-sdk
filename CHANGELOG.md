@@ -7,27 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.2] - 2026-07-08
 
+### Breaking Changes
+
+- **Request struct renames** (replace old name with new):
+  - `StockDelayBriefsRequest` → `DelayedQuoteRequest`（对应 `get_delayed_quote`）
+  - `DepthQuoteRequest` → `QuoteDepthRequest`（对应 `get_quote_depth`）
+  - `FutureBriefRequest` → `FutureRealTimeQuoteRequest`（对应 `get_future_real_time_quote`）
+  - `WarrantBriefsRequest` → `WarrantQuoteRequest`（对应 `get_warrant_quote`）
+- **`get_option_expiration` 签名变更**：新增 `market: Option<&str>` 参数；查 HK 期权到期日需传 `Some("HK")`。
+- **`get_option_chain` / `get_option_quote` / `get_option_kline` 签名变更**：参数改为结构体（`OptionChainRequest` / `OptionQuoteRequest` / `OptionKlineRequest`），支持 `begin_time` / `end_time`。
+
 ### Added
 
-- **`OptionChainItem` / `OptionChainRequest`**：`get_option_chain` 签名由 `&[(&str, &str)]` 改为 `OptionChainRequest`，`OptionChainItem` 支持三种构造方式：
-  - `OptionChainItem::new(symbol, expiry_ms)` — 直接传毫秒时间戳
-  - `OptionChainItem::from_date(symbol, "YYYY-MM-DD")?` — 日期字符串，按 symbol 自动推断时区（US → `America/New_York`，HK → `Asia/Hong_Kong`，其余 → `Asia/Shanghai`）
-  - `OptionChainItem::from_date_tz(symbol, "YYYY-MM-DD", "America/New_York")?` — 显式指定时区
-
-- **`OptionContractItem` / `OptionQuoteRequest`**：`get_option_quote` 签名由 `&[&str]`（OCC 字符串）改为 `OptionQuoteRequest`，`OptionContractItem` 支持：
-  - `OptionContractItem::from_occ("AAPL 240119C00150000")?` — OCC 格式，按 symbol 推断时区
-  - `OptionContractItem::from_occ_tz(occ, timezone)?` — 显式指定时区
-  - `OptionContractItem::new(symbol, expiry_ms, right, strike)` — 直接构造
-
-- **`OptionKlineItem` / `OptionKlineRequest`**：`get_option_kline` 签名由 `(&[&str], period)` 改为 `OptionKlineRequest`，`OptionKlineItem` 支持 `from_occ` / `from_occ_tz` / `new`，并可设置 `begin_time` / `end_time` / `limit`。
+- **HK option identifier 格式支持**：`parse_occ_identifier` 现在同时支持空格分隔的 OCC 格式（`"AAPL  260918C00275000"`）和 HK 紧凑格式（`"TCH.HK260710C00295000"`）。
+- **`OptionChainItem` / `OptionContractItem` / `OptionKlineItem`**：三种构造方式——直接传毫秒时间戳 `::new()`、日期字符串 `::from_date()`（按 symbol 自动推断交易所时区）、指定时区 `::from_date_tz()`。
 
 ### Fixed
 
-- **期权 expiry 时区错误**：原 `parse_expiry_to_ms` 将日期字符串转为 UTC 午夜时间戳，导致 US 期权 expiry 偏差 4–5 小时、HK 期权偏差 8 小时。现在按 symbol 推断交易所时区（与 Java SDK `SymbolUtil.getZoneIdBySymbol` 对齐）。
-- **`Brief.expiry` 反序列化**：服务器对部分期权接口返回整型毫秒时间戳而非字符串，原 `String` 类型反序列化会报错；添加 `deserialize_string_or_number` 兼容处理，整型和字符串均可正常解析。
-- **OCC identifier 解析（双空格填充）**：OCC 标准将标的代码填充到 6 位（如 `"AAPL  260918C00275000"` 有两个空格），原 `parse_occ_identifier` 按单空格分割导致 parse 失败；改用 `splitn(2, ' ')` + `trim_start()` 处理多余空格。
-- **`get_option_symbols` wire name**：方法内部使用了错误的 wire name `"option_symbol"`，导致服务器返回 `code=4: method does not support`；修正为 `"all_hk_option_symbols"`（与 Java SDK `MethodName.ALL_HK_OPTION_SYMBOLS` 一致）。
-- **`get_option_kline` 必填字段**：服务器要求 `begin_time` 和 `end_time` 均不能为空（否则返回 `code=1010`）；示例已更新，默认传最近 30 天范围。
+- **`get_option_symbols` wire name**：错误的 `"option_symbol"` → `"all_hk_option_symbols"`（服务器返回 `code=4` 的根因）。
+- **`Brief.expiry` 反序列化**：服务器对部分期权接口返回 `i64` 时间戳而非字符串；现在两种格式均可解析。
+- **OCC 双空格解析**：`"AAPL  260918C00275000"` 等 OCC 填充空格格式不再 panic。
+- **`get_option_kline` 必填字段**：服务器要求 `begin_time` / `end_time` 同时存在（`code=1010`）。
 
 ## [0.5.1] - 2026-07-07
 

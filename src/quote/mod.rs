@@ -24,9 +24,9 @@ use crate::model::quote::{
     TradingCalendarItem, WarrantBrief, WarrantFilterResult, FutureKlineItem,
 };
 use crate::model::quote_requests::{
-    AllFutureContractsRequest, KlineRequest, KlineByPageRequest, BriefRequest, DepthQuoteRequest,
+    AllFutureContractsRequest, KlineRequest, KlineByPageRequest, BriefRequest, QuoteDepthRequest,
     FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest,
-    FutureKlineByPageRequest, FutureBriefRequest, FutureContinuousContractsRequest,
+    FutureKlineByPageRequest, FutureRealTimeQuoteRequest, FutureContinuousContractsRequest,
     FutureContractSingleRequest, FutureDepthRequest, FutureHistoryMainContractRequest,
     FutureTradingTimesRequest, FutureTradeTicksRequest, FundContractsRequest, FundHistoryQuoteRequest,
     FundQuoteRequest, FundSymbolsRequest, IndustryListRequest, IndustryStocksRequest,
@@ -34,9 +34,9 @@ use crate::model::quote_requests::{
     OptionDepthRequest, OptionSymbolsRequest, OptionTimelineRequest, OptionTradeTicksRequest,
     OptionChainRequest, OptionContractItem, OptionKlineRequest, OptionQuoteRequest,
     QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest, StockBrokerRequest,
-    StockDelayBriefsRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
+    DelayedQuoteRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
     SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
-    TradingCalendarRequest, WarrantBriefsRequest, WarrantFilterRequest,
+    TradingCalendarRequest, WarrantQuoteRequest, WarrantFilterRequest,
 };
 
 /// API 版本常量
@@ -176,8 +176,8 @@ impl QuoteClient {
         self.call_into("trade_tick", req).await
     }
 
-    /// 获取深度报价（v0.4.0 新签名：接受 DepthQuoteRequest）。wire: quote_depth
-    pub async fn get_quote_depth(&self, req: DepthQuoteRequest) -> Result<Vec<Depth>, TigerError> {
+    /// 获取深度报价（v0.4.0 新签名：接受 QuoteDepthRequest）。wire: quote_depth
+    pub async fn get_quote_depth(&self, req: QuoteDepthRequest) -> Result<Vec<Depth>, TigerError> {
         self.call_into("quote_depth", req).await
     }
 
@@ -204,12 +204,12 @@ impl QuoteClient {
     }
 
     /// 延时行情。wire: quote_delay
-    pub async fn get_delayed_quote(&self, req: StockDelayBriefsRequest) -> Result<Vec<Brief>, TigerError> {
+    pub async fn get_delayed_quote(&self, req: DelayedQuoteRequest) -> Result<Vec<Brief>, TigerError> {
         self.call_into("quote_delay", req).await
     }
 
     #[deprecated(since = "0.5.1", note = "Use get_delayed_quote instead")]
-    pub async fn get_stock_delay_briefs(&self, req: StockDelayBriefsRequest) -> Result<Vec<Brief>, TigerError> {
+    pub async fn get_stock_delay_briefs(&self, req: DelayedQuoteRequest) -> Result<Vec<Brief>, TigerError> {
         self.get_delayed_quote(req).await
     }
 
@@ -417,8 +417,8 @@ impl QuoteClient {
         .await
     }
 
-    /// 获取期货实时报价（v0.4.0 新签名：接受 FutureBriefRequest）。wire: future_real_time_quote
-    pub async fn get_future_real_time_quote(&self, req: FutureBriefRequest) -> Result<Vec<FutureQuote>, TigerError> {
+    /// 获取期货实时报价（v0.4.0 新签名：接受 FutureRealTimeQuoteRequest）。wire: future_real_time_quote
+    pub async fn get_future_real_time_quote(&self, req: FutureRealTimeQuoteRequest) -> Result<Vec<FutureQuote>, TigerError> {
         self.call_into("future_real_time_quote", req).await
     }
 
@@ -564,12 +564,12 @@ impl QuoteClient {
     // ========== 窝轮 ==========
 
     /// 窝轮实时行情。wire: warrant_briefs
-    pub async fn get_warrant_quote(&self, req: WarrantBriefsRequest) -> Result<Vec<WarrantBrief>, TigerError> {
+    pub async fn get_warrant_quote(&self, req: WarrantQuoteRequest) -> Result<Vec<WarrantBrief>, TigerError> {
         self.call_into("warrant_briefs", req).await
     }
 
     #[deprecated(since = "0.5.1", note = "Use get_warrant_quote instead")]
-    pub async fn get_warrant_briefs(&self, req: WarrantBriefsRequest) -> Result<Vec<WarrantBrief>, TigerError> {
+    pub async fn get_warrant_briefs(&self, req: WarrantQuoteRequest) -> Result<Vec<WarrantBrief>, TigerError> {
         self.get_warrant_quote(req).await
     }
 

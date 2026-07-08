@@ -17,7 +17,7 @@ use crate::model::quote::{
     MarketScannerRequest,
 };
 use crate::model::quote_requests::{
-    BriefRequest, DepthQuoteRequest, FutureBriefRequest, FutureKlineRequest, KlineRequest, TradeTickRequest,
+    BriefRequest, QuoteDepthRequest, FutureRealTimeQuoteRequest, FutureKlineRequest, KlineRequest, TradeTickRequest,
     OptionChainItem, OptionChainRequest, OptionContractItem, OptionKlineItem, OptionKlineRequest, OptionQuoteRequest,
 };
 
@@ -148,7 +148,7 @@ async fn test_get_quote_depth_parses_typed() {
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let d = qc
-        .get_quote_depth(DepthQuoteRequest {
+        .get_quote_depth(QuoteDepthRequest {
             symbols: Some(vec!["AAPL".into()]),
             market: Some("US".into()),
             ..Default::default()
@@ -281,7 +281,7 @@ async fn test_get_future_real_time_quote_sends_contract_codes() {
     let server = mock_success_server(r#"[]"#).await;
         let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc
-        .get_future_real_time_quote(FutureBriefRequest {
+        .get_future_real_time_quote(FutureRealTimeQuoteRequest {
             contract_codes: Some(vec!["CL2609".into()]),
             ..Default::default()
         })
