@@ -3,7 +3,21 @@
 //! - 响应结构体使用 `#[serde(rename_all = "camelCase")]` 匹配服务端返回。
 //! - 请求结构体使用 `#[serde(rename_all = "snake_case")]` 匹配服务端约定。
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+fn deserialize_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde_json::Value;
+    let v = Value::deserialize(deserializer)?;
+    match v {
+        Value::String(s) => Ok(s),
+        Value::Number(n) => Ok(n.to_string()),
+        Value::Null => Ok(String::new()),
+        other => Ok(other.to_string()),
+    }
+}
 
 // ========== 响应模型 ==========
 
@@ -61,7 +75,7 @@ pub struct Brief {
     pub change_rate: f64,
     #[serde(default)]
     pub amplitude: f64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_or_number")]
     pub expiry: String,
     #[serde(default)]
     pub strike: String,

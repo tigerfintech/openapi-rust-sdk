@@ -452,12 +452,15 @@ struct OccContract {
 
 fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
     let trimmed = identifier.trim();
-    let mut it = trimmed.splitn(2, ' ');
-    let symbol = it.next().filter(|s| !s.is_empty())
+    // OCC standard pads symbol to 6 chars with spaces, so there may be multiple spaces between
+    // symbol and suffix (e.g. "AAPL  260918C00275000"). Split on any whitespace and rejoin.
+    let mut parts = trimmed.splitn(2, |c: char| c == ' ');
+    let symbol = parts.next().filter(|s| !s.is_empty())
         .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier: {:?}", identifier)))?
         .to_string();
-    let rest = it.next()
-        .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier (missing suffix): {:?}", identifier)))?;
+    let rest = parts.next()
+        .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier (missing suffix): {:?}", identifier)))?
+        .trim_start(); // strip padding spaces between symbol and date
     if rest.len() < 15 {
         return Err(TigerError::Config(format!("invalid OCC identifier (suffix too short): {:?}", identifier)));
     }
