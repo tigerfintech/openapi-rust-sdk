@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **期权 expiry 时区错误**：原 `parse_expiry_to_ms` 将日期字符串转为 UTC 午夜时间戳，导致 US 期权 expiry 偏差 4–5 小时、HK 期权偏差 8 小时。现在按 symbol 推断交易所时区（与 Java SDK `SymbolUtil.getZoneIdBySymbol` 对齐）。
+- **`Brief.expiry` 反序列化**：服务器对部分期权接口返回整型毫秒时间戳而非字符串，原 `String` 类型反序列化会报错；添加 `deserialize_string_or_number` 兼容处理，整型和字符串均可正常解析。
+- **OCC identifier 解析（双空格填充）**：OCC 标准将标的代码填充到 6 位（如 `"AAPL  260918C00275000"` 有两个空格），原 `parse_occ_identifier` 按单空格分割导致 parse 失败；改用 `splitn(2, ' ')` + `trim_start()` 处理多余空格。
+- **`get_option_symbols` wire name**：方法内部使用了错误的 wire name `"option_symbol"`，导致服务器返回 `code=4: method does not support`；修正为 `"all_hk_option_symbols"`（与 Java SDK `MethodName.ALL_HK_OPTION_SYMBOLS` 一致）。
+- **`get_option_kline` 必填字段**：服务器要求 `begin_time` 和 `end_time` 均不能为空（否则返回 `code=1010`）；示例已更新，默认传最近 30 天范围。
 
 ## [0.5.1] - 2026-07-07
 
