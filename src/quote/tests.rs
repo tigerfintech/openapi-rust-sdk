@@ -385,7 +385,7 @@ async fn test_get_option_quote_parses_identifier() {
     let basic = &biz["option_basic"][0];
     assert_eq!(basic["symbol"].as_str().unwrap(), "AAPL");
     assert_eq!(basic["right"].as_str().unwrap(), "CALL");
-    assert_eq!(basic["strike"].as_f64().unwrap(), 150.0);
+    assert_eq!(basic["strike"].as_str().unwrap(), "150.0");
     // 2024-01-19 00:00:00 America/New_York = 1705640400000
     assert_eq!(basic["expiry"].as_i64().unwrap(), 1705640400000);
 }
