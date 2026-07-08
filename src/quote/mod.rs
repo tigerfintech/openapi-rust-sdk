@@ -295,13 +295,13 @@ impl QuoteClient {
 
     // ========== 期权行情 ==========
 
-    /// 获取期权到期日
-    pub async fn get_option_expiration(&self, symbols: &[&str]) -> Result<Vec<OptionExpiration>, TigerError> {
-        self.call_into(
-            "option_expiration",
-            serde_json::json!({ "symbols": symbols }),
-        )
-        .await
+    /// 获取期权到期日。HK 市场需传 `market = Some("HK")` 及 HK 标的代码（如 `"00700"`）。
+    pub async fn get_option_expiration(&self, symbols: &[&str], market: Option<&str>) -> Result<Vec<OptionExpiration>, TigerError> {
+        let mut payload = serde_json::json!({ "symbols": symbols });
+        if let Some(m) = market {
+            payload["market"] = serde_json::Value::String(m.to_string());
+        }
+        self.call_into("option_expiration", payload).await
     }
 
     /// 获取期权链（v3.0）。

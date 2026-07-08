@@ -452,15 +452,35 @@ struct OccContract {
 
 fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
     let trimmed = identifier.trim();
-    // OCC standard pads symbol to 6 chars with spaces, so there may be multiple spaces between
-    // symbol and suffix (e.g. "AAPL  260918C00275000"). Split on any whitespace and rejoin.
-    let mut parts = trimmed.splitn(2, |c: char| c == ' ');
-    let symbol = parts.next().filter(|s| !s.is_empty())
-        .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier: {:?}", identifier)))?
-        .to_string();
-    let rest = parts.next()
-        .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier (missing suffix): {:?}", identifier)))?
-        .trim_start(); // strip padding spaces between symbol and date
+
+    // Support two formats:
+    // 1. OCC with space(s): "AAPL  260918C00275000" or "AAPL 240119C00150000"
+    // 2. HK compact (no space): "TCH.HK260710C00295000" — symbol ends where digits begin
+    let (symbol, rest) = if trimmed.contains(' ') {
+        // Space-delimited: symbol is everything before first space
+        let mut parts = trimmed.splitn(2, |c: char| c == ' ');
+        let sym = parts.next().filter(|s| !s.is_empty())
+            .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier: {:?}", identifier)))?
+            .to_string();
+        let rest = parts.next()
+            .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier (missing suffix): {:?}", identifier)))?
+            .trim_start(); // strip OCC padding spaces between symbol and date
+        (sym, rest.to_string())
+    } else {
+        // No space: find where the suffix starts — 6 consecutive digits for YYMMDD
+        // Walk from the right; the suffix is always 15 chars: YYMMDD + C/P + 8 digits
+        if trimmed.len() < 15 {
+            return Err(TigerError::Config(format!("invalid OCC identifier (too short): {:?}", identifier)));
+        }
+        let suffix_start = trimmed.len() - 15;
+        let sym = trimmed[..suffix_start].to_string();
+        let rest = trimmed[suffix_start..].to_string();
+        (sym, rest)
+    };
+
+    if symbol.is_empty() {
+        return Err(TigerError::Config(format!("invalid OCC identifier (empty symbol): {:?}", identifier)));
+    }
     if rest.len() < 15 {
         return Err(TigerError::Config(format!("invalid OCC identifier (suffix too short): {:?}", identifier)));
     }
