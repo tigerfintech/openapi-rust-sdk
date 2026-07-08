@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-07-08
+
+### Breaking Changes
+
+- **Request struct renames** (replace old name with new):
+  - `StockDelayBriefsRequest` → `DelayedQuoteRequest`（对应 `get_delayed_quote`）
+  - `DepthQuoteRequest` → `QuoteDepthRequest`（对应 `get_quote_depth`）
+  - `FutureBriefRequest` → `FutureRealTimeQuoteRequest`（对应 `get_future_real_time_quote`）
+  - `WarrantBriefsRequest` → `WarrantQuoteRequest`（对应 `get_warrant_quote`）
+- **`get_option_expiration` 签名变更**：新增 `market: Option<&str>` 参数；查 HK 期权到期日需传 `Some("HK")`。
+- **`get_option_chain` / `get_option_quote` / `get_option_kline` 签名变更**：参数改为结构体（`OptionChainRequest` / `OptionQuoteRequest` / `OptionKlineRequest`），支持 `begin_time` / `end_time`。
+
+### Added
+
+- **HK option identifier 格式支持**：`parse_occ_identifier` 现在同时支持空格分隔的 OCC 格式（`"AAPL  260918C00275000"`）和 HK 紧凑格式（`"TCH.HK260710C00295000"`）。
+- **`OptionChainItem` / `OptionContractItem` / `OptionKlineItem`**：三种构造方式——直接传毫秒时间戳 `::new()`、日期字符串 `::from_date()`（按 symbol 自动推断交易所时区）、指定时区 `::from_date_tz()`。
+
+### Fixed
+
+- **`get_option_symbols` wire name**：错误的 `"option_symbol"` → `"all_hk_option_symbols"`（服务器返回 `code=4` 的根因）。
+- **`Brief.expiry` 反序列化**：服务器对部分期权接口返回 `i64` 时间戳而非字符串；现在两种格式均可解析。
+- **OCC 双空格解析**：`"AAPL  260918C00275000"` 等 OCC 填充空格格式不再 panic。
+- **`get_option_kline` 必填字段**：服务器要求 `begin_time` / `end_time` 同时存在（`code=1010`）。
+
 ## [0.5.1] - 2026-07-07
 
 ### Deprecated

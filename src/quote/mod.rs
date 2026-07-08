@@ -24,18 +24,19 @@ use crate::model::quote::{
     TradingCalendarItem, WarrantBrief, WarrantFilterResult, FutureKlineItem,
 };
 use crate::model::quote_requests::{
-    AllFutureContractsRequest, KlineRequest, KlineByPageRequest, BriefRequest, DepthQuoteRequest,
+    AllFutureContractsRequest, KlineRequest, KlineByPageRequest, BriefRequest, QuoteDepthRequest,
     FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest,
-    FutureKlineByPageRequest, FutureBriefRequest, FutureContinuousContractsRequest,
+    FutureKlineByPageRequest, FutureRealTimeQuoteRequest, FutureContinuousContractsRequest,
     FutureContractSingleRequest, FutureDepthRequest, FutureHistoryMainContractRequest,
     FutureTradingTimesRequest, FutureTradeTicksRequest, FundContractsRequest, FundHistoryQuoteRequest,
     FundQuoteRequest, FundSymbolsRequest, IndustryListRequest, IndustryStocksRequest,
     KlineQuotaRequest, MarketScannerTagsRequest, OptionAnalysisRequest,
     OptionDepthRequest, OptionSymbolsRequest, OptionTimelineRequest, OptionTradeTicksRequest,
+    OptionChainRequest, OptionContractItem, OptionKlineRequest, OptionQuoteRequest,
     QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest, StockBrokerRequest,
-    StockDelayBriefsRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
+    DelayedQuoteRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
     SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
-    TradingCalendarRequest, WarrantBriefsRequest, WarrantFilterRequest,
+    TradingCalendarRequest, WarrantQuoteRequest, WarrantFilterRequest,
 };
 
 /// API 版本常量
@@ -88,14 +89,19 @@ impl QuoteClient {
         let resp = self.http_client.execute_request(&req).await?;
         unmarshal_data(resp.data)
     }
-
-    /// 解包 {items:[...]} 外壳并返回 items 列表。
     pub async fn call_into_items<T, P>(&self, method: &str, params: P) -> Result<Vec<T>, TigerError>
     where
         T: serde::de::DeserializeOwned,
         P: Serialize,
     {
-        let wrap: serde_json::Value = self.call_into(method, params).await?;
+        let raw: serde_json::Value = self.call_into(method, params).await?;
+        // Some endpoints (e.g. stock_detail) return data as a JSON-encoded string rather than
+        // a nested object; unwrap one level if so.
+        let wrap = match raw {
+            serde_json::Value::String(s) => serde_json::from_str::<serde_json::Value>(&s)
+                .map_err(|e| TigerError::Config(format!("decode items string failed: {}", e)))?,
+            v => v,
+        };
         match wrap.get("items") {
             None | Some(Value::Null) => Ok(vec![]),
             Some(items) => serde_json::from_value(items.clone())
@@ -175,8 +181,8 @@ impl QuoteClient {
         self.call_into("trade_tick", req).await
     }
 
-    /// 获取深度报价（v0.4.0 新签名：接受 DepthQuoteRequest）。wire: quote_depth
-    pub async fn get_quote_depth(&self, req: DepthQuoteRequest) -> Result<Vec<Depth>, TigerError> {
+    /// 获取深度报价（v0.4.0 新签名：接受 QuoteDepthRequest）。wire: quote_depth
+    pub async fn get_quote_depth(&self, req: QuoteDepthRequest) -> Result<Vec<Depth>, TigerError> {
         self.call_into("quote_depth", req).await
     }
 
@@ -203,12 +209,12 @@ impl QuoteClient {
     }
 
     /// 延时行情。wire: quote_delay
-    pub async fn get_delayed_quote(&self, req: StockDelayBriefsRequest) -> Result<Vec<Brief>, TigerError> {
+    pub async fn get_delayed_quote(&self, req: DelayedQuoteRequest) -> Result<Vec<Brief>, TigerError> {
         self.call_into("quote_delay", req).await
     }
 
     #[deprecated(since = "0.5.1", note = "Use get_delayed_quote instead")]
-    pub async fn get_stock_delay_briefs(&self, req: StockDelayBriefsRequest) -> Result<Vec<Brief>, TigerError> {
+    pub async fn get_stock_delay_briefs(&self, req: DelayedQuoteRequest) -> Result<Vec<Brief>, TigerError> {
         self.get_delayed_quote(req).await
     }
 
@@ -294,46 +300,53 @@ impl QuoteClient {
 
     // ========== 期权行情 ==========
 
-    /// 获取期权到期日
-    pub async fn get_option_expiration(&self, symbols: &[&str]) -> Result<Vec<OptionExpiration>, TigerError> {
-        self.call_into(
-            "option_expiration",
-            serde_json::json!({ "symbols": symbols }),
-        )
-        .await
+    /// 获取期权到期日。HK 市场需传 `market = Some("HK")` 及 HK 标的代码（如 `"00700"`）。
+    pub async fn get_option_expiration(&self, symbols: &[&str], market: Option<&str>) -> Result<Vec<OptionExpiration>, TigerError> {
+        let mut payload = serde_json::json!({ "symbols": symbols });
+        if let Some(m) = market {
+            payload["market"] = serde_json::Value::String(m.to_string());
+        }
+        self.call_into("option_expiration", payload).await
     }
 
-    /// 获取期权链（v3.0）。每个元素为 `(symbol, expiry)`，`expiry` 格式 "YYYY-MM-DD"，内部转为毫秒时间戳。
+    /// 获取期权链（v3.0）。
+    ///
+    /// ```rust,ignore
+    /// // 日期字符串，按 symbol 自动推断时区
+    /// qc.get_option_chain(OptionChainRequest::new(vec![
+    ///     OptionChainItem::from_date("AAPL", "2024-01-19")?,
+    /// ])).await?;
+    ///
+    /// // 直接传毫秒时间戳
+    /// qc.get_option_chain(OptionChainRequest::new(vec![
+    ///     OptionChainItem::new("AAPL", 1705622400000),
+    /// ])).await?;
+    /// ```
     pub async fn get_option_chain(
         &self,
-        items: &[(&str, &str)],
+        req: OptionChainRequest,
     ) -> Result<Vec<OptionChain>, TigerError> {
-        let mut option_basics: Vec<serde_json::Value> = Vec::with_capacity(items.len());
-        for (symbol, expiry) in items {
-            let expiry_ts = parse_expiry_to_ms(expiry)?;
-            option_basics.push(serde_json::json!({ "symbol": symbol, "expiry": expiry_ts }));
-        }
-        let params = serde_json::json!({ "option_basic": option_basics });
-        self.call_into_versioned("option_chain", params, Some(VERSION_V3)).await
+        self.call_into_versioned("option_chain", req, Some(VERSION_V3)).await
     }
 
-    /// 获取期权实时行情（v2.0）。`identifiers` 为 OCC 格式（如 "AAPL 240119C00150000"）。
+    /// 获取期权实时行情（v2.0）。
+    ///
+    /// ```rust,ignore
+    /// // OCC 格式，按 symbol 自动推断时区
+    /// qc.get_option_quote(OptionQuoteRequest::new(vec![
+    ///     OptionContractItem::from_occ("AAPL 240119C00150000")?,
+    /// ])).await?;
+    ///
+    /// // 直接传时间戳
+    /// qc.get_option_quote(OptionQuoteRequest::new(vec![
+    ///     OptionContractItem::new("AAPL", 1705622400000, "CALL", 150.0),
+    /// ])).await?;
+    /// ```
     pub async fn get_option_quote(
         &self,
-        identifiers: &[&str],
+        req: OptionQuoteRequest,
     ) -> Result<Vec<OptionBrief>, TigerError> {
-        let mut option_basics: Vec<serde_json::Value> = Vec::with_capacity(identifiers.len());
-        for id in identifiers {
-            let contract = parse_option_identifier(id)?;
-            option_basics.push(serde_json::json!({
-                "symbol": contract.symbol,
-                "expiry": contract.expiry,
-                "right": contract.right,
-                "strike": contract.strike,
-            }));
-        }
-        let params = serde_json::json!({ "option_basic": option_basics });
-        self.call_into_versioned("option_brief", params, Some(VERSION_V2)).await
+        self.call_into_versioned("option_brief", req, Some(VERSION_V2)).await
     }
 
     #[deprecated(since = "0.5.1", note = "Use get_option_quote instead")]
@@ -341,28 +354,28 @@ impl QuoteClient {
         &self,
         identifiers: &[&str],
     ) -> Result<Vec<OptionBrief>, TigerError> {
-        self.get_option_quote(identifiers).await
+        let items: Result<Vec<_>, _> = identifiers.iter()
+            .map(|id| OptionContractItem::from_occ(id))
+            .collect();
+        self.get_option_quote(OptionQuoteRequest::new(items?)).await
     }
 
-    /// 获取期权 K 线（v2.0）。`identifiers` 为 OCC 格式，`period` 对所有 identifier 生效。
+    /// 获取期权 K 线（v2.0）。
+    ///
+    /// ```rust,ignore
+    /// // OCC 格式，按 symbol 自动推断时区
+    /// qc.get_option_kline(OptionKlineRequest {
+    ///     option_query: Some(vec![
+    ///         OptionKlineItem::from_occ("AAPL 240119C00150000", "day")?,
+    ///     ]),
+    ///     ..Default::default()
+    /// }).await?;
+    /// ```
     pub async fn get_option_kline(
         &self,
-        identifiers: &[&str],
-        period: &str,
+        req: OptionKlineRequest,
     ) -> Result<Vec<OptionKline>, TigerError> {
-        let mut option_query: Vec<serde_json::Value> = Vec::with_capacity(identifiers.len());
-        for id in identifiers {
-            let contract = parse_option_identifier(id)?;
-            option_query.push(serde_json::json!({
-                "symbol": contract.symbol,
-                "expiry": contract.expiry,
-                "right": contract.right,
-                "strike": contract.strike,
-                "period": period,
-            }));
-        }
-        let params = serde_json::json!({ "option_query": option_query });
-        self.call_into_versioned("option_kline", params, Some(VERSION_V2)).await
+        self.call_into_versioned("option_kline", req, Some(VERSION_V2)).await
     }
 
     /// 期权逐笔。wire: option_trade_tick
@@ -380,9 +393,9 @@ impl QuoteClient {
         self.call_into("option_depth", req).await
     }
 
-    /// 期权代码列表。wire: option_symbol
+    /// 期权代码列表（港股）。wire: all_hk_option_symbols
     pub async fn get_option_symbols(&self, req: OptionSymbolsRequest) -> Result<Vec<OptionSymbol>, TigerError> {
-        self.call_into("option_symbol", req).await
+        self.call_into("all_hk_option_symbols", req).await
     }
 
     /// 期权分析（隐含/历史波动率）。wire: option_analysis
@@ -409,8 +422,8 @@ impl QuoteClient {
         .await
     }
 
-    /// 获取期货实时报价（v0.4.0 新签名：接受 FutureBriefRequest）。wire: future_real_time_quote
-    pub async fn get_future_real_time_quote(&self, req: FutureBriefRequest) -> Result<Vec<FutureQuote>, TigerError> {
+    /// 获取期货实时报价（v0.4.0 新签名：接受 FutureRealTimeQuoteRequest）。wire: future_real_time_quote
+    pub async fn get_future_real_time_quote(&self, req: FutureRealTimeQuoteRequest) -> Result<Vec<FutureQuote>, TigerError> {
         self.call_into("future_real_time_quote", req).await
     }
 
@@ -556,12 +569,12 @@ impl QuoteClient {
     // ========== 窝轮 ==========
 
     /// 窝轮实时行情。wire: warrant_briefs
-    pub async fn get_warrant_quote(&self, req: WarrantBriefsRequest) -> Result<Vec<WarrantBrief>, TigerError> {
+    pub async fn get_warrant_quote(&self, req: WarrantQuoteRequest) -> Result<Vec<WarrantBrief>, TigerError> {
         self.call_into("warrant_briefs", req).await
     }
 
     #[deprecated(since = "0.5.1", note = "Use get_warrant_quote instead")]
-    pub async fn get_warrant_briefs(&self, req: WarrantBriefsRequest) -> Result<Vec<WarrantBrief>, TigerError> {
+    pub async fn get_warrant_briefs(&self, req: WarrantQuoteRequest) -> Result<Vec<WarrantBrief>, TigerError> {
         self.get_warrant_quote(req).await
     }
 
@@ -763,87 +776,6 @@ where
     }
 }
 
-
-// ========== 期权 identifier 辅助 ==========
-
-struct OptionContract {
-    symbol: String,
-    /// 毫秒时间戳
-    expiry: i64,
-    /// "CALL" 或 "PUT"
-    right: String,
-    strike: f64,
-}
-
-/// 解析 "YYYY-MM-DD" 为 UTC 毫秒时间戳
-fn parse_expiry_to_ms(expiry: &str) -> Result<i64, TigerError> {
-    use chrono::NaiveDate;
-    let d = NaiveDate::parse_from_str(expiry, "%Y-%m-%d")
-        .map_err(|e| TigerError::Config(format!("invalid expiry {:?}: expected YYYY-MM-DD: {}", expiry, e)))?;
-    let dt = d
-        .and_hms_opt(0, 0, 0)
-        .ok_or_else(|| TigerError::Config(format!("invalid expiry date: {:?}", expiry)))?;
-    let utc = dt.and_utc();
-    Ok(utc.timestamp_millis())
-}
-
-/// 解析 OCC 期权 identifier（"AAPL 240119C00150000"）
-fn parse_option_identifier(identifier: &str) -> Result<OptionContract, TigerError> {
-    let trimmed = identifier.trim();
-    let mut it = trimmed.splitn(2, ' ');
-    let symbol = it
-        .next()
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| TigerError::Config(format!("invalid option identifier: {:?}", identifier)))?
-        .to_string();
-    let rest = it
-        .next()
-        .map(str::trim)
-        .ok_or_else(|| TigerError::Config(format!("invalid option identifier: {:?}", identifier)))?;
-
-    if rest.len() < 15 {
-        return Err(TigerError::Config(format!("option code too short: {:?}", rest)));
-    }
-
-    let date_str = &rest[..6];
-    let date = chrono::NaiveDate::parse_from_str(date_str, "%y%m%d")
-        .map_err(|_| TigerError::Config(format!("invalid date in identifier: {:?}", date_str)))?;
-    let expiry = date
-        .and_hms_opt(0, 0, 0)
-        .ok_or_else(|| TigerError::Config("invalid date".into()))?
-        .and_utc()
-        .timestamp_millis();
-
-    let right_char = rest.as_bytes()[6];
-    let right = match right_char {
-        b'C' => "CALL",
-        b'P' => "PUT",
-        other => {
-            return Err(TigerError::Config(format!(
-                "invalid right character: {:?}",
-                other as char
-            )));
-        }
-    }
-    .to_string();
-
-    let strike_str = &rest[7..];
-    let mut strike_int: i64 = 0;
-    for c in strike_str.chars() {
-        if !c.is_ascii_digit() {
-            return Err(TigerError::Config(format!("invalid strike digits: {:?}", strike_str)));
-        }
-        strike_int = strike_int * 10 + (c as i64 - '0' as i64);
-    }
-    let strike = strike_int as f64 / 1000.0;
-
-    Ok(OptionContract {
-        symbol,
-        expiry,
-        right,
-        strike,
-    })
-}
 
 #[cfg(test)]
 mod tests;

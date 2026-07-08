@@ -1,6 +1,6 @@
 [package]
 name = "tigeropen"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 rust-version = "1.70"
 description = "老虎证券 OpenAPI Rust SDK"
@@ -21,6 +21,7 @@ ureq = { version = "2", features = ["json", "tls"] }
 tokio = { version = "1", features = ["full"] }
 thiserror = "1"
 chrono = "0.4"
+chrono-tz = "0.9"
 rsa = { version = "0.9", features = ["sha1"] }
 sha1 = "0.10"
 base64 = "0.21"

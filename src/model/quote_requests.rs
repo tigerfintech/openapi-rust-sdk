@@ -3,6 +3,7 @@
 //! 所有字段使用 snake_case（与 wire 协议直接对齐），`Option<T>` + `skip_serializing_if` 跳过空值。
 
 use serde::Serialize;
+use crate::error::TigerError;
 
 // ============================================================================
 // 股票基础查询
@@ -56,7 +57,7 @@ pub struct StockDetailsRequest {
 
 /// 延时行情请求。wire: quote_delay
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct StockDelayBriefsRequest {
+pub struct DelayedQuoteRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,9 +66,9 @@ pub struct StockDelayBriefsRequest {
     pub lang: Option<String>,
 }
 
-/// 盘口深度请求。wire: quote_depth
+/// 深度报价请求。wire: quote_depth
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct DepthQuoteRequest {
+pub struct QuoteDepthRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -274,11 +275,241 @@ pub struct OptionQueryItem {
     pub page_token: Option<String>,
 }
 
+/// 期权链查询条目：symbol + expiry（毫秒时间戳）。
+///
+/// 构造方式：
+/// - `OptionChainItem::new("AAPL", 1705622400000)` — 直接传时间戳
+/// - `OptionChainItem::from_date("AAPL", "2024-01-19")?` — 日期字符串，按 symbol 推断时区
+/// - `OptionChainItem::from_date_tz("AAPL", "2024-01-19", "America/New_York")?` — 指定时区
+#[derive(Debug, Clone, Serialize)]
+pub struct OptionChainItem {
+    pub symbol: String,
+    pub expiry: i64,
+}
+
+impl OptionChainItem {
+    pub fn new(symbol: impl Into<String>, expiry: i64) -> Self {
+        Self { symbol: symbol.into(), expiry }
+    }
+
+    pub fn from_date(symbol: impl Into<String>, date: &str) -> Result<Self, TigerError> {
+        let symbol = symbol.into();
+        let tz = infer_option_timezone(&symbol);
+        let expiry = date_to_expiry_ms(date, tz)?;
+        Ok(Self { symbol, expiry })
+    }
+
+    pub fn from_date_tz(symbol: impl Into<String>, date: &str, timezone: &str) -> Result<Self, TigerError> {
+        let symbol = symbol.into();
+        let expiry = date_to_expiry_ms(date, timezone)?;
+        Ok(Self { symbol, expiry })
+    }
+}
+
+/// 期权链请求。wire: option_chain (v3.0)
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OptionChainRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub option_basic: Option<Vec<OptionChainItem>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+}
+
+impl OptionChainRequest {
+    pub fn new(items: Vec<OptionChainItem>) -> Self {
+        Self { option_basic: Some(items), market: None, lang: None }
+    }
+}
+
+/// 期权实时行情查询条目：OCC 已解析字段 + expiry 时间戳。
+///
+/// 构造方式：
+/// - `OptionContractItem::from_occ("AAPL 240119C00150000")?` — OCC 格式，按 symbol 推断时区
+/// - `OptionContractItem::from_occ_tz("AAPL 240119C00150000", "America/New_York")?` — 指定时区
+/// - `OptionContractItem::new("AAPL", 1705622400000, "CALL", 150.0)` — 直接构造
+#[derive(Debug, Clone, Serialize)]
+pub struct OptionContractItem {
+    pub symbol: String,
+    pub expiry: i64,
+    pub right: String,
+    pub strike: f64,
+}
+
+impl OptionContractItem {
+    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: f64) -> Self {
+        Self { symbol: symbol.into(), expiry, right: right.into(), strike }
+    }
+
+    pub fn from_occ(identifier: &str) -> Result<Self, TigerError> {
+        let c = parse_occ_identifier(identifier)?;
+        let tz = infer_option_timezone(&c.symbol);
+        let expiry = date_to_expiry_ms(&c.expiry_date, tz)?;
+        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike })
+    }
+
+    pub fn from_occ_tz(identifier: &str, timezone: &str) -> Result<Self, TigerError> {
+        let c = parse_occ_identifier(identifier)?;
+        let expiry = date_to_expiry_ms(&c.expiry_date, timezone)?;
+        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike })
+    }
+}
+
+/// 期权实时行情请求。wire: option_brief (v2.0)
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OptionQuoteRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub option_basic: Option<Vec<OptionContractItem>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+}
+
+impl OptionQuoteRequest {
+    pub fn new(items: Vec<OptionContractItem>) -> Self {
+        Self { option_basic: Some(items), market: None, lang: None }
+    }
+}
+
+/// 期权 K 线查询条目。
+#[derive(Debug, Clone, Serialize)]
+pub struct OptionKlineItem {
+    pub symbol: String,
+    pub expiry: i64,
+    pub right: String,
+    pub strike: f64,
+    pub period: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub begin_time: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_time: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i32>,
+}
+
+impl OptionKlineItem {
+    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: f64, period: impl Into<String>) -> Self {
+        Self { symbol: symbol.into(), expiry, right: right.into(), strike, period: period.into(), begin_time: None, end_time: None, limit: None }
+    }
+
+    pub fn from_occ(identifier: &str, period: impl Into<String>) -> Result<Self, TigerError> {
+        let c = parse_occ_identifier(identifier)?;
+        let tz = infer_option_timezone(&c.symbol);
+        let expiry = date_to_expiry_ms(&c.expiry_date, tz)?;
+        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None })
+    }
+
+    pub fn from_occ_tz(identifier: &str, period: impl Into<String>, timezone: &str) -> Result<Self, TigerError> {
+        let c = parse_occ_identifier(identifier)?;
+        let expiry = date_to_expiry_ms(&c.expiry_date, timezone)?;
+        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None })
+    }
+}
+
+// ---- 时区推断 & 日期转时间戳 ------------------------------------------------
+
+/// 按 symbol 推断期权到期日时区（与 Java SDK 对齐）。
+pub(crate) fn infer_option_timezone(symbol: &str) -> &'static str {
+    // HK options: numeric symbols or known HK suffixes
+    if symbol.chars().all(|c| c.is_ascii_digit()) || symbol.ends_with(".HK") {
+        return "Asia/Hong_Kong";
+    }
+    // US options: pure ASCII letters (no dot/digit suffix)
+    if symbol.chars().all(|c| c.is_ascii_alphabetic()) {
+        return "America/New_York";
+    }
+    "Asia/Shanghai"
+}
+
+/// 日期字符串 "YYYY-MM-DD" → 毫秒时间戳，使用指定时区的午夜 00:00:00。
+pub(crate) fn date_to_expiry_ms(date: &str, timezone: &str) -> Result<i64, TigerError> {
+    use chrono::NaiveDate;
+    use chrono_tz::Tz;
+
+    let tz: Tz = timezone.parse().map_err(|_| {
+        TigerError::Config(format!("unknown timezone: {:?}", timezone))
+    })?;
+    let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|e| {
+        TigerError::Config(format!("invalid date {:?}: expected YYYY-MM-DD: {}", date, e))
+    })?;
+    let dt = d.and_hms_opt(0, 0, 0).unwrap();
+    let zdt = dt.and_local_timezone(tz).earliest().ok_or_else(|| {
+        TigerError::Config(format!("ambiguous or invalid local time for date {:?} in tz {:?}", date, timezone))
+    })?;
+    Ok(zdt.timestamp_millis())
+}
+
+// ---- OCC identifier 解析 ----------------------------------------------------
+
+struct OccContract {
+    symbol: String,
+    expiry_date: String, // "YYYY-MM-DD"
+    right: String,
+    strike: f64,
+}
+
+fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
+    let trimmed = identifier.trim();
+
+    // Support two formats:
+    // 1. OCC with space(s): "AAPL  260918C00275000" or "AAPL 240119C00150000"
+    // 2. HK compact (no space): "TCH.HK260710C00295000" — symbol ends where digits begin
+    let (symbol, rest) = if trimmed.contains(' ') {
+        // Space-delimited: symbol is everything before first space
+        let mut parts = trimmed.splitn(2, ' ');
+        let sym = parts.next().filter(|s| !s.is_empty())
+            .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier: {:?}", identifier)))?
+            .to_string();
+        let rest = parts.next()
+            .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier (missing suffix): {:?}", identifier)))?
+            .trim_start(); // strip OCC padding spaces between symbol and date
+        (sym, rest.to_string())
+    } else {
+        // No space: find where the suffix starts — suffix is always 15 ASCII chars: YYMMDD + C/P + 8 digits
+        // Require ASCII so byte-offset slicing is safe (non-ASCII symbols are not valid OCC identifiers)
+        if !trimmed.is_ascii() {
+            return Err(TigerError::Config(format!("invalid OCC identifier (non-ASCII characters not supported): {:?}", identifier)));
+        }
+        if trimmed.len() < 15 {
+            return Err(TigerError::Config(format!("invalid OCC identifier (too short): {:?}", identifier)));
+        }
+        let suffix_start = trimmed.len() - 15;
+        let sym = trimmed[..suffix_start].to_string();
+        let rest = trimmed[suffix_start..].to_string();
+        (sym, rest)
+    };
+
+    if symbol.is_empty() {
+        return Err(TigerError::Config(format!("invalid OCC identifier (empty symbol): {:?}", identifier)));
+    }
+    if rest.len() < 15 {
+        return Err(TigerError::Config(format!("invalid OCC identifier (suffix too short): {:?}", identifier)));
+    }
+    // YYMMDD + C/P + 8-digit strike (5 integer + 3 decimal, no dot)
+    let date_part = &rest[..6];
+    let right_char = &rest[6..7];
+    let strike_raw = &rest[7..];
+    let year = 2000 + date_part[..2].parse::<i32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
+    let month = date_part[2..4].parse::<u32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
+    let day = date_part[4..6].parse::<u32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
+    let expiry_date = format!("{:04}-{:02}-{:02}", year, month, day);
+    let right = match right_char {
+        "C" => "CALL".to_string(),
+        "P" => "PUT".to_string(),
+        _ => return Err(TigerError::Config(format!("invalid OCC right {:?}: {:?}", right_char, identifier))),
+    };
+    let strike_int: u64 = strike_raw.parse().map_err(|_| TigerError::Config(format!("invalid OCC strike: {:?}", identifier)))?;
+    let strike = strike_int as f64 / 1000.0;
+    Ok(OccContract { symbol, expiry_date, right, strike })
+}
+
 /// 期权 K 线请求。wire: option_kline
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct OptionKlineRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub option_query: Option<Vec<OptionQueryItem>>,
+    pub option_query: Option<Vec<OptionKlineItem>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub market: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -316,7 +547,7 @@ pub struct OptionDepthRequest {
     pub lang: Option<String>,
 }
 
-/// 期权代码列表请求。wire: option_symbol
+/// 港股期权代码列表请求。wire: all_hk_option_symbols
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct OptionSymbolsRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -346,7 +577,7 @@ pub struct OptionAnalysisRequest {
 
 /// 期货实时行情请求。wire: future_real_time_quote
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct FutureBriefRequest {
+pub struct FutureRealTimeQuoteRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contract_codes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -520,9 +751,9 @@ pub struct FundHistoryQuoteRequest {
     pub lang: Option<String>,
 }
 
-/// 窝轮简要报价请求。wire: warrant_briefs
+/// 权证行情请求。wire: warrant_briefs
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct WarrantBriefsRequest {
+pub struct WarrantQuoteRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -15,13 +15,14 @@ use tigeropen::model::quote::{
     MarketScannerRequest, MarketState,
 };
 use tigeropen::model::quote_requests::{
-    AllFutureContractsRequest, KlineRequest, BriefRequest, DepthQuoteRequest,
-    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest, FutureBriefRequest,
+    AllFutureContractsRequest, KlineRequest, BriefRequest, QuoteDepthRequest,
+    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest, FutureRealTimeQuoteRequest,
     FutureContractSingleRequest, FutureDepthRequest, FutureTradingTimesRequest,
     FundSymbolsRequest, IndustryListRequest, KlineQuotaRequest,
-    QuoteOvernightRequest, QuotePermissionRequest, StockDetailsRequest, StockIndustryRequest,
-    TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
-    TradingCalendarRequest,
+    OptionChainItem, OptionChainRequest, OptionContractItem, OptionKlineItem, OptionKlineRequest,
+    OptionQuoteRequest, QuoteOvernightRequest, QuotePermissionRequest, StockDetailsRequest,
+    StockIndustryRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest,
+    TradeTickRequest, TradingCalendarRequest,
 };
 use tigeropen::quote::QuoteClient;
 
@@ -173,7 +174,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // v0.4.0 new signature: DepthQuoteRequest
     match qc
-        .get_quote_depth(DepthQuoteRequest {
+        .get_quote_depth(QuoteDepthRequest {
             symbols: Some(vec!["AAPL".to_string()]),
             market: Some("US".to_string()),
             ..Default::default()
@@ -243,7 +244,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     match qc
-        .get_delayed_quote(tigeropen::model::quote_requests::StockDelayBriefsRequest {
+        .get_delayed_quote(tigeropen::model::quote_requests::DelayedQuoteRequest {
             symbols: Some(vec!["AAPL".to_string()]),
             ..Default::default()
         })
@@ -340,76 +341,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "GetKlineQuota", e),
     }
 
-    println!("\n=== Options ===");
-    let mut expiry_date = String::new();
-    let mut opt_identifier = String::new();
+    println!("\n=== Options (US — AAPL) ===");
+    run_option_smoke(&qc, "AAPL", &mut results).await;
 
-    match qc.get_option_expiration(&["AAPL"]).await {
-        Ok(exps) if !exps.is_empty() && !exps[0].dates.is_empty() => {
-            ok(
-                &mut results,
-                "GetOptionExpiration(AAPL)",
-                format!("dates={} first={}", exps[0].dates.len(), exps[0].dates[0]),
-            );
-            let dates = &exps[0].dates;
-            expiry_date = dates[dates.len() / 2].clone();
-        }
-        Ok(_) => ok(&mut results, "GetOptionExpiration(AAPL)", "(empty)"),
-        Err(e) => fail(&mut results, "GetOptionExpiration(AAPL)", e),
-    }
-
-    if expiry_date.is_empty() {
-        skip(&mut results, "GetOptionChain", "no expiry available");
-        skip(&mut results, "GetOptionQuote", "no expiry available");
-        skip(&mut results, "GetOptionKline", "no expiry available");
-    } else {
-        match qc.get_option_chain(&[("AAPL", &expiry_date)]).await {
-            Ok(chain) if !chain.is_empty() && !chain[0].items.is_empty() => {
-                ok(
-                    &mut results,
-                    &format!("GetOptionChain({})", expiry_date),
-                    format!("rows={}", chain[0].items.len()),
-                );
-                let mid = &chain[0].items[chain[0].items.len() / 2];
-                if let Some(call) = &mid.call {
-                    opt_identifier = call.identifier.clone();
-                } else if let Some(put) = &mid.put {
-                    opt_identifier = put.identifier.clone();
-                }
-            }
-            Ok(_) => ok(
-                &mut results,
-                &format!("GetOptionChain({})", expiry_date),
-                "(empty items)",
-            ),
-            Err(e) => fail(&mut results, &format!("GetOptionChain({})", expiry_date), e),
-        }
-
-        if opt_identifier.is_empty() {
-            skip(&mut results, "GetOptionQuote", "no identifier from chain");
-            skip(&mut results, "GetOptionKline", "no identifier from chain");
-        } else {
-            match qc.get_option_quote(&[opt_identifier.as_str()]).await {
-                Ok(briefs) if !briefs.is_empty() => ok(
-                    &mut results,
-                    "GetOptionQuote",
-                    format!("{} latestPrice={:.4}", briefs[0].symbol, briefs[0].latest_price),
-                ),
-                Ok(_) => ok(&mut results, "GetOptionQuote", "(empty)"),
-                Err(e) => fail(&mut results, "GetOptionQuote", e),
-            }
-
-            match qc.get_option_kline(&[opt_identifier.as_str()], "day").await {
-                Ok(ks) if !ks.is_empty() => ok(
-                    &mut results,
-                    "GetOptionKline",
-                    format!("bars={}", ks[0].items.len()),
-                ),
-                Ok(_) => ok(&mut results, "GetOptionKline", "(empty)"),
-                Err(e) => fail(&mut results, "GetOptionKline", e),
-            }
-        }
-    }
+    println!("\n=== Options (HK — 00700.HK) ===");
+    run_hk_option_smoke(&qc, "00700.HK", &mut results).await;
 
     println!("\n=== Futures ===");
     let mut exchange_code = String::new();
@@ -465,7 +401,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         // v0.4.0 new signature: FutureBriefRequest
         match qc
-            .get_future_real_time_quote(FutureBriefRequest {
+            .get_future_real_time_quote(FutureRealTimeQuoteRequest {
                 contract_codes: Some(vec![contract_code.clone()]),
                 ..Default::default()
             })
@@ -900,23 +836,283 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "call_into_items(brief)", e),
     }
 
-    // call_optional: returns None when data is absent
+    // call_optional: returns None when data is absent; use capital_distribution which returns a single object
     match qc
-        .call_optional::<Brief, _>(
-            "brief",
-            serde_json::json!({"symbols": ["AAPL"], "level": "basic"}),
+        .call_optional::<tigeropen::model::quote::CapitalDistribution, _>(
+            "capital_distribution",
+            serde_json::json!({"symbol": "AAPL", "market": "US"}),
         )
         .await
     {
-        Ok(Some(b)) => ok(
+        Ok(Some(cd)) => ok(
             &mut results,
-            "call_optional(brief)",
-            format!("symbol={}", b.symbol),
+            "call_optional(capital_distribution)",
+            format!("symbol={} netInflow={:.0}", cd.symbol, cd.net_inflow),
         ),
-        Ok(None) => ok(&mut results, "call_optional(brief)", "(no data)"),
-        Err(e) => fail(&mut results, "call_optional(brief)", e),
+        Ok(None) => ok(&mut results, "call_optional(capital_distribution)", "(no data)"),
+        Err(e) => fail(&mut results, "call_optional(capital_distribution)", e),
     }
 
     print_summary(&results);
     Ok(())
+}
+
+async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, results: &mut Vec<RunResult>) {
+    let mut expiry_date = String::new();
+    let mut opt_identifier = String::new();
+
+    // Fetch current price to find ATM strike later.
+    let current_price: f64 = match qc.get_real_time_quote(BriefRequest {
+        symbols: Some(vec![symbol.to_string()]),
+        ..Default::default()
+    }).await {
+        Ok(briefs) if !briefs.is_empty() && briefs[0].latest_price > 0.0 => briefs[0].latest_price,
+        _ => 0.0,
+    };
+
+    let tag = format!("GetOptionExpiration({})", symbol);
+    match qc.get_option_expiration(&[symbol], None).await {
+        Ok(exps) if !exps.is_empty() && !exps[0].dates.is_empty() => {
+            let dates = &exps[0].dates;
+            // Pick the first expiry >= 30 days from now — these contracts have trade history for kline.
+            let min_date = {
+                let secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+                    + 30 * 86_400;
+                let d = chrono::DateTime::from_timestamp(secs as i64, 0).unwrap();
+                d.format("%Y-%m-%d").to_string()
+            };
+            let picked = dates.iter()
+                .find(|d| d.as_str() >= min_date.as_str())
+                .unwrap_or(&dates[dates.len() / 2]);
+            ok(results, &tag, format!("dates={} picked={}", dates.len(), picked));
+            expiry_date = picked.clone();
+        }
+        Ok(_) => ok(results, &tag, "(empty)"),
+        Err(e) => { fail(results, &tag, e); return; }
+    }
+
+    let chain_tag = format!("GetOptionChain({} {})", symbol, expiry_date);
+    match qc.get_option_chain(OptionChainRequest::new(vec![
+        OptionChainItem::from_date(symbol, &expiry_date).unwrap()
+    ])).await {
+        Ok(chain) if !chain.is_empty() && !chain[0].items.is_empty() => {
+            ok(results, &chain_tag, format!("rows={}", chain[0].items.len()));
+            let items = &chain[0].items;
+            // Chain rows are sorted by strike. Pick call with strike closest to current_price.
+            let best = if current_price > 0.0 {
+                items.iter()
+                    .filter_map(|row| row.call.as_ref())
+                    .filter(|leg| !leg.identifier.is_empty())
+                    .min_by(|a, b| {
+                        let da = (a.strike.parse::<f64>().unwrap_or(0.0) - current_price).abs();
+                        let db = (b.strike.parse::<f64>().unwrap_or(0.0) - current_price).abs();
+                        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+            } else {
+                items.iter().filter_map(|row| row.call.as_ref())
+                    .max_by_key(|leg| leg.open_interest)
+            };
+            if let Some(leg) = best {
+                opt_identifier = leg.identifier.clone();
+            } else {
+                let mid = &items[items.len() / 2];
+                if let Some(call) = &mid.call { opt_identifier = call.identifier.clone(); }
+                else if let Some(put) = &mid.put { opt_identifier = put.identifier.clone(); }
+            }
+            ok(results, &format!("{}→picked", chain_tag), opt_identifier.clone());
+        }
+        Ok(_) => ok(results, &chain_tag, "(empty items)"),
+        Err(e) => { fail(results, &chain_tag, e); return; }
+    }
+
+    if opt_identifier.is_empty() {
+        skip(results, &format!("GetOptionQuote({})", symbol), "no identifier from chain");
+        skip(results, &format!("GetOptionKline({})", symbol), "no identifier from chain");
+        return;
+    }
+
+    let quote_tag = format!("GetOptionQuote({})", symbol);
+    match qc.get_option_quote(OptionQuoteRequest::new(vec![
+        OptionContractItem::from_occ(&opt_identifier).unwrap()
+    ])).await {
+        Ok(briefs) if !briefs.is_empty() => ok(
+            results, &quote_tag,
+            format!("{} latestPrice={:.4}", briefs[0].symbol, briefs[0].latest_price),
+        ),
+        Ok(_) => ok(results, &quote_tag, "(empty)"),
+        Err(e) => fail(results, &quote_tag, e),
+    }
+
+    let kline_tag = format!("GetOptionKline({})", symbol);
+    // option_kline requires begin_time and end_time; use last 90 days
+    let end_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let begin_ms = end_ms - 90 * 86_400_000;
+    let mut kline_item = OptionKlineItem::from_occ(&opt_identifier, "day").unwrap();
+    kline_item.begin_time = Some(begin_ms);
+    kline_item.end_time = Some(end_ms);
+    match qc.get_option_kline(OptionKlineRequest {
+        option_query: Some(vec![kline_item]),
+        ..Default::default()
+    }).await {
+        Ok(ks) if !ks.is_empty() => ok(results, &kline_tag, format!("bars={}", ks[0].items.len())),
+        Ok(_) => ok(results, &kline_tag, "(empty)"),
+        Err(e) => fail(results, &kline_tag, e),
+    }
+}
+
+async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, results: &mut Vec<RunResult>) {
+    use tigeropen::model::quote_requests::{OptionAnalysisRequest, OptionSymbolsRequest};
+
+    // Step 1: get_option_symbols(HK) to discover tradable HK option symbols
+    let syms = match qc.get_option_symbols(OptionSymbolsRequest {
+        market: Some("HK".to_string()),
+        ..Default::default()
+    }).await {
+        Ok(s) if !s.is_empty() => {
+            ok(results, "GetOptionSymbols(HK)", format!("count={}", s.len()));
+            s
+        }
+        Ok(_) => { skip(results, "GetOptionSymbols(HK)", "empty result"); return; }
+        Err(e) if e.to_string().contains("does not support") || e.to_string().contains("code=4") => {
+            skip(results, "GetOptionSymbols(HK)", "not supported by this account tier");
+            return;
+        }
+        Err(e) => { fail(results, "GetOptionSymbols(HK)", e); return; }
+    };
+
+    // Step 2: get_option_expiration — underlying for HK options is "TCH.HK" format (not numeric)
+    let hk_chain_input: Option<(String, i64)> = {
+        let mut result: Option<(String, i64)> = None;
+        // Build candidate list: use symbol itself as underlying (e.g. "TCH.HK")
+        // TCH.HK is Tencent's HK option symbol, underlying = "TCH.HK"
+        let mut candidates: Vec<String> = vec!["TCH.HK".to_string()];
+        for s in syms.iter().take(5) {
+            candidates.push(s.symbol.clone());
+        }
+        candidates.dedup();
+        for sym in &candidates {
+            match qc.get_option_expiration(&[sym.as_str()], Some("HK")).await {
+                Ok(exps) => {
+                    let min_ts = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
+                        + 30 * 86_400_000;
+                    let ts = exps.iter()
+                        .flat_map(|e| e.timestamps.iter().copied())
+                        .find(|&t| t >= min_ts);
+                    if let Some(ts) = ts {
+                        ok(results, "GetOptionExpiration(HK)", format!("sym={} ts={}", sym, ts));
+                        result = Some((sym.clone(), ts));
+                        break;
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+        if result.is_none() {
+            skip(results, "GetOptionExpiration(HK)", "no valid expiry found");
+        }
+        result
+    };
+
+    // Step 3: get_option_chain — only if we have a valid expiry
+    let (hk_opt_symbol, hk_expiry_ms) = match hk_chain_input {
+        Some(v) => v,
+        None => {
+            skip(results, "GetOptionChain→Quote→Kline(HK)", "no expiry found");
+            // still run analysis
+            match qc.get_option_analysis(tigeropen::model::quote_requests::OptionAnalysisRequest {
+                symbols: Some(vec![symbol.to_string()]),
+                market: Some("HK".to_string()),
+                period: Some("day".to_string()),
+                ..Default::default()
+            }).await {
+                Ok(items) => ok(results, &format!("GetOptionAnalysis({} HK)", symbol), format!("count={}", items.len())),
+                Err(e) => fail(results, &format!("GetOptionAnalysis({} HK)", symbol), e),
+            }
+            return;
+        }
+    };
+    let hk_chain_tag = format!("GetOptionChain({} HK)", hk_opt_symbol);
+    let opt_identifier = match qc.get_option_chain(OptionChainRequest {
+        option_basic: Some(vec![OptionChainItem::new(hk_opt_symbol.as_str(), hk_expiry_ms)]),
+        market: Some("HK".to_string()),
+        lang: None,
+    }).await {
+        Ok(chains) => {
+            // Pick call with OI > 0; if none, take the middle strike (closest to ATM).
+            let all_items: Vec<_> = chains.iter().flat_map(|c| c.items.iter()).collect();
+            let best_id = all_items.iter()
+                .filter_map(|row| row.call.as_ref())
+                .filter(|leg| leg.open_interest > 0 && !leg.identifier.is_empty())
+                .max_by_key(|leg| leg.open_interest)
+                .map(|leg| leg.identifier.clone());
+            let first_id = best_id.or_else(|| {
+                let mid_idx = all_items.len() / 2;
+                all_items[mid_idx].call.as_ref()
+                    .map(|l| l.identifier.clone())
+                    .or_else(|| all_items[mid_idx].put.as_ref().map(|l| l.identifier.clone()))
+                    .filter(|id| !id.is_empty())
+                    .or_else(|| {
+                        all_items.iter().find_map(|row| {
+                            row.call.as_ref().map(|l| l.identifier.clone())
+                                .or_else(|| row.put.as_ref().map(|l| l.identifier.clone()))
+                        }).filter(|id| !id.is_empty())
+                    })
+            });
+            match first_id {
+                Some(id) => { ok(results, &hk_chain_tag, format!("identifier={}", id.trim())); id }
+                None => { ok(results, &hk_chain_tag, "(empty chain)"); return; }
+            }
+        }
+        Err(e) => { fail(results, &hk_chain_tag, e); return; }
+    };
+
+    // Step 4: get_option_quote using the identifier from chain
+    let opt_id_trimmed = opt_identifier.trim().to_string();
+    let quote_tag = format!("GetOptionQuote({} HK)", opt_id_trimmed);
+    let contract_item = match OptionContractItem::from_occ(&opt_id_trimmed) {
+        Ok(c) => c,
+        Err(e) => { fail(results, &quote_tag, e); return; }
+    };
+    match qc.get_option_quote(OptionQuoteRequest::new(vec![contract_item])).await {
+        Ok(briefs) if !briefs.is_empty() => ok(
+            results, &quote_tag,
+            format!("{} latestPrice={:.4}", briefs[0].symbol, briefs[0].latest_price),
+        ),
+        Ok(_) => ok(results, &quote_tag, "(empty)"),
+        Err(e) => fail(results, &quote_tag, e),
+    }
+
+    // Step 5: get_option_kline using same identifier, last 30 days
+    let kline_tag = format!("GetOptionKline({} HK)", opt_id_trimmed);
+    let end_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+    let begin_ms = end_ms - 90 * 86_400_000;
+    let kline_item = match OptionKlineItem::from_occ(&opt_id_trimmed, "day") {
+        Ok(mut k) => { k.begin_time = Some(begin_ms); k.end_time = Some(end_ms); k }
+        Err(e) => { fail(results, &kline_tag, e); return; }
+    };
+    match qc.get_option_kline(OptionKlineRequest {
+        option_query: Some(vec![kline_item]),
+        ..Default::default()
+    }).await {
+        Ok(ks) if !ks.is_empty() => ok(results, &kline_tag, format!("bars={}", ks[0].items.len())),
+        Ok(_) => ok(results, &kline_tag, "(empty)"),
+        Err(e) => fail(results, &kline_tag, e),
+    }
+
+    // Step 6: get_option_analysis for the underlying symbol (HK)
+    match qc.get_option_analysis(OptionAnalysisRequest {
+        symbols: Some(vec![symbol.to_string()]),
+        market: Some("HK".to_string()),
+        period: Some("day".to_string()),
+        ..Default::default()
+    }).await {
+        Ok(items) => ok(results, &format!("GetOptionAnalysis({} HK)", symbol), format!("count={}", items.len())),
+        Err(e) => fail(results, &format!("GetOptionAnalysis({} HK)", symbol), e),
+    }
 }
