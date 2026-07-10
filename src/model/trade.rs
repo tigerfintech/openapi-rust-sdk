@@ -424,7 +424,7 @@ pub struct SegmentFundHistoryItem {
 #[serde(rename_all = "camelCase")]
 pub struct FundDetails {
     #[serde(default)]
-    pub id: i64,
+    pub id: String,
     #[serde(default)]
     pub account: String,
     #[serde(default)]

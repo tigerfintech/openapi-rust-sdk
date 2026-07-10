@@ -891,12 +891,12 @@ pub struct TradingCalendarRequest {
 }
 
 /// 扫描器标签请求。wire: market_scanner_tags
-/// 注意 wire 字段名是 `multi_tags_fields`（不是 `multi_tag_field_list`）。
+/// 注意 wire 字段名是 `multi_tag_field_list`（不是 `multi_tags_fields`）。
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct MarketScannerTagsRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub market: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "multi_tag_field_list", skip_serializing_if = "Option::is_none")]
     pub multi_tags_fields: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
