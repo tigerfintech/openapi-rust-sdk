@@ -19,7 +19,7 @@ use tigeropen::model::quote_requests::{
     FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest, FutureRealTimeQuoteRequest,
     FutureContractSingleRequest, FutureDepthRequest, FutureTradingTimesRequest,
     FundSymbolsRequest, IndustryListRequest, KlineQuotaRequest,
-    OptionChainItem, OptionChainRequest, OptionContractItem, OptionKlineItem, OptionKlineRequest,
+    OptionChainItem, OptionChainRequest, OptionAnalysisRequest, OptionContractItem, OptionKlineItem, OptionKlineRequest,
     OptionQuoteRequest, QuoteOvernightRequest, QuotePermissionRequest, StockDetailsRequest,
     StockIndustryRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest,
     TradeTickRequest, TradingCalendarRequest,
@@ -962,10 +962,25 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
         Ok(_) => ok(results, &kline_tag, "(empty)"),
         Err(e) => fail(results, &kline_tag, e),
     }
+
+    // GetOptionAnalysis (US)
+    match qc.get_option_analysis(OptionAnalysisRequest {
+        symbols: Some(vec![symbol.to_string()]),
+        market: Some("US".to_string()),
+        period: Some("52week".to_string()),
+        ..Default::default()
+    }).await {
+        Ok(items) => ok(results, &format!("GetOptionAnalysis({} US)", symbol),
+            format!("count={} iv30d={:.4} hv={:.4}",
+                items.len(),
+                items.first().map(|i| i.implied_vol30_days).unwrap_or(0.0),
+                items.first().map(|i| i.his_volatility).unwrap_or(0.0))),
+        Err(e) => fail(results, &format!("GetOptionAnalysis({} US)", symbol), e),
+    }
 }
 
 async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, results: &mut Vec<RunResult>) {
-    use tigeropen::model::quote_requests::{OptionAnalysisRequest, OptionSymbolsRequest};
+    use tigeropen::model::quote_requests::OptionSymbolsRequest;
 
     // Step 1: get_option_symbols(HK) to discover tradable HK option symbols
     let syms = match qc.get_option_symbols(OptionSymbolsRequest {
@@ -1027,7 +1042,7 @@ async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, r
             match qc.get_option_analysis(tigeropen::model::quote_requests::OptionAnalysisRequest {
                 symbols: Some(vec![symbol.to_string()]),
                 market: Some("HK".to_string()),
-                period: Some("day".to_string()),
+                period: Some("52week".to_string()),
                 ..Default::default()
             }).await {
                 Ok(items) => ok(results, &format!("GetOptionAnalysis({} HK)", symbol), format!("count={}", items.len())),
@@ -1109,7 +1124,7 @@ async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, r
     match qc.get_option_analysis(OptionAnalysisRequest {
         symbols: Some(vec![symbol.to_string()]),
         market: Some("HK".to_string()),
-        period: Some("day".to_string()),
+        period: Some("52week".to_string()),
         ..Default::default()
     }).await {
         Ok(items) => ok(results, &format!("GetOptionAnalysis({} HK)", symbol), format!("count={}", items.len())),

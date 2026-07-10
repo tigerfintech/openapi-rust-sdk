@@ -5,7 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.3] - 2026-07-08
+## [0.5.4] - 2026-07-10
+
+### Breaking Changes
+
+- **`OptionAnalysis` 响应模型完全重写**：原字段（`historical_volatility30_day`、`historical_volatility60_day`、`historical_volatility90_day`、`implied_volatility`）均与服务端不符，已全部替换：
+
+  | 旧字段（已删除）| 新字段 | 服务端 wire |
+  |---|---|---|
+  | `implied_volatility: f64` | `implied_vol30_days: f64` | `impliedVol30Days` |
+  | `historical_volatility30_day: f64` | `his_volatility: f64` | `hisVolatility` |
+  | `historical_volatility60_day: f64` | `iv_his_v_ratio: f64` | `ivHisVRatio` |
+  | `historical_volatility90_day: f64` | `call_put_ratio: f64` | `callPutRatio` |
+  | —（无此字段）| `implied_vol_metric: Option<ImpliedVolMetric>` | `impliedVolMetric` |
+
+- **`OptionVolatilityPoint` 响应模型完全重写**：原字段（`date: String`、`volatility: f64`）已替换：
+  - 新增字段：`implied_vol: f64`、`percentile: f64`、`rank: f64`、`his_volatility: f64`、`timestamp: i64`
+
+- **`OptionAnalysisRequest.symbols` 新增 `symbol_items` 对应字段**：原 `symbols: Option<Vec<String>>` 保留；新增 `symbol_items: Option<Vec<OptionAnalysisSymbol>>`，支持为每个 symbol 单独指定 period（与 Python SDK 对齐）。发送时 `symbol_items` 优先于 `symbols`。
+
+### Added
+
+- **`ImpliedVolMetric` 新类型**：对应 `impliedVolMetric`，含 `period: String`、`percentile: f64`、`rank: f64`。
+- **`OptionAnalysisSymbol` 新类型**：`{symbol, period?}`，用于 per-symbol period 格式（与 Python SDK `[{"symbol": "AAPL", "period": "26week"}]` 对齐）。
+- **`get_option_analysis` 覆盖 US + HK**：`quote_example.rs` 新增 US（AAPL）和 HK（00700.HK）的 option_analysis 集成测试，均通过。
+
+
 
 ### Breaking Changes
 
