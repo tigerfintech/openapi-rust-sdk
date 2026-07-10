@@ -22,6 +22,7 @@ pub use order::{
     new_order_leg, stop_limit_order, stop_order, trail_order,
 };
 pub use position::Position;
+#[allow(deprecated)]
 pub use quote::{
     Brief, BrokerDetail, CapitalDistribution, CapitalFlow, CapitalFlowItem, CorporateAction,
     CorporateActionRequest, Depth, DepthLevel, ExchangeRate, FinancialCurrency,
@@ -32,9 +33,9 @@ pub use quote::{
     FutureTradingSegment, FutureTradingTime, FutureTradeTickItem,
     IndustryItem, IndustryStock,
     Kline, KlineItem, KlineQuota, KlineQuotaDetail,
-    MarketScannerRequest, MarketScannerTag, MarketScannerTags, MarketState,
-    OptionAnalysis, OptionBrief, OptionChain, OptionChainRow, OptionExpiration, OptionKline,
-    OptionLeg as OptionChainLeg, OptionSymbol, OptionVolatilityPoint,
+    MarketScannerRequest, MarketScannerTag, MarketScannerTagGroup, MarketScannerTags, MarketState,
+    ImpliedVolMetric, OptionAnalysis, OptionBrief, OptionChain, OptionChainRow, OptionExpiration,
+    OptionKline, OptionLeg as OptionChainLeg, OptionSymbol, OptionVolatilityPoint,
     QuoteOvernight, QuotePermission,
     ScannerDataRow, ScannerResult, ScannerResultItem,
     ShortInterest, StockBroker, StockBrokerItem, StockDetail, StockFundamental, StockIndustry,

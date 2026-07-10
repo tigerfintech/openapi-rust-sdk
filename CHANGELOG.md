@@ -5,33 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.3] - 2026-07-08
+## [0.5.4] - 2026-07-10
 
 ### Breaking Changes
 
-- **Request struct renames** (replace old name with new):
-  - `StockDelayBriefsRequest` → `DelayedQuoteRequest`（对应 `get_delayed_quote`）
-  - `DepthQuoteRequest` → `QuoteDepthRequest`（对应 `get_quote_depth`）
-  - `FutureBriefRequest` → `FutureRealTimeQuoteRequest`（对应 `get_future_real_time_quote`）
-  - `WarrantBriefsRequest` → `WarrantQuoteRequest`（对应 `get_warrant_quote`）
-- **`get_option_expiration` 签名变更**：新增 `market: Option<&str>` 参数；查 HK 期权到期日需传 `Some("HK")`。
-- **`get_option_chain` / `get_option_quote` / `get_option_kline` 签名变更**：参数改为结构体（`OptionChainRequest` / `OptionQuoteRequest` / `OptionKlineRequest`），支持 `begin_time` / `end_time`。
-- **`OptionContractItem::new` / `OptionKlineItem::new` `strike` 参数类型**：`f64` → `impl Into<String>`；直接构造时请传字符串，如 `"150.0"`。
+- **`OptionAnalysis` 响应模型完全重写**：原字段（`historical_volatility30_day`、`historical_volatility60_day`、`historical_volatility90_day`、`implied_volatility`）均与服务端不符，已全部替换：
+
+  | 旧字段（已删除）| 新字段 | 服务端 wire |
+  |---|---|---|
+  | `implied_volatility: f64` | `implied_vol30_days: f64` | `impliedVol30Days` |
+  | `historical_volatility30_day: f64` | `his_volatility: f64` | `hisVolatility` |
+  | `historical_volatility60_day: f64` | `iv_his_v_ratio: f64` | `ivHisVRatio` |
+  | `historical_volatility90_day: f64` | `call_put_ratio: f64` | `callPutRatio` |
+  | —（无此字段）| `implied_vol_metric: Option<ImpliedVolMetric>` | `impliedVolMetric` |
+
+- **`OptionVolatilityPoint` 响应模型完全重写**：原字段（`date: String`、`volatility: f64`）已替换：
+  - 新增字段：`implied_vol: f64`、`percentile: f64`、`rank: f64`、`his_volatility: f64`、`timestamp: i64`
+
+- **`OptionAnalysisRequest.symbols` 新增 `symbol_items` 对应字段**：原 `symbols: Option<Vec<String>>` 保留；新增 `symbol_items: Option<Vec<OptionAnalysisSymbol>>`，支持为每个 symbol 单独指定 period（与 Python SDK 对齐）。发送时 `symbol_items` 优先于 `symbols`。
 
 ### Added
 
-- **HK option identifier 格式支持**：`parse_occ_identifier` 现在同时支持空格分隔的 OCC 格式（`"AAPL  260918C00275000"`）和 HK 紧凑格式（`"TCH.HK260710C00295000"`）。
-- **`OptionChainItem` / `OptionContractItem` / `OptionKlineItem`**：三种构造方式——直接传毫秒时间戳 `::new()`、日期字符串 `::from_date()`（按 symbol 自动推断交易所时区）、指定时区 `::from_date_tz()`。
+- **`ImpliedVolMetric` 新类型**：对应 `impliedVolMetric`，含 `period: String`、`percentile: f64`、`rank: f64`。
+- **`OptionAnalysisSymbol` 新类型**：`{symbol, period?}`，用于 per-symbol period 格式（与 Python SDK `[{"symbol": "AAPL", "period": "26week"}]` 对齐）。
+- **`get_option_analysis` 覆盖 US + HK**：`quote_example.rs` 新增 US（AAPL）和 HK（00700.HK）的 option_analysis 集成测试，均通过。
+- **`Contract.primary_exchange` 新字段**：对应服务端 `primaryExchange`（如 `NASDAQ`、`NYSE`），之前访问主交易所需查 `exchange` 但实际返回空。
+- **全接口集成测试覆盖**：`quote_example.rs` 新增 19 个接口测试（含 `get_short_interest`、`get_stock_broker`、`get_stock_fundamental`、`get_kline_by_page`、`get_market_scanner_tags`、`get_corporate_earnings_calendar`、`get_industry_stocks`、期货系列、基金系列、窝轮系列）；`trade_example.rs` 新增 7 个接口测试（含 `get_derivative_contracts`、`get_fund_details`、`get_segment_fund_available`、`get_position_transfer_records` 等，`get_option_exercise_records` 已在 main 分支）。
 
 ### Fixed
 
-- **`get_option_symbols` wire name**：错误的 `"option_symbol"` → `"all_hk_option_symbols"`（服务器返回 `code=4` 的根因）。
-- **`Brief.expiry` 反序列化**：服务器对部分期权接口返回 `i64` 时间戳而非字符串；现在两种格式均可解析。
-- **OCC 双空格解析**：`"AAPL  260918C00275000"` 等 OCC 填充空格格式不再 panic。
-- **`get_option_kline` 必填字段**：服务器要求 `begin_time` / `end_time` 同时存在（`code=1010`）。
-- **`OptionContractItem` / `OptionKlineItem` strike 类型**：从 `f64` 改回 `String`，与 Java/Go/TypeScript SDK 保持一致；从 OCC identifier 解析时自动去掉末尾多余的零（`"310.000"` → `"310.0"`）。
+- **`get_order` wire method 错误**：错误的 `"order_no"` → `"orders"`（`"order_no"` 返回的是下单结果结构 `{id, orderId}`，不是 `Order` 对象；与 Go/Python SDK 对齐）。
+- **`FundDetails.id` 类型错误**：服务端返回 `id` 为数字字符串（如 `"4733519770"`），原来 `i64` 反序列化直接失败；改为 `String`。
+- **`MarketScannerTagsRequest.multi_tags_fields` rename 错误**：服务端 wire 字段名为 `multi_tag_field_list`，而非 `multi_tags_fields`；添加 `#[serde(rename = "multi_tag_field_list")]`。
 
-## [0.5.1] - 2026-07-07
+## [0.5.3] - 2026-07-08
 
 ### Deprecated
 
