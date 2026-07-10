@@ -1154,25 +1154,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "MarketScanner", e),
     }
 
-    // GetMarketScannerTags (new test) — server returns array of {market, multiTagField, tagList:[...]}
-    // Use Vec<Value> since the wire format is an array, not the MarketScannerTags object struct
+    // GetMarketScannerTags — server returns array of {market, multiTagField, tagList:[...]}
     match qc
-        .call_into::<Vec<serde_json::Value>, _>(
-            "market_scanner_tags",
-            MarketScannerTagsRequest {
-                market: Some("US".to_string()),
-                multi_tags_fields: Some(vec!["MultiTagField_Industry".to_string()]),
-                ..Default::default()
-            },
-        )
+        .get_market_scanner_tags(MarketScannerTagsRequest {
+            market: Some("US".to_string()),
+            multi_tags_fields: Some(vec!["MultiTagField_Industry".to_string()]),
+            ..Default::default()
+        })
         .await
     {
         Ok(items) => {
-            let tag_count: usize = items
-                .iter()
-                .filter_map(|v| v.get("tagList").and_then(|t| t.as_array()))
-                .map(|a| a.len())
-                .sum();
+            let tag_count: usize = items.iter().map(|g| g.tag_list.len()).sum();
             ok(
                 &mut results,
                 "GetMarketScannerTags",
@@ -1224,7 +1216,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(_) => skip(&mut results, "GetWarrantQuote", "no data returned (may need warrant permission)"),
         Err(e) => {
             let msg = e.to_string();
-            if msg.contains("permission") || msg.contains("4") || msg.contains("unauthorized") {
+            if msg.contains("permission") || msg.contains("code=4") || msg.contains("unauthorized") {
                 skip(&mut results, "GetWarrantQuote", format!("no warrant permission: {}", msg));
             } else {
                 fail(&mut results, "GetWarrantQuote", e);

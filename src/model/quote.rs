@@ -1291,7 +1291,7 @@ pub struct TradingCalendarItem {
     pub session_type: String,
 }
 
-/// 扫描器标签（market_scanner_tags）。
+/// 扫描器标签条目（market_scanner_tags `tagList` 数组元素）。
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketScannerTag {
@@ -1303,15 +1303,22 @@ pub struct MarketScannerTag {
     pub values: Vec<String>,
 }
 
-/// 扫描器可用标签集合（market_scanner_tags）。
+/// 扫描器标签分组（market_scanner_tags 顶层数组元素）。
+/// 服务端 wire: `[{market, multiTagField, tagList:[...]}]`
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct MarketScannerTags {
+pub struct MarketScannerTagGroup {
     #[serde(default)]
-    pub tag_fields: Vec<String>,
+    pub market: String,
     #[serde(default)]
-    pub tags: Vec<MarketScannerTag>,
+    pub multi_tag_field: String,
+    #[serde(default)]
+    pub tag_list: Vec<MarketScannerTag>,
 }
+
+/// 兼容别名，保留旧名称以防外部代码直接引用。
+#[deprecated(since = "0.5.4", note = "use MarketScannerTagGroup instead")]
+pub type MarketScannerTags = MarketScannerTagGroup;
 
 /// 隔夜行情（quote_overnight）。
 #[derive(Debug, Clone, Deserialize, Default)]

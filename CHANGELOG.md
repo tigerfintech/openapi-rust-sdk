@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`OptionAnalysisSymbol` 新类型**：`{symbol, period?}`，用于 per-symbol period 格式（与 Python SDK `[{"symbol": "AAPL", "period": "26week"}]` 对齐）。
 - **`get_option_analysis` 覆盖 US + HK**：`quote_example.rs` 新增 US（AAPL）和 HK（00700.HK）的 option_analysis 集成测试，均通过。
 - **`Contract.primary_exchange` 新字段**：对应服务端 `primaryExchange`（如 `NASDAQ`、`NYSE`），之前访问主交易所需查 `exchange` 但实际返回空。
-- **全接口集成测试覆盖**：`quote_example.rs` 新增 19 个接口测试（含 `get_short_interest`、`get_stock_broker`、`get_stock_fundamental`、`get_kline_by_page`、`get_market_scanner_tags`、`get_corporate_earnings_calendar`、`get_industry_stocks`、期货系列、基金系列、窝轮系列）；`trade_example.rs` 新增 8 个接口测试（含 `get_derivative_contracts`、`get_fund_details`、`get_segment_fund_available`、`get_position_transfer_records`、`get_option_exercise_records` 等）。
+- **全接口集成测试覆盖**：`quote_example.rs` 新增 19 个接口测试（含 `get_short_interest`、`get_stock_broker`、`get_stock_fundamental`、`get_kline_by_page`、`get_market_scanner_tags`、`get_corporate_earnings_calendar`、`get_industry_stocks`、期货系列、基金系列、窝轮系列）；`trade_example.rs` 新增 7 个接口测试（含 `get_derivative_contracts`、`get_fund_details`、`get_segment_fund_available`、`get_position_transfer_records` 等，`get_option_exercise_records` 已在 main 分支）。
 
 ### Fixed
 
@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`FundDetails.id` 类型错误**：服务端返回 `id` 为数字字符串（如 `"4733519770"`），原来 `i64` 反序列化直接失败；改为 `String`。
 - **`MarketScannerTagsRequest.multi_tags_fields` rename 错误**：服务端 wire 字段名为 `multi_tag_field_list`，而非 `multi_tags_fields`；添加 `#[serde(rename = "multi_tag_field_list")]`。
 
-## [0.5.3] - 2026-07-07
+## [0.5.3] - 2026-07-08
 
 ### Deprecated
 
