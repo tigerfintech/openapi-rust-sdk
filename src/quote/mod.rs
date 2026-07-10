@@ -18,7 +18,7 @@ use crate::model::quote::{
     FutureContractInfo, FutureDepth, FutureExchange, FutureKline,
     FutureMainContractHistory, FutureQuote, FutureTradingTime, FutureTradeTickItem,
     IndustryItem, IndustryStock, Kline, KlineItem, KlineQuota, MarketScannerRequest,
-    MarketScannerTags, MarketState, OptionAnalysis, OptionBrief, OptionChain, OptionExpiration,
+    MarketScannerTagGroup, MarketState, OptionAnalysis, OptionBrief, OptionChain, OptionExpiration,
     OptionKline, OptionSymbol, QuoteOvernight, QuotePermission, ScannerResult, ShortInterest,
     StockBroker, StockDetail, StockIndustry, SymbolName, Timeline, TradeTick, TradeRankItem,
     TradingCalendarItem, WarrantBrief, WarrantFilterResult, FutureKlineItem,
@@ -716,8 +716,8 @@ impl QuoteClient {
     }
 
     /// 扫描器可用标签。wire: market_scanner_tags
-    pub async fn get_market_scanner_tags(&self, req: MarketScannerTagsRequest) -> Result<Option<MarketScannerTags>, TigerError> {
-        self.call_optional("market_scanner_tags", req).await
+    pub async fn get_market_scanner_tags(&self, req: MarketScannerTagsRequest) -> Result<Vec<MarketScannerTagGroup>, TigerError> {
+        self.call_into("market_scanner_tags", req).await
     }
 
     /// 隔夜行情。wire: quote_overnight

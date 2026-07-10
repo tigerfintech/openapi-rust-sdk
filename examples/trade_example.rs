@@ -17,10 +17,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tigeropen::config::ClientConfig;
 use tigeropen::model::order::limit_order;
 use tigeropen::model::trade_requests::{
-    AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, EstimateTradableQuantityRequest,
+    AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, DerivativeContractsRequest,
+    EstimateTradableQuantityRequest, FundDetailsRequest, FundingHistoryRequest,
     GetOrderRequest, ManagedAccountsRequest, OptionExerciseCheckRequest,
-    OptionExercisePositionRequest, OptionExerciseRecordsRequest, OrderTransactionsRequest,
-    OrdersRequest, PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest,
+    OptionExercisePositionRequest, OptionExerciseRecordsRequest,
+    OrderTransactionsRequest, OrdersRequest,
+    PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest,
     PositionsRequest, SegmentFundRequest,
 };
 use tigeropen::trade::TradeClient;
@@ -547,6 +549,168 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
         Ok(None) => ok(&mut results, "call_optional(preview_order)", "(no data)"),
         Err(e) => fail(&mut results, "call_optional(preview_order)", e),
+    }
+
+    // ========== Derivative Contracts ==========
+
+    println!("\n=== Derivative Contracts ===");
+    // expiry is required by the API
+    match tc
+        .get_derivative_contracts(DerivativeContractsRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            sec_type: Some("OPT".to_string()),
+            expiry: Some("20260619".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => {
+            if items.is_empty() {
+                skip(&mut results, "GetDerivativeContracts", "no contracts for 20260619");
+            } else {
+                let first = &items[0];
+                ok(
+                    &mut results,
+                    "GetDerivativeContracts",
+                    format!(
+                        "count={} symbol={} expiry={}",
+                        items.len(),
+                        first.symbol,
+                        first.expiry.as_deref().unwrap_or(""),
+                    ),
+                );
+            }
+        }
+        Err(e) => fail(&mut results, "GetDerivativeContracts", e),
+    }
+
+    // ========== Fund Details & Funding History ==========
+
+    println!("\n=== Fund Details ===");
+    match tc
+        .get_fund_details(FundDetailsRequest {
+            seg_types: Some(vec!["SEC".to_string()]),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => {
+            if items.is_empty() {
+                skip(&mut results, "GetFundDetails", "no fund_details returned");
+            } else {
+                ok(
+                    &mut results,
+                    "GetFundDetails",
+                    format!("count={}", items.len()),
+                );
+            }
+        }
+        Err(e) => fail(&mut results, "GetFundDetails", e),
+    }
+
+    match tc
+        .get_funding_history(FundingHistoryRequest { ..Default::default() })
+        .await
+    {
+        Ok(items) => {
+            if items.is_empty() {
+                skip(&mut results, "GetFundingHistory", "no transfer_fund records");
+            } else {
+                ok(
+                    &mut results,
+                    "GetFundingHistory",
+                    format!("count={}", items.len()),
+                );
+            }
+        }
+        Err(e) => fail(&mut results, "GetFundingHistory", e),
+    }
+
+    // ========== Segment Fund (read-only queries) ==========
+
+    println!("\n=== Segment Fund ===");
+    match tc
+        .get_segment_fund_available(SegmentFundRequest {
+            from_segment: Some("SEC".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => {
+            if items.is_empty() {
+                skip(&mut results, "GetSegmentFundAvailable", "no segment_fund_available items");
+            } else {
+                let first = &items[0];
+                ok(
+                    &mut results,
+                    "GetSegmentFundAvailable",
+                    format!(
+                        "count={} currency={} amount={:.2}",
+                        items.len(),
+                        first.currency,
+                        first.amount,
+                    ),
+                );
+            }
+        }
+        Err(e) => fail(&mut results, "GetSegmentFundAvailable", e),
+    }
+
+    match tc
+        .get_segment_fund_history(SegmentFundRequest { ..Default::default() })
+        .await
+    {
+        Ok(items) => {
+            if items.is_empty() {
+                skip(&mut results, "GetSegmentFundHistory", "no segment_fund_history items");
+            } else {
+                ok(&mut results, "GetSegmentFundHistory", format!("count={}", items.len()));
+            }
+        }
+        Err(e) => fail(&mut results, "GetSegmentFundHistory", e),
+    }
+
+    // ========== Position Transfer Records ==========
+
+    println!("\n=== Position Transfer Records ===");
+    match tc
+        .get_position_transfer_records(PositionTransferRecordsRequest {
+            since_date: Some("2026-06-01".to_string()),
+            to_date: Some("2026-07-07".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => {
+            if items.is_empty() {
+                skip(&mut results, "GetPositionTransferRecords", "no records");
+            } else {
+                ok(&mut results, "GetPositionTransferRecords", format!("count={}", items.len()));
+            }
+        }
+        Err(e) => fail(&mut results, "GetPositionTransferRecords", e),
+    }
+
+    match tc
+        .get_position_transfer_external_records(PositionTransferExternalRecordsRequest {
+            since_date: Some("2026-06-01".to_string()),
+            to_date: Some("2026-07-07".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => {
+            if items.is_empty() {
+                skip(&mut results, "GetPositionTransferExternalRecords", "no records");
+            } else {
+                ok(
+                    &mut results,
+                    "GetPositionTransferExternalRecords",
+                    format!("count={}", items.len()),
+                );
+            }
+        }
+        Err(e) => fail(&mut results, "GetPositionTransferExternalRecords", e),
     }
 
     print_summary(&results);

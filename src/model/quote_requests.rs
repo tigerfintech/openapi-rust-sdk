@@ -572,19 +572,53 @@ pub struct OptionSymbolsRequest {
     pub lang: Option<String>,
 }
 
-/// 期权分析请求。wire: option_analysis
+/// 单个 symbol 的期权分析参数（per-symbol period 格式）。
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct OptionAnalysisRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub symbols: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub market: Option<String>,
+pub struct OptionAnalysisSymbol {
+    pub symbol: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub period: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+}
+
+impl OptionAnalysisSymbol {
+    pub fn new(symbol: impl Into<String>) -> Self {
+        Self { symbol: symbol.into(), period: None }
+    }
+    pub fn with_period(symbol: impl Into<String>, period: impl Into<String>) -> Self {
+        Self { symbol: symbol.into(), period: Some(period.into()) }
+    }
+}
+
+/// 期权分析请求。wire: option_analysis
+///
+/// `symbols` 传字符串数组（统一用 `period` 指定周期）；
+/// `symbol_items` 传对象数组（可为每个 symbol 单独指定 period），两者选其一。
+#[derive(Debug, Clone, Default)]
+pub struct OptionAnalysisRequest {
+    pub symbols: Option<Vec<String>>,
+    pub symbol_items: Option<Vec<OptionAnalysisSymbol>>,
+    pub market: Option<String>,
+    pub period: Option<String>,
     pub require_volatility_list: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
+}
+
+impl serde::Serialize for OptionAnalysisRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(None)?;
+        // symbols: prefer symbol_items (object array) over symbols (string array)
+        if let Some(ref items) = self.symbol_items {
+            map.serialize_entry("symbols", items)?;
+        } else if let Some(ref syms) = self.symbols {
+            map.serialize_entry("symbols", syms)?;
+        }
+        if let Some(ref v) = self.market { map.serialize_entry("market", v)?; }
+        if let Some(ref v) = self.period { map.serialize_entry("period", v)?; }
+        if let Some(v) = self.require_volatility_list { map.serialize_entry("require_volatility_list", &v)?; }
+        if let Some(ref v) = self.lang { map.serialize_entry("lang", v)?; }
+        map.end()
+    }
 }
 
 // ============================================================================
@@ -857,12 +891,12 @@ pub struct TradingCalendarRequest {
 }
 
 /// 扫描器标签请求。wire: market_scanner_tags
-/// 注意 wire 字段名是 `multi_tags_fields`（不是 `multi_tag_field_list`）。
+/// 注意 wire 字段名是 `multi_tag_field_list`（不是 `multi_tags_fields`）。
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct MarketScannerTagsRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub market: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "multi_tag_field_list", skip_serializing_if = "Option::is_none")]
     pub multi_tags_fields: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,

@@ -281,7 +281,7 @@ impl TradeClient {
         if req.id.unwrap_or(0) == 0 && req.order_id.unwrap_or(0) == 0 {
             return Ok(None);
         }
-        self.call_optional("order_no", req).await
+        self.call_optional("orders", req).await
     }
 
     /// 查询订单成交明细。

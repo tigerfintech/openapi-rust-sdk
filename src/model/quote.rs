@@ -987,14 +987,33 @@ pub struct KlineQuota {
     pub detail: Vec<KlineQuotaDetail>,
 }
 
-/// 期权历史波动率时序点。
+/// 隐含波动率指标（impliedVolMetric）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ImpliedVolMetric {
+    #[serde(default)]
+    pub period: String,
+    #[serde(default)]
+    pub percentile: f64,
+    #[serde(default)]
+    pub rank: f64,
+}
+
+/// 期权历史波动率时序点（volatilityList item）。
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionVolatilityPoint {
     #[serde(default)]
-    pub date: String,
+    pub implied_vol: f64,
     #[serde(default)]
-    pub volatility: f64,
+    pub percentile: f64,
+    #[serde(default)]
+    pub rank: f64,
+    #[serde(default)]
+    pub his_volatility: f64,
+    /// Unix ms timestamp
+    #[serde(default)]
+    pub timestamp: i64,
 }
 
 /// 期权分析（option_analysis）。
@@ -1003,14 +1022,21 @@ pub struct OptionVolatilityPoint {
 pub struct OptionAnalysis {
     #[serde(default)]
     pub symbol: String,
+    /// 30 日隐含波动率
     #[serde(default)]
-    pub historical_volatility30_day: f64,
+    pub implied_vol30_days: f64,
+    /// 历史波动率
     #[serde(default)]
-    pub historical_volatility60_day: f64,
+    pub his_volatility: f64,
+    /// IV/HV 比率
     #[serde(default)]
-    pub historical_volatility90_day: f64,
+    pub iv_his_v_ratio: f64,
+    /// 看涨/看跌比率
     #[serde(default)]
-    pub implied_volatility: f64,
+    pub call_put_ratio: f64,
+    /// 隐含波动率指标（含 period、percentile、rank）
+    #[serde(default)]
+    pub implied_vol_metric: Option<ImpliedVolMetric>,
     #[serde(default)]
     pub volatility_list: Vec<OptionVolatilityPoint>,
 }
@@ -1265,7 +1291,7 @@ pub struct TradingCalendarItem {
     pub session_type: String,
 }
 
-/// 扫描器标签（market_scanner_tags）。
+/// 扫描器标签条目（market_scanner_tags `tagList` 数组元素）。
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketScannerTag {
@@ -1277,15 +1303,22 @@ pub struct MarketScannerTag {
     pub values: Vec<String>,
 }
 
-/// 扫描器可用标签集合（market_scanner_tags）。
+/// 扫描器标签分组（market_scanner_tags 顶层数组元素）。
+/// 服务端 wire: `[{market, multiTagField, tagList:[...]}]`
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct MarketScannerTags {
+pub struct MarketScannerTagGroup {
     #[serde(default)]
-    pub tag_fields: Vec<String>,
+    pub market: String,
     #[serde(default)]
-    pub tags: Vec<MarketScannerTag>,
+    pub multi_tag_field: String,
+    #[serde(default)]
+    pub tag_list: Vec<MarketScannerTag>,
 }
+
+/// 兼容别名，保留旧名称以防外部代码直接引用。
+#[deprecated(since = "0.5.4", note = "use MarketScannerTagGroup instead")]
+pub type MarketScannerTags = MarketScannerTagGroup;
 
 /// 隔夜行情（quote_overnight）。
 #[derive(Debug, Clone, Deserialize, Default)]
