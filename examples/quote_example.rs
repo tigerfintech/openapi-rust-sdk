@@ -22,7 +22,8 @@ use tigeropen::model::quote_requests::{
     FutureTradingTimesRequest, FutureTradeTicksRequest, FundContractsRequest,
     FundHistoryQuoteRequest, FundQuoteRequest, FundSymbolsRequest, IndustryListRequest,
     IndustryStocksRequest, KlineQuotaRequest, MarketScannerTagsRequest,
-    OptionChainItem, OptionChainRequest, OptionAnalysisRequest, OptionContractItem,
+    OptionChainItem, OptionChainRequest, OptionChainFilter, OptionChainFilterGreeks,
+    RangeF64, OptionAnalysisRequest, OptionContractItem,
     OptionDepthRequest, OptionKlineItem, OptionKlineRequest, OptionQueryItem,
     OptionQuoteRequest, OptionTimelineRequest, OptionTradeTicksRequest,
     QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest, StockBrokerRequest,
@@ -1389,6 +1390,34 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
         }
         Ok(_) => ok(results, &chain_tag, "(empty items)"),
         Err(e) => { fail(results, &chain_tag, e); return; }
+    }
+
+    // Verify return_greek_value and option_filter take effect
+    let chain_greek_tag = format!("GetOptionChain({} greek+filter)", symbol);
+    match qc.get_option_chain(OptionChainRequest {
+        option_basic: Some(vec![OptionChainItem::from_date(symbol, &expiry_date).unwrap()]),
+        return_greek_value: Some(true),
+        option_filter: Some(OptionChainFilter {
+            in_the_money: Some(false),
+            implied_volatility: Some(RangeF64::new(0.0, 5.0)),
+            greeks: Some(OptionChainFilterGreeks {
+                delta: Some(RangeF64::new(0.0, 0.6)),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }).await {
+        Ok(chain) if !chain.is_empty() => {
+            let total_rows = chain.iter().map(|c| c.items.len()).sum::<usize>();
+            let has_greek = chain.iter().flat_map(|c| c.items.iter())
+                .any(|row| row.call.as_ref().map(|l| l.delta != 0.0).unwrap_or(false)
+                    || row.put.as_ref().map(|l| l.delta != 0.0).unwrap_or(false));
+            ok(results, &chain_greek_tag,
+                format!("rows={} has_greek={}", total_rows, has_greek));
+        }
+        Ok(_) => ok(results, &chain_greek_tag, "(empty)"),
+        Err(e) => fail(results, &chain_greek_tag, e),
     }
 
     if opt_identifier.is_empty() {
