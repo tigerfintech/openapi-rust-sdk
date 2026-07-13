@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.4] - 2026-07-10
+## [0.5.5] - 2026-07-13
+
+### Bug Fixes
+
+- `TradeClient::get_order` now correctly calls the `order_no` wire method instead of `orders` (which is the batch list API); previously single-order lookup was silently broken.
+- `QuoteClient::get_kline_by_page` now correctly accumulates K-line items for **all** symbols in the request. Previously only the first symbol's bars were collected; remaining symbols' data was silently dropped.
+- `RetryPolicy::calculate_backoff` no longer panics on large retry counts. The exponent is clamped to 62 before `mul_f64` to prevent `f64::INFINITY` from triggering a panic inside the standard library.
+- `TokenManager::should_token_refresh` (both struct method and standalone function) now uses `i64::try_from` for the Unix epoch seconds conversion instead of `as i64` truncation, avoiding the Y2038 correctness hazard.
+
+### Added
+
+- **`OptionChainRequest`**: new optional fields `return_greek_value: Option<bool>` and `option_filter: Option<OptionChainFilter>` (matching Java `OptionChainV3Model`). New structs `OptionChainFilter` and `OptionChainFilterGreeks` expose the full filter schema (ITM flag, IV/OI ranges, delta/gamma/vega/theta/rho ranges).
+- **`OptionKlineItem`**: new optional field `sort_dir: Option<String>` (matching Java `OptionKlineModel.sortDir`).
+- **`OptionAnalysisSymbol`**: new optional field `require_volatility_list: Option<bool>` (matching Java `OptionAnalysisModel.requireVolatilityList`), allowing per-symbol volatility list opt-in.
+- **`OrderRequest`**: added 22 fields that were present in the Java SDK but missing in Rust: `adjust_limit`, `expire_time`, `trading_session_type`, `exchange`, `multiplier`, `local_symbol`, `alloc_accounts`, `alloc_shares`, `total_quantity_scale`, `attach_type`, `profit_taker_order_id`, `profit_taker_price`, `profit_taker_tif`, `profit_taker_rth`, `stop_loss_order_type`, `stop_loss_order_id`, `stop_loss_price`, `stop_loss_limit_price`, `stop_loss_tif`, `stop_loss_trailing_percent`, `stop_loss_trailing_amount`, `combo_type`, `contract_legs`, `oca_orders`, `cash_amount`. These enable bracket orders, stop-loss/take-profit orders, MLEG combos, GTD expiry, and institutional allocation.
+
+
 
 ### Breaking Changes
 

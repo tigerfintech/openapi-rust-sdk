@@ -67,7 +67,16 @@ fn test_is_trade_operation() {
     assert!(!is_trade_operation(""));
 }
 
-// ========== Property 9 属性测试 ==========
+#[test]
+fn test_backoff_large_retry_count_no_panic() {
+    let policy = RetryPolicy::default();
+    // 以前 retry_count=100 会导致 2f64.powi(100) = f64::INFINITY，mul_f64(INFINITY) panic
+    let backoff = policy.calculate_backoff(100);
+    assert_eq!(backoff, Duration::from_secs(16));
+    let backoff_max = policy.calculate_backoff(u32::MAX);
+    assert_eq!(backoff_max, Duration::from_secs(16));
+}
+
 
 // **Validates: Requirements 11.3**
 //

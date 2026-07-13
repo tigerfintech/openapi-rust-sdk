@@ -18,7 +18,8 @@ use crate::model::quote::{
 };
 use crate::model::quote_requests::{
     BriefRequest, QuoteDepthRequest, FutureRealTimeQuoteRequest, FutureKlineRequest, KlineRequest,
-    OptionChainItem, OptionChainRequest, OptionContractItem, OptionKlineItem, OptionKlineRequest, OptionQuoteRequest,
+    OptionChainItem, OptionChainFilter, OptionChainRequest, OptionContractItem, OptionKlineItem,
+    OptionKlineRequest, OptionQuoteRequest, OptionAnalysisSymbol, RangeF64,
 };
 
 fn cached_test_private_key() -> &'static str {
@@ -405,6 +406,67 @@ async fn test_get_option_kline_uses_option_query_key() {
     let biz = biz_of(&received[0]);
     assert!(biz.get("option_query").is_some());
     assert_eq!(biz["option_query"][0]["period"].as_str().unwrap(), "day");
+}
+
+#[tokio::test]
+async fn test_option_chain_return_greek_value_serialized() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc.get_option_chain(OptionChainRequest {
+        option_basic: Some(vec![OptionChainItem::from_date("AAPL", "2024-01-19").unwrap()]),
+        return_greek_value: Some(true),
+        ..Default::default()
+    }).await;
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["return_greek_value"].as_bool().unwrap(), true);
+}
+
+#[tokio::test]
+async fn test_option_chain_filter_serialized() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc.get_option_chain(OptionChainRequest {
+        option_basic: Some(vec![OptionChainItem::from_date("AAPL", "2024-01-19").unwrap()]),
+        option_filter: Some(OptionChainFilter {
+            in_the_money: Some(true),
+            implied_volatility: Some(RangeF64::new(0.1, 1.0)),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }).await;
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["option_filter"]["in_the_money"].as_bool().unwrap(), true);
+    assert!((biz["option_filter"]["implied_volatility"]["min"].as_f64().unwrap() - 0.1).abs() < 1e-9);
+    assert!((biz["option_filter"]["implied_volatility"]["max"].as_f64().unwrap() - 1.0).abs() < 1e-9);
+}
+
+#[tokio::test]
+async fn test_option_kline_sort_dir_serialized() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let mut item = OptionKlineItem::from_occ("AAPL 240119C00150000", "day").unwrap();
+    item.sort_dir = Some("asc".to_string());
+    let _ = qc.get_option_kline(OptionKlineRequest {
+        option_query: Some(vec![item]),
+        ..Default::default()
+    }).await;
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["option_query"][0]["sort_dir"].as_str().unwrap(), "asc");
+}
+
+#[test]
+fn test_option_analysis_symbol_require_volatility_list() {
+    let sym = OptionAnalysisSymbol {
+        symbol: "AAPL".to_string(),
+        period: Some("day".to_string()),
+        require_volatility_list: Some(true),
+    };
+    let json = serde_json::to_value(&sym).unwrap();
+    assert_eq!(json["symbol"].as_str().unwrap(), "AAPL");
+    assert_eq!(json["require_volatility_list"].as_bool().unwrap(), true);
 }
 
 #[tokio::test]

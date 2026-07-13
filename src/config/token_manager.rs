@@ -195,10 +195,13 @@ impl TokenManager {
             Err(_) => return false,
         };
 
-        let now_secs = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
+        let now_secs = i64::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        )
+        .unwrap_or(i64::MAX);
 
         (now_secs - gen_ts / 1000) > self.refresh_duration
     }
@@ -317,10 +320,13 @@ fn should_refresh_token(token: &str, refresh_duration: i64) -> bool {
         Ok(v) => v,
         Err(_) => return false,
     };
-    let now_secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
+    let now_secs = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    )
+    .unwrap_or(i64::MAX);
     (now_secs - gen_ts / 1000) > refresh_duration
 }
 

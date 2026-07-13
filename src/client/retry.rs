@@ -49,7 +49,10 @@ impl RetryPolicy {
     /// 计算第 n 次重试的退避等待时间（从 0 开始计数）
     /// 退避公式：min(2^n * base_delay, max_delay)
     pub fn calculate_backoff(&self, retry_count: u32) -> Duration {
-        let delay = self.base_delay.mul_f64(2f64.powi(retry_count as i32));
+        // clamp exponent before mul_f64 to prevent f64::INFINITY which would panic
+        let exp = retry_count.min(62) as i32;
+        let factor = 2f64.powi(exp);
+        let delay = self.base_delay.mul_f64(factor);
         if delay > self.max_delay {
             self.max_delay
         } else {

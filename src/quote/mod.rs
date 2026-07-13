@@ -239,18 +239,30 @@ impl QuoteClient {
                 ..Default::default()
             };
             let page_out: Vec<Kline> = self.call_into("kline", sub).await?;
-            if page_out.is_empty() || page_out[0].items.is_empty() {
+            if page_out.is_empty() || page_out.iter().all(|k| k.items.is_empty()) {
                 break;
             }
-            let items = page_out[0].items.clone();
-            let len = items.len() as i32;
-            acc.extend(items.clone());
-            if len < page_size {
+            let mut any_full_page = false;
+            let mut oldest_across_symbols: Option<i64> = None;
+            for kline in &page_out {
+                if kline.items.is_empty() {
+                    continue;
+                }
+                let len = kline.items.len() as i32;
+                if len >= page_size {
+                    any_full_page = true;
+                }
+                acc.extend(kline.items.clone());
+                let oldest = kline.items.iter().map(|i| i.time).min().unwrap_or(0);
+                oldest_across_symbols = Some(match oldest_across_symbols {
+                    None => oldest,
+                    Some(prev) => prev.min(oldest),
+                });
+            }
+            if !any_full_page {
                 break;
             }
-            // 以最早 bar 的时间 - 1 作为下一页 end_time
-            let oldest = items.iter().map(|i| i.time).min().unwrap_or(0);
-            end_time = Some(oldest - 1);
+            end_time = oldest_across_symbols.map(|t| t - 1);
         }
         Ok(acc)
     }

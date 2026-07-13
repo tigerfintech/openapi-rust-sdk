@@ -306,6 +306,64 @@ impl OptionChainItem {
     }
 }
 
+/// `{"min": ..., "max": ...}` 范围值（对应 Java `Range<Double>`）。
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+pub struct RangeF64 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+}
+
+impl RangeF64 {
+    pub fn new(min: f64, max: f64) -> Self {
+        Self { min: Some(min), max: Some(max) }
+    }
+}
+
+/// `{"min": ..., "max": ...}` 范围值（对应 Java `Range<Integer>`）。
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+pub struct RangeI32 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<i32>,
+}
+
+impl RangeI32 {
+    pub fn new(min: i32, max: i32) -> Self {
+        Self { min: Some(min), max: Some(max) }
+    }
+}
+
+/// Greeks 筛选范围（对应 Java `OptionChainFilterModel.Greeks`）。
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OptionChainFilterGreeks {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delta: Option<RangeF64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gamma: Option<RangeF64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vega: Option<RangeF64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theta: Option<RangeF64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rho: Option<RangeF64>,
+}
+
+/// 期权链筛选条件（对应 Java `OptionChainFilterModel`）。
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OptionChainFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub in_the_money: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub implied_volatility: Option<RangeF64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_interest: Option<RangeI32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub greeks: Option<OptionChainFilterGreeks>,
+}
+
 /// 期权链请求。wire: option_chain (v3.0)
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct OptionChainRequest {
@@ -315,11 +373,15 @@ pub struct OptionChainRequest {
     pub market: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub return_greek_value: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub option_filter: Option<OptionChainFilter>,
 }
 
 impl OptionChainRequest {
     pub fn new(items: Vec<OptionChainItem>) -> Self {
-        Self { option_basic: Some(items), market: None, lang: None }
+        Self { option_basic: Some(items), ..Default::default() }
     }
 }
 
@@ -387,24 +449,26 @@ pub struct OptionKlineItem {
     pub end_time: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_dir: Option<String>,
 }
 
 impl OptionKlineItem {
     pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: impl Into<String>, period: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into(), period: period.into(), begin_time: None, end_time: None, limit: None }
+        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into(), period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None }
     }
 
     pub fn from_occ(identifier: &str, period: impl Into<String>) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let tz = infer_option_timezone(&c.symbol);
         let expiry = date_to_expiry_ms(&c.expiry_date, tz)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None })
+        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None })
     }
 
     pub fn from_occ_tz(identifier: &str, period: impl Into<String>, timezone: &str) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let expiry = date_to_expiry_ms(&c.expiry_date, timezone)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None })
+        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None })
     }
 }
 
@@ -578,14 +642,16 @@ pub struct OptionAnalysisSymbol {
     pub symbol: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub period: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub require_volatility_list: Option<bool>,
 }
 
 impl OptionAnalysisSymbol {
     pub fn new(symbol: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), period: None }
+        Self { symbol: symbol.into(), period: None, require_volatility_list: None }
     }
     pub fn with_period(symbol: impl Into<String>, period: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), period: Some(period.into()) }
+        Self { symbol: symbol.into(), period: Some(period.into()), require_volatility_list: None }
     }
 }
 
