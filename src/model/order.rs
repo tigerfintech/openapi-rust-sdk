@@ -211,6 +211,27 @@ pub struct OrderLegRequest {
     pub quantity: Option<i64>,
 }
 
+/// MLEG 组合单子合约腿（对应 Java ContractLeg）
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct ContractLegRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sec_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expiry: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub right: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    /// 合约腿比例（必须大于 0）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ratio: Option<i32>,
+}
+
 /// 算法订单参数 - 请求模型
 #[derive(Debug, Clone, Serialize, Default, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -300,6 +321,81 @@ pub struct OrderRequest {
     /// 机构账户交易密钥（client 层自动填充默认值）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secret_key: Option<String>,
+    /// 限价偏移（adjust_limit），用于 STP 等场景
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adjust_limit: Option<f64>,
+    /// 订单到期时间（epoch ms），GTD 单必填
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expire_time: Option<i64>,
+    /// 交易时段类型（如 RTH / ETH / ALL）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trading_session_type: Option<String>,
+    /// 交易所
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exchange: Option<String>,
+    /// 合约乘数（期权/期货）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub multiplier: Option<String>,
+    /// 本地合约代码
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_symbol: Option<String>,
+    /// 机构分配账户列表（wire: alloc_accounts，JSON 数组）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alloc_accounts: Option<Vec<String>>,
+    /// 机构分配份额列表（与 alloc_accounts 一一对应，wire: alloc_shares，JSON 数组）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alloc_shares: Option<Vec<f64>>,
+    /// 数量精度（小数点后位数）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_quantity_scale: Option<i32>,
+    /// 附属订单类型（PROFIT_TAKER / STOP_LOSS / BRACKET 等）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attach_type: Option<String>,
+    /// 止盈订单 ID
+    #[serde(rename = "profit_taker_orderId", skip_serializing_if = "Option::is_none")]
+    pub profit_taker_order_id: Option<i64>,
+    /// 止盈价格
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profit_taker_price: Option<f64>,
+    /// 止盈 TIF
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profit_taker_tif: Option<String>,
+    /// 止盈是否支持盘外交易
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profit_taker_rth: Option<bool>,
+    /// 止损订单类型（STP / STP LMT / TRAIL 等）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_loss_order_type: Option<String>,
+    /// 止损订单 ID
+    #[serde(rename = "stop_loss_orderId", skip_serializing_if = "Option::is_none")]
+    pub stop_loss_order_id: Option<i64>,
+    /// 止损触发价
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_loss_price: Option<f64>,
+    /// 止损限价（STP LMT 用）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_loss_limit_price: Option<f64>,
+    /// 止损 TIF
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_loss_tif: Option<String>,
+    /// 止损追踪百分比（TRAIL 用）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_loss_trailing_percent: Option<f64>,
+    /// 止损追踪金额（TRAIL 用）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_loss_trailing_amount: Option<f64>,
+    /// 组合单类型（如 MLEG）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub combo_type: Option<String>,
+    /// MLEG 多腿组合的子合约列表（wire: contract_legs，对应 Java ContractLeg）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contract_legs: Option<Vec<ContractLegRequest>>,
+    /// OCA 组关联订单列表（wire: oca_orders，对应 Java List<TradeOrderModel>）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oca_orders: Option<Vec<Box<OrderRequest>>>,
+    /// 现金金额（按金额下单用）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cash_amount: Option<f64>,
 }
 
 // ========== 订单请求构造工具函数 ==========
