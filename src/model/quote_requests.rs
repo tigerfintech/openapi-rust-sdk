@@ -306,44 +306,60 @@ impl OptionChainItem {
     }
 }
 
-/// 期权链筛选条件（option_filter 子结构）。
+/// `{"min": ..., "max": ...}` 范围值（对应 Java `Range<Double>`）。
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+pub struct RangeF64 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+}
+
+impl RangeF64 {
+    pub fn new(min: f64, max: f64) -> Self {
+        Self { min: Some(min), max: Some(max) }
+    }
+}
+
+/// `{"min": ..., "max": ...}` 范围值（对应 Java `Range<Integer>`）。
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+pub struct RangeI32 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<i32>,
+}
+
+impl RangeI32 {
+    pub fn new(min: i32, max: i32) -> Self {
+        Self { min: Some(min), max: Some(max) }
+    }
+}
+
+/// Greeks 筛选范围（对应 Java `OptionChainFilterModel.Greeks`）。
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct OptionChainFilterGreeks {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub delta_min: Option<f64>,
+    pub delta: Option<RangeF64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub delta_max: Option<f64>,
+    pub gamma: Option<RangeF64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gamma_min: Option<f64>,
+    pub vega: Option<RangeF64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gamma_max: Option<f64>,
+    pub theta: Option<RangeF64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub vega_min: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vega_max: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub theta_min: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub theta_max: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rho_min: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rho_max: Option<f64>,
+    pub rho: Option<RangeF64>,
 }
 
-/// 期权链筛选条件（对应 Java OptionChainFilterModel）。
+/// 期权链筛选条件（对应 Java `OptionChainFilterModel`）。
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct OptionChainFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub in_the_money: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub implied_volatility_min: Option<f64>,
+    pub implied_volatility: Option<RangeF64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub implied_volatility_max: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub open_interest_min: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub open_interest_max: Option<i64>,
+    pub open_interest: Option<RangeI32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub greeks: Option<OptionChainFilterGreeks>,
 }

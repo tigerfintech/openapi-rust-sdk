@@ -19,7 +19,7 @@ use crate::model::quote::{
 use crate::model::quote_requests::{
     BriefRequest, QuoteDepthRequest, FutureRealTimeQuoteRequest, FutureKlineRequest, KlineRequest,
     OptionChainItem, OptionChainFilter, OptionChainRequest, OptionContractItem, OptionKlineItem,
-    OptionKlineRequest, OptionQuoteRequest, OptionAnalysisSymbol,
+    OptionKlineRequest, OptionQuoteRequest, OptionAnalysisSymbol, RangeF64,
 };
 
 fn cached_test_private_key() -> &'static str {
@@ -430,7 +430,7 @@ async fn test_option_chain_filter_serialized() {
         option_basic: Some(vec![OptionChainItem::from_date("AAPL", "2024-01-19").unwrap()]),
         option_filter: Some(OptionChainFilter {
             in_the_money: Some(true),
-            implied_volatility_min: Some(0.1),
+            implied_volatility: Some(RangeF64::new(0.1, 1.0)),
             ..Default::default()
         }),
         ..Default::default()
@@ -438,7 +438,8 @@ async fn test_option_chain_filter_serialized() {
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
     assert_eq!(biz["option_filter"]["in_the_money"].as_bool().unwrap(), true);
-    assert!((biz["option_filter"]["implied_volatility_min"].as_f64().unwrap() - 0.1).abs() < 1e-9);
+    assert!((biz["option_filter"]["implied_volatility"]["min"].as_f64().unwrap() - 0.1).abs() < 1e-9);
+    assert!((biz["option_filter"]["implied_volatility"]["max"].as_f64().unwrap() - 1.0).abs() < 1e-9);
 }
 
 #[tokio::test]
