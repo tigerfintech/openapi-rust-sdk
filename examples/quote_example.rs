@@ -1609,7 +1609,7 @@ async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, r
     let opt_identifier = match qc.get_option_chain(OptionChainRequest {
         option_basic: Some(vec![OptionChainItem::new(hk_opt_symbol.as_str(), hk_expiry_ms)]),
         market: Some("HK".to_string()),
-        lang: None,
+        ..Default::default()
     }).await {
         Ok(chains) => {
             // Pick call with OI > 0; if none, take the middle strike (closest to ATM).
