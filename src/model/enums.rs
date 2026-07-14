@@ -272,6 +272,8 @@ pub enum TimeInForce {
     Day,
     #[serde(rename = "GTC")]
     Gtc,
+    #[serde(rename = "GTD")]
+    Gtd,
     #[serde(rename = "OPG")]
     Opg,
 }
@@ -510,6 +512,7 @@ mod tests {
     fn test_time_in_force_serialize() {
         assert_eq!(serde_json::to_string(&TimeInForce::Day).unwrap(), "\"DAY\"");
         assert_eq!(serde_json::to_string(&TimeInForce::Gtc).unwrap(), "\"GTC\"");
+        assert_eq!(serde_json::to_string(&TimeInForce::Gtd).unwrap(), "\"GTD\"");
         assert_eq!(serde_json::to_string(&TimeInForce::Opg).unwrap(), "\"OPG\"");
     }
 
@@ -517,6 +520,7 @@ mod tests {
     fn test_time_in_force_deserialize() {
         assert_eq!(serde_json::from_str::<TimeInForce>("\"DAY\"").unwrap(), TimeInForce::Day);
         assert_eq!(serde_json::from_str::<TimeInForce>("\"GTC\"").unwrap(), TimeInForce::Gtc);
+        assert_eq!(serde_json::from_str::<TimeInForce>("\"GTD\"").unwrap(), TimeInForce::Gtd);
         assert_eq!(serde_json::from_str::<TimeInForce>("\"OPG\"").unwrap(), TimeInForce::Opg);
     }
 }
