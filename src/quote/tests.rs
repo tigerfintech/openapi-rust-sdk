@@ -197,6 +197,65 @@ async fn test_get_corporate_action_flattens_grouped() {
 }
 
 #[tokio::test]
+async fn test_get_corporate_symbol_change() {
+    let server = mock_success_server(
+        r#"{"META":[{"symbol":"META","market":"US","actionType":"symbol_change","executeDate":"2022-06-09","oldSymbol":"FB","newSymbol":"META"}]}"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let items = qc
+        .get_corporate_symbol_change(CorporateActionRequest {
+            symbols: vec!["META".into()],
+            market: "US".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].old_symbol, "FB");
+    assert_eq!(items[0].new_symbol, "META");
+}
+
+#[tokio::test]
+async fn test_get_corporate_delisting() {
+    let server = mock_success_server(
+        r#"{"TWTR":[{"symbol":"TWTR","market":"US","actionType":"delisting","executeDate":"2022-10-28","announcedDate":"2022-10-27","reason":"acquired"}]}"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let items = qc
+        .get_corporate_delisting(CorporateActionRequest {
+            symbols: vec!["TWTR".into()],
+            market: "US".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].reason, "acquired");
+}
+
+#[tokio::test]
+async fn test_get_corporate_ipo() {
+    let server = mock_success_server(
+        r#"{"RIVN":[{"symbol":"RIVN","market":"US","actionType":"ipo","executeDate":"2021-11-10","ipoName":"Rivian Automotive","listingDate":"2021-11-10","listingPrice":78.0,"sharesOutstanding":864000000,"sharesFloat":153000000,"offerAmount":11932000000.0,"priceRange":"72-74","currency":"USD","minPurchaseQuantity":1,"leverageRatio":1.0}]}"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let items = qc
+        .get_corporate_ipo(CorporateActionRequest {
+            symbols: vec!["RIVN".into()],
+            market: "US".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].ipo_name, "Rivian Automotive");
+    assert!((items[0].listing_price - 78.0).abs() < 0.001);
+}
+
+#[tokio::test]
 async fn test_get_capital_distribution_option_some() {
     let server = mock_success_server(
         r#"{"symbol":"AAPL","netInflow":1000.0,"inAll":2000.0,"inBig":500.0}"#,

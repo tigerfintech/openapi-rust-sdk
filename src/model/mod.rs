@@ -25,6 +25,7 @@ pub use position::Position;
 #[allow(deprecated)]
 pub use quote::{
     Brief, BrokerDetail, CapitalDistribution, CapitalFlow, CapitalFlowItem, CorporateAction,
+    CorporateSymbolChange, CorporateDelisting, CorporateIPO,
     CorporateActionRequest, Depth, DepthLevel, ExchangeRate, FinancialCurrency,
     FinancialDailyItem, FinancialDailyRequest, FinancialReportItem, FinancialReportRequest,
     FundContractInfo, FundHistoryQuote, FundQuote,

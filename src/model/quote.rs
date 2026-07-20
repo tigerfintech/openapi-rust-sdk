@@ -504,6 +504,83 @@ pub struct CorporateAction {
     pub to_factor: f64,
 }
 
+/// 股票代码变更事件
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CorporateSymbolChange {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub exchange: String,
+    #[serde(default)]
+    pub execute_date: String,
+    #[serde(default)]
+    pub action_type: String,
+    #[serde(default)]
+    pub old_symbol: String,
+    /// new_symbol is the ticker after the rename; same as symbol.
+    #[serde(default)]
+    pub new_symbol: String,
+}
+
+/// 退市事件
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CorporateDelisting {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub exchange: String,
+    #[serde(default)]
+    pub execute_date: String,
+    #[serde(default)]
+    pub action_type: String,
+    #[serde(default)]
+    pub announced_date: String,
+    #[serde(default)]
+    pub reason: String,
+}
+
+/// 新股上市事件
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CorporateIPO {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub market: String,
+    #[serde(default)]
+    pub exchange: String,
+    #[serde(default)]
+    pub execute_date: String,
+    #[serde(default)]
+    pub action_type: String,
+    #[serde(default)]
+    pub ipo_name: String,
+    #[serde(default)]
+    pub listing_date: String,
+    #[serde(default)]
+    pub listing_price: f64,
+    #[serde(default)]
+    pub shares_outstanding: i64,
+    #[serde(default)]
+    pub shares_float: i64,
+    #[serde(default)]
+    pub offer_amount: f64,
+    #[serde(default)]
+    pub price_range: String,
+    #[serde(default)]
+    pub currency: String,
+    #[serde(default)]
+    pub min_purchase_quantity: i32,
+    #[serde(default)]
+    pub leverage_ratio: f64,
+}
+
 /// 资金流向明细
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]

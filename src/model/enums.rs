@@ -215,6 +215,12 @@ pub enum CorporateActionType {
     Dividend,
     #[serde(rename = "earning")]
     Earning,
+    #[serde(rename = "symbol_change")]
+    SymbolChange,
+    #[serde(rename = "delisting")]
+    Delisting,
+    #[serde(rename = "ipo")]
+    Ipo,
 }
 
 /// 行业级别枚举（1~4 级）

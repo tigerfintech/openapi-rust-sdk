@@ -12,7 +12,8 @@ use crate::client::http_client::HttpClient;
 use crate::config::client_config::ClientConfig;
 use crate::error::TigerError;
 use crate::model::quote::{
-    Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest, Depth,
+    Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest,
+    CorporateDelisting, CorporateIPO, CorporateSymbolChange, Depth,
     ExchangeRate, FinancialCurrency, FinancialDailyItem, FinancialDailyRequest,
     FinancialReportItem, FinancialReportRequest, FundContractInfo, FundHistoryQuote, FundQuote,
     FutureContractInfo, FutureDepth, FutureExchange, FutureKline,
@@ -648,6 +649,51 @@ impl QuoteClient {
     ) -> Result<Vec<CorporateAction>, TigerError> {
         req.action_type = "earning".into();
         self.get_corporate_action(req).await
+    }
+
+    /// 公司行动 - 股票代码变更。wire: corporate_action (action_type=symbol_change)
+    pub async fn get_corporate_symbol_change(
+        &self,
+        mut req: CorporateActionRequest,
+    ) -> Result<Vec<CorporateSymbolChange>, TigerError> {
+        req.action_type = "symbol_change".into();
+        let grouped: std::collections::BTreeMap<String, Vec<CorporateSymbolChange>> =
+            self.call_into("corporate_action", req).await?;
+        let mut out = Vec::new();
+        for (_, mut list) in grouped {
+            out.append(&mut list);
+        }
+        Ok(out)
+    }
+
+    /// 公司行动 - 退市。wire: corporate_action (action_type=delisting)
+    pub async fn get_corporate_delisting(
+        &self,
+        mut req: CorporateActionRequest,
+    ) -> Result<Vec<CorporateDelisting>, TigerError> {
+        req.action_type = "delisting".into();
+        let grouped: std::collections::BTreeMap<String, Vec<CorporateDelisting>> =
+            self.call_into("corporate_action", req).await?;
+        let mut out = Vec::new();
+        for (_, mut list) in grouped {
+            out.append(&mut list);
+        }
+        Ok(out)
+    }
+
+    /// 公司行动 - 新股上市。wire: corporate_action (action_type=ipo)
+    pub async fn get_corporate_ipo(
+        &self,
+        mut req: CorporateActionRequest,
+    ) -> Result<Vec<CorporateIPO>, TigerError> {
+        req.action_type = "ipo".into();
+        let grouped: std::collections::BTreeMap<String, Vec<CorporateIPO>> =
+            self.call_into("corporate_action", req).await?;
+        let mut out = Vec::new();
+        for (_, mut list) in grouped {
+            out.append(&mut list);
+        }
+        Ok(out)
     }
 
     // ========== 财务 / 日历 ==========
