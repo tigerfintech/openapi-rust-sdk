@@ -1,0 +1,26 @@
+# 构建产物
+target/
+**/*.rs.bk
+
+# Cargo.lock（库项目不提交，由使用者生成）
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# 敏感文件
+*.properties
+*.pem
+*.key
+.env
+.env.*
+
+# 临时文件
+*.log
+*.tmp
