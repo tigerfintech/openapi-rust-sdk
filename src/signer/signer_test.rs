@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
     use crate::signer::{load_private_key, sign_with_rsa};
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64;
-    use rsa::RsaPrivateKey;
+    use base64::Engine;
     use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
     use rsa::pkcs8::EncodePrivateKey;
+    use rsa::RsaPrivateKey;
 
     /// 生成测试用 RSA 密钥对（PKCS#1 PEM 格式）
     fn generate_pkcs1_pem() -> (String, RsaPrivateKey) {
@@ -31,9 +31,7 @@ mod tests {
     fn generate_raw_base64() -> (String, RsaPrivateKey) {
         let mut rng = rand::thread_rng();
         let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("生成密钥失败");
-        let der = private_key
-            .to_pkcs1_der()
-            .expect("编码 PKCS#1 DER 失败");
+        let der = private_key.to_pkcs1_der().expect("编码 PKCS#1 DER 失败");
         let raw_base64 = BASE64.encode(der.as_bytes());
         (raw_base64, private_key)
     }
@@ -84,7 +82,9 @@ mod tests {
         assert!(!signature.is_empty(), "签名结果不应为空");
 
         // 验证签名是有效的 Base64
-        let sig_bytes = BASE64.decode(&signature).expect("签名结果不是有效的 Base64");
+        let sig_bytes = BASE64
+            .decode(&signature)
+            .expect("签名结果不是有效的 Base64");
 
         // 使用公钥验签
         use rsa::pkcs1v15::VerifyingKey;
@@ -138,11 +138,11 @@ mod tests {
 #[cfg(test)]
 mod property_tests {
     use crate::signer::sign_with_rsa;
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
     use proptest::prelude::*;
-    use rsa::RsaPrivateKey;
     use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
+    use rsa::RsaPrivateKey;
 
     /// 生成一个固定的测试密钥对（属性测试中避免每次都生成密钥，太慢）
     fn test_key_pair() -> (String, RsaPrivateKey) {

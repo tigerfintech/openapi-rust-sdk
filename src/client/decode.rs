@@ -18,10 +18,13 @@ where
         Err(original_err) => {
             if let Value::String(s) = &v {
                 return serde_json::from_str::<T>(s).map_err(|e| {
-                    TigerError::Config(format!("decode data (double-encoded) failed: {}", e))
+                    TigerError::Parse(format!("decode data (double-encoded) failed: {}", e))
                 });
             }
-            Err(TigerError::Config(format!("decode data failed: {}", original_err)))
+            Err(TigerError::Parse(format!(
+                "decode data failed: {}",
+                original_err
+            )))
         }
     }
 }

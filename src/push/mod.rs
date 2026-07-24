@@ -5,16 +5,16 @@
 //! Supports connection authentication, subscribe/unsubscribe, callbacks,
 //! heartbeat keep-alive, and automatic reconnection.
 
-pub mod pb;
-pub mod varint;
-pub mod proto_message;
-mod push_message;
 mod callbacks;
+pub mod pb;
+pub mod proto_message;
 mod push_client;
+mod push_message;
+pub mod varint;
 
-pub use push_message::*;
 pub use callbacks::*;
 pub use push_client::*;
+pub use push_message::*;
 
 #[cfg(test)]
 mod tests;

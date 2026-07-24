@@ -15,21 +15,20 @@ use tigeropen::model::quote::{
     MarketScannerRequest, MarketState,
 };
 use tigeropen::model::quote_requests::{
-    AllFutureContractsRequest, KlineRequest, KlineByPageRequest, BriefRequest, QuoteDepthRequest,
-    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest,
-    FutureKlineByPageRequest, FutureContinuousContractsRequest, FutureRealTimeQuoteRequest,
-    FutureContractSingleRequest, FutureDepthRequest, FutureHistoryMainContractRequest,
-    FutureTradingTimesRequest, FutureTradeTicksRequest, FundContractsRequest,
-    FundHistoryQuoteRequest, FundQuoteRequest, FundSymbolsRequest, IndustryListRequest,
-    IndustryStocksRequest, KlineQuotaRequest, MarketScannerTagsRequest,
-    OptionChainItem, OptionChainRequest, OptionChainFilter, OptionChainFilterGreeks,
-    RangeF64, OptionAnalysisRequest, OptionContractItem,
-    OptionDepthRequest, OptionKlineItem, OptionKlineRequest, OptionQueryItem,
-    OptionQuoteRequest, OptionTimelineRequest, OptionTradeTicksRequest,
-    QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest, StockBrokerRequest,
-    StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
-    SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest,
-    TradeTickRequest, TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
+    AllFutureContractsRequest, BriefRequest, FinancialCurrencyRequest,
+    FinancialExchangeRateRequest, FundContractsRequest, FundHistoryQuoteRequest, FundQuoteRequest,
+    FundSymbolsRequest, FutureContinuousContractsRequest, FutureContractSingleRequest,
+    FutureDepthRequest, FutureHistoryMainContractRequest, FutureKlineByPageRequest,
+    FutureKlineRequest, FutureRealTimeQuoteRequest, FutureTradeTicksRequest,
+    FutureTradingTimesRequest, IndustryListRequest, IndustryStocksRequest, KlineByPageRequest,
+    KlineQuotaRequest, KlineRequest, MarketScannerTagsRequest, OptionAnalysisRequest,
+    OptionChainFilter, OptionChainFilterGreeks, OptionChainItem, OptionChainRequest,
+    OptionContractItem, OptionDepthRequest, OptionKlineItem, OptionKlineRequest, OptionQueryItem,
+    OptionQuoteRequest, OptionTimelineRequest, OptionTradeTicksRequest, QuoteDepthRequest,
+    QuoteOvernightRequest, QuotePermissionRequest, RangeF64, ShortInterestRequest,
+    StockBrokerRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
+    SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
+    TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
 };
 use tigeropen::quote::QuoteClient;
 
@@ -48,19 +47,31 @@ struct RunResult {
 fn ok(results: &mut Vec<RunResult>, name: &str, note: impl Into<String>) {
     let note = note.into();
     println!("[ OK ] {:<42} {}", name, truncate(&note, 140));
-    results.push(RunResult { name: name.into(), outcome: Outcome::Pass, detail: note });
+    results.push(RunResult {
+        name: name.into(),
+        outcome: Outcome::Pass,
+        detail: note,
+    });
 }
 
 fn fail(results: &mut Vec<RunResult>, name: &str, err: impl std::fmt::Display) {
     let detail = format!("{}", err);
     println!("[FAIL] {:<42} {}", name, detail);
-    results.push(RunResult { name: name.into(), outcome: Outcome::Fail, detail });
+    results.push(RunResult {
+        name: name.into(),
+        outcome: Outcome::Fail,
+        detail,
+    });
 }
 
 fn skip(results: &mut Vec<RunResult>, name: &str, reason: impl Into<String>) {
     let reason = reason.into();
     println!("[SKIP] {:<42} {}", name, reason);
-    results.push(RunResult { name: name.into(), outcome: Outcome::Skip, detail: reason });
+    results.push(RunResult {
+        name: name.into(),
+        outcome: Outcome::Skip,
+        detail: reason,
+    });
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -83,7 +94,13 @@ fn print_summary(results: &[RunResult]) {
         }
     }
     println!("\n================ SUMMARY ================");
-    println!("PASS={}  FAIL={}  SKIP={}  TOTAL={}", p, f, s, results.len());
+    println!(
+        "PASS={}  FAIL={}  SKIP={}  TOTAL={}",
+        p,
+        f,
+        s,
+        results.len()
+    );
     if f > 0 {
         println!("\nFailures:");
         for r in results {
@@ -139,7 +156,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "GetRealTimeQuote", e),
     }
 
-    match qc.get_kline(KlineRequest { symbols: Some(vec!["AAPL".to_string()]), period: Some("day".to_string()), ..Default::default() }).await {
+    match qc
+        .get_kline(KlineRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            period: Some("day".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(klines) if !klines.is_empty() => ok(
             &mut results,
             "GetKline(AAPL day)",
@@ -180,7 +204,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 tt[0].items[0].r#type
             ),
         ),
-        Ok(tt) if !tt.is_empty() => ok(&mut results, "GetTradeTick", format!("ticks={}", tt[0].items.len())),
+        Ok(tt) if !tt.is_empty() => ok(
+            &mut results,
+            "GetTradeTick",
+            format!("ticks={}", tt[0].items.len()),
+        ),
         Ok(_) => ok(&mut results, "GetTradeTick", "(empty)"),
         Err(e) => fail(&mut results, "GetTradeTick", e),
     }
@@ -213,7 +241,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await
     {
-        Ok(syms) => ok(&mut results, "GetSymbols(US STK)", format!("count={}", syms.len())),
+        Ok(syms) => ok(
+            &mut results,
+            "GetSymbols(US STK)",
+            format!("count={}", syms.len()),
+        ),
         Err(e) => fail(&mut results, "GetSymbols(US STK)", e),
     }
 
@@ -225,7 +257,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await
     {
-        Ok(names) => ok(&mut results, "GetSymbolNames(US STK)", format!("count={}", names.len())),
+        Ok(names) => ok(
+            &mut results,
+            "GetSymbolNames(US STK)",
+            format!("count={}", names.len()),
+        ),
         Err(e) => fail(&mut results, "GetSymbolNames(US STK)", e),
     }
 
@@ -242,7 +278,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GetTradeMetas(AAPL)",
             format!("count={} lot_size={}", metas.len(), metas[0].lot_size),
         ),
-        Ok(metas) => ok(&mut results, "GetTradeMetas(AAPL)", format!("count={}", metas.len())),
+        Ok(metas) => ok(
+            &mut results,
+            "GetTradeMetas(AAPL)",
+            format!("count={}", metas.len()),
+        ),
         Err(e) => fail(&mut results, "GetTradeMetas(AAPL)", e),
     }
 
@@ -277,7 +317,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(briefs) if !briefs.is_empty() => ok(
             &mut results,
             "GetDelayedQuote(AAPL)",
-            format!("count={} latest_price={:.4}", briefs.len(), briefs[0].latest_price),
+            format!(
+                "count={} latest_price={:.4}",
+                briefs.len(),
+                briefs[0].latest_price
+            ),
         ),
         Ok(briefs) => ok(
             &mut results,
@@ -339,10 +383,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GetTradeRank(US)",
             format!(
                 "count={} first_symbol={} first_price={:.4}",
-                items.len(), items[0].symbol, items[0].latest_price
+                items.len(),
+                items[0].symbol,
+                items[0].latest_price
             ),
         ),
-        Ok(items) => ok(&mut results, "GetTradeRank(US)", format!("count={}", items.len())),
+        Ok(items) => ok(
+            &mut results,
+            "GetTradeRank(US)",
+            format!("count={}", items.len()),
+        ),
         Err(e) => fail(&mut results, "GetTradeRank(US)", e),
     }
 
@@ -358,7 +408,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(industries) if !industries.is_empty() => ok(
             &mut results,
             "GetStockIndustry(AAPL)",
-            format!("count={} gsector={}", industries.len(), industries[0].gsector),
+            format!(
+                "count={} gsector={}",
+                industries.len(),
+                industries[0].gsector
+            ),
         ),
         Ok(industries) => ok(
             &mut results,
@@ -380,7 +434,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GetQuotePermission",
             format!("count={} first_name={}", perms.len(), perms[0].name),
         ),
-        Ok(perms) => ok(&mut results, "GetQuotePermission", format!("count={}", perms.len())),
+        Ok(perms) => ok(
+            &mut results,
+            "GetQuotePermission",
+            format!("count={}", perms.len()),
+        ),
         Err(e) => fail(&mut results, "GetQuotePermission", e),
     }
 
@@ -397,10 +455,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GetKlineQuota",
             format!(
                 "count={} first_method={} first_quota={}",
-                quotas.len(), quotas[0].method, quotas[0].quota
+                quotas.len(),
+                quotas[0].method,
+                quotas[0].quota
             ),
         ),
-        Ok(quotas) => ok(&mut results, "GetKlineQuota", format!("count={}", quotas.len())),
+        Ok(quotas) => ok(
+            &mut results,
+            "GetKlineQuota",
+            format!("count={}", quotas.len()),
+        ),
         Err(e) => fail(&mut results, "GetKlineQuota", e),
     }
 
@@ -417,14 +481,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GetShortInterest(AAPL)",
             format!(
                 "count={} symbol={} date={} short_interest={:.0}",
-                items.len(), items[0].symbol, items[0].settlement_date, items[0].short_interest
+                items.len(),
+                items[0].symbol,
+                items[0].settlement_date,
+                items[0].short_interest
             ),
         ),
         Ok(_) => skip(&mut results, "GetShortInterest(AAPL)", "no data returned"),
         Err(e) => {
             let msg = e.to_string();
-            if msg.contains("does not support") || msg.contains("code=1000") || msg.contains("code=4") {
-                skip(&mut results, "GetShortInterest(AAPL)", format!("not supported: {}", msg));
+            if msg.contains("does not support")
+                || msg.contains("code=1000")
+                || msg.contains("code=4")
+            {
+                skip(
+                    &mut results,
+                    "GetShortInterest(AAPL)",
+                    format!("not supported: {}", msg),
+                );
             } else {
                 fail(&mut results, "GetShortInterest(AAPL)", e);
             }
@@ -448,8 +522,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(None) => skip(&mut results, "GetStockBroker(00700 HK)", "no data returned"),
         Err(e) => {
             let msg = e.to_string();
-            if msg.contains("does not support") || msg.contains("code=1000") || msg.contains("code=4") {
-                skip(&mut results, "GetStockBroker(00700 HK)", format!("not supported: {}", msg));
+            if msg.contains("does not support")
+                || msg.contains("code=1000")
+                || msg.contains("code=4")
+            {
+                skip(
+                    &mut results,
+                    "GetStockBroker(00700 HK)",
+                    format!("not supported: {}", msg),
+                );
             } else {
                 fail(&mut results, "GetStockBroker(00700 HK)", e);
             }
@@ -565,7 +646,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(q) if !q.is_empty() => ok(
                 &mut results,
                 "GetFutureRealTimeQuote",
-                format!("{} latestPrice={:.4}", q[0].contract_code, q[0].latest_price),
+                format!(
+                    "{} latestPrice={:.4}",
+                    q[0].contract_code, q[0].latest_price
+                ),
             ),
             Ok(_) => ok(&mut results, "GetFutureRealTimeQuote", "(empty)"),
             Err(e) => fail(&mut results, "GetFutureRealTimeQuote", e),
@@ -611,18 +695,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &format!("GetFutureContract({})", contract_code),
                 format!("count={}", cs.len()),
             ),
-            Err(e) => fail(&mut results, &format!("GetFutureContract({})", contract_code), e),
+            Err(e) => fail(
+                &mut results,
+                &format!("GetFutureContract({})", contract_code),
+                e,
+            ),
         }
 
         // GetAllFutureContracts — type is the product code e.g. "MEUR" extracted from contract_code
         let product_code: String = contract_code
             .trim_end_matches(|c: char| c.is_ascii_digit())
             .to_string();
-        match qc.get_all_future_contracts(AllFutureContractsRequest {
-            contract_type: Some(product_code.clone()),
-            ..Default::default()
-        }).await {
-            Ok(cs) => ok(&mut results, "GetAllFutureContracts", format!("count={}", cs.len())),
+        match qc
+            .get_all_future_contracts(AllFutureContractsRequest {
+                contract_type: Some(product_code.clone()),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(cs) => ok(
+                &mut results,
+                "GetAllFutureContracts",
+                format!("count={}", cs.len()),
+            ),
             Err(e) => fail(&mut results, "GetAllFutureContracts", e),
         }
 
@@ -661,8 +756,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &format!("GetFutureKline({})", contract_code),
                 format!("bars={}", ks[0].items.len()),
             ),
-            Ok(_) => ok(&mut results, &format!("GetFutureKline({})", contract_code), "(empty)"),
-            Err(e) => fail(&mut results, &format!("GetFutureKline({})", contract_code), e),
+            Ok(_) => ok(
+                &mut results,
+                &format!("GetFutureKline({})", contract_code),
+                "(empty)",
+            ),
+            Err(e) => fail(
+                &mut results,
+                &format!("GetFutureKline({})", contract_code),
+                e,
+            ),
         }
 
         // GetFutureDepth
@@ -711,7 +814,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "GetFutureContinuousContracts",
                 format!("count={} first={}", cs.len(), cs[0].contract_code),
             ),
-            Ok(_) => skip(&mut results, "GetFutureContinuousContracts", "no data returned"),
+            Ok(_) => skip(
+                &mut results,
+                "GetFutureContinuousContracts",
+                "no data returned",
+            ),
             Err(e) => fail(&mut results, "GetFutureContinuousContracts", e),
         }
 
@@ -730,8 +837,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ),
             Err(e) => {
                 let msg = e.to_string();
-                if msg.contains("does not support") || msg.contains("code=1000") || msg.contains("code=4") {
-                    skip(&mut results, "GetFutureHistoryMainContract", format!("not supported: {}", msg));
+                if msg.contains("does not support")
+                    || msg.contains("code=1000")
+                    || msg.contains("code=4")
+                {
+                    skip(
+                        &mut results,
+                        "GetFutureHistoryMainContract",
+                        format!("not supported: {}", msg),
+                    );
                 } else {
                     fail(&mut results, "GetFutureHistoryMainContract", e);
                 }
@@ -759,7 +873,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let msg = e.to_string();
                 if msg.contains("contract_codes") || msg.contains("cannot be empty") {
                     // server requires contract_codes array; try with contract_codes via raw kline
-                    skip(&mut results, "GetFutureKlineByPage", format!("server needs contract_codes array: {}", msg));
+                    skip(
+                        &mut results,
+                        "GetFutureKlineByPage",
+                        format!("server needs contract_codes array: {}", msg),
+                    );
                 } else {
                     fail(&mut results, "GetFutureKlineByPage", e);
                 }
@@ -789,7 +907,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match qc.get_fund_symbols(FundSymbolsRequest::default()).await {
         Ok(syms) if !syms.is_empty() => {
-            ok(&mut results, "GetFundSymbols", format!("count={}", syms.len()));
+            ok(
+                &mut results,
+                "GetFundSymbols",
+                format!("count={}", syms.len()),
+            );
             fund_symbol = syms[0].clone();
         }
         Ok(_) => ok(&mut results, "GetFundSymbols", "(empty)"),
@@ -812,7 +934,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(items) if !items.is_empty() => ok(
                 &mut results,
                 "GetFundContracts",
-                format!("count={} symbol={} fund_type={}", items.len(), items[0].symbol, items[0].fund_type),
+                format!(
+                    "count={} symbol={} fund_type={}",
+                    items.len(),
+                    items[0].symbol,
+                    items[0].fund_type
+                ),
             ),
             Ok(_) => skip(&mut results, "GetFundContracts", "no data returned"),
             Err(e) => fail(&mut results, "GetFundContracts", e),
@@ -829,7 +956,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(items) if !items.is_empty() => ok(
                 &mut results,
                 "GetFundQuote",
-                format!("count={} symbol={} latest_nav={:.4}", items.len(), items[0].symbol, items[0].latest_nav),
+                format!(
+                    "count={} symbol={} latest_nav={:.4}",
+                    items.len(),
+                    items[0].symbol,
+                    items[0].latest_nav
+                ),
             ),
             Ok(_) => skip(&mut results, "GetFundQuote", "no data returned"),
             Err(e) => fail(&mut results, "GetFundQuote", e),
@@ -837,7 +969,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // GetFundHistoryQuote (new test) — requires both begin_time and end_time
         let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
         let one_year_ago_ms = now_ms - 365 * 86_400_000;
         match qc
             .get_fund_history_quote(FundHistoryQuoteRequest {
@@ -852,7 +986,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(items) if !items.is_empty() => ok(
                 &mut results,
                 "GetFundHistoryQuote",
-                format!("count={} first_date={} first_nav={:.4}", items.len(), items[0].date, items[0].nav),
+                format!(
+                    "count={} first_date={} first_nav={:.4}",
+                    items.len(),
+                    items[0].date,
+                    items[0].nav
+                ),
             ),
             Ok(_) => skip(&mut results, "GetFundHistoryQuote", "no data returned"),
             Err(e) => fail(&mut results, "GetFundHistoryQuote", e),
@@ -900,8 +1039,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ),
             Err(e) => {
                 let msg = e.to_string();
-                if msg.contains("does not support") || msg.contains("code=1000") || msg.contains("code=4") {
-                    skip(&mut results, "GetIndustryStocks", format!("not supported: {}", msg));
+                if msg.contains("does not support")
+                    || msg.contains("code=1000")
+                    || msg.contains("code=4")
+                {
+                    skip(
+                        &mut results,
+                        "GetIndustryStocks",
+                        format!("not supported: {}", msg),
+                    );
                 } else {
                     fail(&mut results, "GetIndustryStocks", e);
                 }
@@ -924,7 +1070,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(items) if !items.is_empty() => ok(
             &mut results,
             "GetFinancialDaily(AAPL)",
-            format!("rows={} field={} value={:.0}", items.len(), items[0].field, items[0].value),
+            format!(
+                "rows={} field={} value={:.0}",
+                items.len(),
+                items[0].field,
+                items[0].value
+            ),
         ),
         Ok(items) => ok(
             &mut results,
@@ -1009,7 +1160,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(items) if !items.is_empty() => ok(
             &mut results,
             "GetTradingCalendar(US May)",
-            format!("count={} first_date={} is_trading={}", items.len(), items[0].date, items[0].is_trading),
+            format!(
+                "count={} first_date={} is_trading={}",
+                items.len(),
+                items[0].date,
+                items[0].is_trading
+            ),
         ),
         Ok(items) => ok(
             &mut results,
@@ -1033,7 +1189,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(items) if !items.is_empty() => ok(
             &mut results,
             "GetCorporateSplit(AAPL)",
-            format!("rows={} first_exec_date={}", items.len(), items[0].execute_date),
+            format!(
+                "rows={} first_exec_date={}",
+                items.len(),
+                items[0].execute_date
+            ),
         ),
         Ok(items) => ok(
             &mut results,
@@ -1057,7 +1217,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(items) if !items.is_empty() => ok(
             &mut results,
             "GetCorporateDividend(AAPL)",
-            format!("rows={} first_exec_date={}", items.len(), items[0].execute_date),
+            format!(
+                "rows={} first_exec_date={}",
+                items.len(),
+                items[0].execute_date
+            ),
         ),
         Ok(items) => ok(
             &mut results,
@@ -1081,7 +1245,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(items) if !items.is_empty() => ok(
             &mut results,
             "GetCorporateAction(AAPL)",
-            format!("rows={} first_action_type={}", items.len(), items[0].action_type),
+            format!(
+                "rows={} first_action_type={}",
+                items.len(),
+                items[0].action_type
+            ),
         ),
         Ok(items) => ok(
             &mut results,
@@ -1108,6 +1276,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             format!("events={}", items.len()),
         ),
         Err(e) => fail(&mut results, "GetCorporateEarningsCalendar(AAPL)", e),
+    }
+
+    match qc
+        .get_corporate_symbol_change(CorporateActionRequest {
+            symbols: vec!["META".into()],
+            market: "US".into(),
+            begin_date: "2022-01-01".into(),
+            end_date: "2023-01-01".into(),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(
+            &mut results,
+            "GetCorporateSymbolChange(META)",
+            format!("rows={}", items.len()),
+        ),
+        Err(e) => fail(&mut results, "GetCorporateSymbolChange(META)", e),
+    }
+
+    match qc
+        .get_corporate_delisting(CorporateActionRequest {
+            symbols: vec!["TWTR".into()],
+            market: "US".into(),
+            begin_date: "2022-01-01".into(),
+            end_date: "2023-01-01".into(),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(
+            &mut results,
+            "GetCorporateDelisting(TWTR)",
+            format!("rows={}", items.len()),
+        ),
+        Err(e) => fail(&mut results, "GetCorporateDelisting(TWTR)", e),
+    }
+
+    match qc
+        .get_corporate_ipo(CorporateActionRequest {
+            symbols: vec!["RIVN".into()],
+            market: "US".into(),
+            begin_date: "2021-01-01".into(),
+            end_date: "2022-01-01".into(),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) if !items.is_empty() => ok(
+            &mut results,
+            "GetCorporateIPO(RIVN)",
+            format!(
+                "rows={} listing_price={}",
+                items.len(),
+                items[0].listing_price
+            ),
+        ),
+        Ok(items) => ok(
+            &mut results,
+            "GetCorporateIPO(RIVN)",
+            format!("rows={}", items.len()),
+        ),
+        Err(e) => fail(&mut results, "GetCorporateIPO(RIVN)", e),
     }
 
     match qc.get_capital_flow("AAPL", "US", "day").await {
@@ -1195,9 +1426,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(items) if !items.is_empty() => ok(
             &mut results,
             "GetQuoteOvernight(AAPL)",
-            format!("count={} pre_close={:.4} volume={}", items.len(), items[0].pre_close, items[0].volume),
+            format!(
+                "count={} pre_close={:.4} volume={}",
+                items.len(),
+                items[0].pre_close,
+                items[0].volume
+            ),
         ),
-        Ok(items) => ok(&mut results, "GetQuoteOvernight(AAPL)", format!("count={}", items.len())),
+        Ok(items) => ok(
+            &mut results,
+            "GetQuoteOvernight(AAPL)",
+            format!("count={}", items.len()),
+        ),
         Err(e) => fail(&mut results, "GetQuoteOvernight(AAPL)", e),
     }
 
@@ -1214,11 +1454,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GetWarrantQuote",
             format!("count={} symbol={}", items.len(), items[0].symbol),
         ),
-        Ok(_) => skip(&mut results, "GetWarrantQuote", "no data returned (may need warrant permission)"),
+        Ok(_) => skip(
+            &mut results,
+            "GetWarrantQuote",
+            "no data returned (may need warrant permission)",
+        ),
         Err(e) => {
             let msg = e.to_string();
-            if msg.contains("permission") || msg.contains("code=4") || msg.contains("unauthorized") {
-                skip(&mut results, "GetWarrantQuote", format!("no warrant permission: {}", msg));
+            if msg.contains("permission") || msg.contains("code=4") || msg.contains("unauthorized")
+            {
+                skip(
+                    &mut results,
+                    "GetWarrantQuote",
+                    format!("no warrant permission: {}", msg),
+                );
             } else {
                 fail(&mut results, "GetWarrantQuote", e);
             }
@@ -1240,11 +1489,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GetWarrantFilter",
             format!("total={} items={}", result.total, result.items.len()),
         ),
-        Ok(None) => skip(&mut results, "GetWarrantFilter", "no data returned (may need warrant permission)"),
+        Ok(None) => skip(
+            &mut results,
+            "GetWarrantFilter",
+            "no data returned (may need warrant permission)",
+        ),
         Err(e) => {
             let msg = e.to_string();
-            if msg.contains("permission") || msg.contains("unauthorized") || msg.contains("does not support") || msg.contains("code=4") {
-                skip(&mut results, "GetWarrantFilter", format!("no warrant permission: {}", msg));
+            if msg.contains("permission")
+                || msg.contains("unauthorized")
+                || msg.contains("does not support")
+                || msg.contains("code=4")
+            {
+                skip(
+                    &mut results,
+                    "GetWarrantFilter",
+                    format!("no warrant permission: {}", msg),
+                );
             } else {
                 fail(&mut results, "GetWarrantFilter", e);
             }
@@ -1262,7 +1523,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(states) if !states.is_empty() => ok(
             &mut results,
             "call_into(market_state)",
-            format!("market={} status={}", states[0].market, states[0].market_status),
+            format!(
+                "market={} status={}",
+                states[0].market, states[0].market_status
+            ),
         ),
         Ok(_) => ok(&mut results, "call_into(market_state)", "(empty)"),
         Err(e) => fail(&mut results, "call_into(market_state)", e),
@@ -1296,7 +1560,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(briefs) if !briefs.is_empty() => ok(
             &mut results,
             "call_into_items(brief)",
-            format!("symbol={} price={:?}", briefs[0].symbol, briefs[0].latest_price),
+            format!(
+                "symbol={} price={:?}",
+                briefs[0].symbol, briefs[0].latest_price
+            ),
         ),
         Ok(_) => ok(&mut results, "call_into_items(brief)", "(empty)"),
         Err(e) => fail(&mut results, "call_into_items(brief)", e),
@@ -1315,7 +1582,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "call_optional(capital_distribution)",
             format!("symbol={} netInflow={:.0}", cd.symbol, cd.net_inflow),
         ),
-        Ok(None) => ok(&mut results, "call_optional(capital_distribution)", "(no data)"),
+        Ok(None) => ok(
+            &mut results,
+            "call_optional(capital_distribution)",
+            "(no data)",
+        ),
         Err(e) => fail(&mut results, "call_optional(capital_distribution)", e),
     }
 
@@ -1323,15 +1594,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, results: &mut Vec<RunResult>) {
+async fn run_option_smoke(
+    qc: &tigeropen::quote::QuoteClient,
+    symbol: &str,
+    results: &mut Vec<RunResult>,
+) {
     let mut expiry_date = String::new();
     let mut opt_identifier = String::new();
 
     // Fetch current price to find ATM strike later.
-    let current_price: f64 = match qc.get_real_time_quote(BriefRequest {
-        symbols: Some(vec![symbol.to_string()]),
-        ..Default::default()
-    }).await {
+    let current_price: f64 = match qc
+        .get_real_time_quote(BriefRequest {
+            symbols: Some(vec![symbol.to_string()]),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(briefs) if !briefs.is_empty() && briefs[0].latest_price > 0.0 => briefs[0].latest_price,
         _ => 0.0,
     };
@@ -1343,31 +1621,51 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
             // Pick the first expiry >= 30 days from now — these contracts have trade history for kline.
             let min_date = {
                 let secs = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
                     + 30 * 86_400;
                 let d = chrono::DateTime::from_timestamp(secs as i64, 0).unwrap();
                 d.format("%Y-%m-%d").to_string()
             };
-            let picked = dates.iter()
+            let picked = dates
+                .iter()
                 .find(|d| d.as_str() >= min_date.as_str())
                 .unwrap_or(&dates[dates.len() / 2]);
-            ok(results, &tag, format!("dates={} picked={}", dates.len(), picked));
+            ok(
+                results,
+                &tag,
+                format!("dates={} picked={}", dates.len(), picked),
+            );
             expiry_date = picked.clone();
         }
         Ok(_) => ok(results, &tag, "(empty)"),
-        Err(e) => { fail(results, &tag, e); return; }
+        Err(e) => {
+            fail(results, &tag, e);
+            return;
+        }
     }
 
     let chain_tag = format!("GetOptionChain({} {})", symbol, expiry_date);
-    match qc.get_option_chain(OptionChainRequest::new(vec![
-        OptionChainItem::from_date(symbol, &expiry_date).unwrap()
-    ])).await {
+    match qc
+        .get_option_chain(OptionChainRequest::new(vec![OptionChainItem::from_date(
+            symbol,
+            &expiry_date,
+        )
+        .unwrap()]))
+        .await
+    {
         Ok(chain) if !chain.is_empty() && !chain[0].items.is_empty() => {
-            ok(results, &chain_tag, format!("rows={}", chain[0].items.len()));
+            ok(
+                results,
+                &chain_tag,
+                format!("rows={}", chain[0].items.len()),
+            );
             let items = &chain[0].items;
             // Chain rows are sorted by strike. Pick call with strike closest to current_price.
             let best = if current_price > 0.0 {
-                items.iter()
+                items
+                    .iter()
                     .filter_map(|row| row.call.as_ref())
                     .filter(|leg| !leg.identifier.is_empty())
                     .min_by(|a, b| {
@@ -1376,66 +1674,115 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
                         da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
                     })
             } else {
-                items.iter().filter_map(|row| row.call.as_ref())
+                items
+                    .iter()
+                    .filter_map(|row| row.call.as_ref())
                     .max_by_key(|leg| leg.open_interest)
             };
             if let Some(leg) = best {
                 opt_identifier = leg.identifier.clone();
             } else {
                 let mid = &items[items.len() / 2];
-                if let Some(call) = &mid.call { opt_identifier = call.identifier.clone(); }
-                else if let Some(put) = &mid.put { opt_identifier = put.identifier.clone(); }
+                if let Some(call) = &mid.call {
+                    opt_identifier = call.identifier.clone();
+                } else if let Some(put) = &mid.put {
+                    opt_identifier = put.identifier.clone();
+                }
             }
-            ok(results, &format!("{}→picked", chain_tag), opt_identifier.clone());
+            ok(
+                results,
+                &format!("{}→picked", chain_tag),
+                opt_identifier.clone(),
+            );
         }
         Ok(_) => ok(results, &chain_tag, "(empty items)"),
-        Err(e) => { fail(results, &chain_tag, e); return; }
+        Err(e) => {
+            fail(results, &chain_tag, e);
+            return;
+        }
     }
 
     // Verify return_greek_value and option_filter take effect
     let chain_greek_tag = format!("GetOptionChain({} greek+filter)", symbol);
-    match qc.get_option_chain(OptionChainRequest {
-        option_basic: Some(vec![OptionChainItem::from_date(symbol, &expiry_date).unwrap()]),
-        return_greek_value: Some(true),
-        option_filter: Some(OptionChainFilter {
-            in_the_money: Some(false),
-            implied_volatility: Some(RangeF64::new(0.0, 5.0)),
-            greeks: Some(OptionChainFilterGreeks {
-                delta: Some(RangeF64::new(0.0, 0.6)),
+    match qc
+        .get_option_chain(OptionChainRequest {
+            option_basic: Some(vec![
+                OptionChainItem::from_date(symbol, &expiry_date).unwrap()
+            ]),
+            return_greek_value: Some(true),
+            option_filter: Some(OptionChainFilter {
+                in_the_money: Some(false),
+                implied_volatility: Some(RangeF64::new(0.0, 5.0)),
+                greeks: Some(OptionChainFilterGreeks {
+                    delta: Some(RangeF64::new(0.0, 0.6)),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }),
             ..Default::default()
-        }),
-        ..Default::default()
-    }).await {
+        })
+        .await
+    {
         Ok(chain) if !chain.is_empty() => {
             let total_rows = chain.iter().map(|c| c.items.len()).sum::<usize>();
-            let has_greek = chain.iter().flat_map(|c| c.items.iter())
-                .any(|row| row.call.as_ref().map(|l| l.delta != 0.0).unwrap_or(false)
-                    || row.put.as_ref().map(|l| l.delta != 0.0).unwrap_or(false));
-            ok(results, &chain_greek_tag,
-                format!("rows={} has_greek={}", total_rows, has_greek));
+            let has_greek = chain.iter().flat_map(|c| c.items.iter()).any(|row| {
+                row.call.as_ref().map(|l| l.delta != 0.0).unwrap_or(false)
+                    || row.put.as_ref().map(|l| l.delta != 0.0).unwrap_or(false)
+            });
+            ok(
+                results,
+                &chain_greek_tag,
+                format!("rows={} has_greek={}", total_rows, has_greek),
+            );
         }
         Ok(_) => ok(results, &chain_greek_tag, "(empty)"),
         Err(e) => fail(results, &chain_greek_tag, e),
     }
 
     if opt_identifier.is_empty() {
-        skip(results, &format!("GetOptionQuote({})", symbol), "no identifier from chain");
-        skip(results, &format!("GetOptionKline({})", symbol), "no identifier from chain");
-        skip(results, &format!("GetOptionTradeTicks({})", symbol), "no identifier from chain");
-        skip(results, &format!("GetOptionTimeline({})", symbol), "no identifier from chain");
-        skip(results, &format!("GetOptionDepth({})", symbol), "no identifier from chain");
+        skip(
+            results,
+            &format!("GetOptionQuote({})", symbol),
+            "no identifier from chain",
+        );
+        skip(
+            results,
+            &format!("GetOptionKline({})", symbol),
+            "no identifier from chain",
+        );
+        skip(
+            results,
+            &format!("GetOptionTradeTicks({})", symbol),
+            "no identifier from chain",
+        );
+        skip(
+            results,
+            &format!("GetOptionTimeline({})", symbol),
+            "no identifier from chain",
+        );
+        skip(
+            results,
+            &format!("GetOptionDepth({})", symbol),
+            "no identifier from chain",
+        );
         return;
     }
 
     let quote_tag = format!("GetOptionQuote({})", symbol);
-    match qc.get_option_quote(OptionQuoteRequest::new(vec![
-        OptionContractItem::from_occ(&opt_identifier).unwrap()
-    ])).await {
+    match qc
+        .get_option_quote(OptionQuoteRequest::new(vec![OptionContractItem::from_occ(
+            &opt_identifier,
+        )
+        .unwrap()]))
+        .await
+    {
         Ok(briefs) if !briefs.is_empty() => ok(
-            results, &quote_tag,
-            format!("{} latestPrice={:.4}", briefs[0].symbol, briefs[0].latest_price),
+            results,
+            &quote_tag,
+            format!(
+                "{} latestPrice={:.4}",
+                briefs[0].symbol, briefs[0].latest_price
+            ),
         ),
         Ok(_) => ok(results, &quote_tag, "(empty)"),
         Err(e) => fail(results, &quote_tag, e),
@@ -1451,10 +1798,13 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
     let mut kline_item = OptionKlineItem::from_occ(&opt_identifier, "day").unwrap();
     kline_item.begin_time = Some(begin_ms);
     kline_item.end_time = Some(end_ms);
-    match qc.get_option_kline(OptionKlineRequest {
-        option_query: Some(vec![kline_item]),
-        ..Default::default()
-    }).await {
+    match qc
+        .get_option_kline(OptionKlineRequest {
+            option_query: Some(vec![kline_item]),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(ks) if !ks.is_empty() => ok(results, &kline_tag, format!("bars={}", ks[0].items.len())),
         Ok(_) => ok(results, &kline_tag, "(empty)"),
         Err(e) => fail(results, &kline_tag, e),
@@ -1472,12 +1822,16 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
             end_index: Some(30),
             ..Default::default()
         };
-        match qc.get_option_trade_ticks(OptionTradeTicksRequest {
-            contracts: Some(vec![query_item]),
-            ..Default::default()
-        }).await {
+        match qc
+            .get_option_trade_ticks(OptionTradeTicksRequest {
+                contracts: Some(vec![query_item]),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(ticks) if !ticks.is_empty() => ok(
-                results, &tick_tag,
+                results,
+                &tick_tag,
                 format!("ticks={}", ticks[0].items.len()),
             ),
             Ok(_) => skip(results, &tick_tag, "no data returned"),
@@ -1487,7 +1841,11 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
             }
         }
     } else {
-        skip(results, &tick_tag, "could not parse opt_identifier for trade ticks");
+        skip(
+            results,
+            &tick_tag,
+            "could not parse opt_identifier for trade ticks",
+        );
     }
 
     // GetOptionTimeline (new test)
@@ -1500,11 +1858,14 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
             strike: Some(ci.strike),
             ..Default::default()
         };
-        match qc.get_option_timeline(OptionTimelineRequest {
-            option_query: Some(vec![query_item]),
-            market: Some("US".to_string()),
-            ..Default::default()
-        }).await {
+        match qc
+            .get_option_timeline(OptionTimelineRequest {
+                option_query: Some(vec![query_item]),
+                market: Some("US".to_string()),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(tl) if !tl.is_empty() => {
                 let n = tl[0].intraday.as_ref().map(|b| b.items.len()).unwrap_or(0);
                 ok(results, &timeline_tag, format!("items.len={}", n))
@@ -1513,7 +1874,11 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
             Err(e) => fail(results, &timeline_tag, e),
         }
     } else {
-        skip(results, &timeline_tag, "could not parse opt_identifier for timeline");
+        skip(
+            results,
+            &timeline_tag,
+            "could not parse opt_identifier for timeline",
+        );
     }
 
     // GetOptionDepth (new test)
@@ -1526,56 +1891,99 @@ async fn run_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, resu
             strike: Some(ci.strike),
             ..Default::default()
         };
-        match qc.get_option_depth(OptionDepthRequest {
-            option_basic: Some(vec![query_item]),
-            market: Some("US".to_string()),
-            ..Default::default()
-        }).await {
+        match qc
+            .get_option_depth(OptionDepthRequest {
+                option_basic: Some(vec![query_item]),
+                market: Some("US".to_string()),
+                ..Default::default()
+            })
+            .await
+        {
             Ok(depths) if !depths.is_empty() => ok(
-                results, &depth_tag,
-                format!("asks={} bids={}", depths[0].asks.len(), depths[0].bids.len()),
+                results,
+                &depth_tag,
+                format!(
+                    "asks={} bids={}",
+                    depths[0].asks.len(),
+                    depths[0].bids.len()
+                ),
             ),
             Ok(_) => skip(results, &depth_tag, "no data returned"),
             Err(e) => fail(results, &depth_tag, e),
         }
     } else {
-        skip(results, &depth_tag, "could not parse opt_identifier for depth");
+        skip(
+            results,
+            &depth_tag,
+            "could not parse opt_identifier for depth",
+        );
     }
 
     // GetOptionAnalysis (US)
-    match qc.get_option_analysis(OptionAnalysisRequest {
-        symbols: Some(vec![symbol.to_string()]),
-        market: Some("US".to_string()),
-        period: Some("52week".to_string()),
-        ..Default::default()
-    }).await {
-        Ok(items) => ok(results, &format!("GetOptionAnalysis({} US)", symbol),
-            format!("count={} iv30d={:.4} hv={:.4}",
+    match qc
+        .get_option_analysis(OptionAnalysisRequest {
+            symbols: Some(vec![symbol.to_string()]),
+            market: Some("US".to_string()),
+            period: Some("52week".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(
+            results,
+            &format!("GetOptionAnalysis({} US)", symbol),
+            format!(
+                "count={} iv30d={:.4} hv={:.4}",
                 items.len(),
                 items.first().map(|i| i.implied_vol30_days).unwrap_or(0.0),
-                items.first().map(|i| i.his_volatility).unwrap_or(0.0))),
+                items.first().map(|i| i.his_volatility).unwrap_or(0.0)
+            ),
+        ),
         Err(e) => fail(results, &format!("GetOptionAnalysis({} US)", symbol), e),
     }
 }
 
-async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, results: &mut Vec<RunResult>) {
+async fn run_hk_option_smoke(
+    qc: &tigeropen::quote::QuoteClient,
+    symbol: &str,
+    results: &mut Vec<RunResult>,
+) {
     use tigeropen::model::quote_requests::OptionSymbolsRequest;
 
     // Step 1: get_option_symbols(HK) to discover tradable HK option symbols
-    let syms = match qc.get_option_symbols(OptionSymbolsRequest {
-        market: Some("HK".to_string()),
-        ..Default::default()
-    }).await {
+    let syms = match qc
+        .get_option_symbols(OptionSymbolsRequest {
+            market: Some("HK".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(s) if !s.is_empty() => {
-            ok(results, "GetOptionSymbols(HK)", format!("count={}", s.len()));
+            ok(
+                results,
+                "GetOptionSymbols(HK)",
+                format!("count={}", s.len()),
+            );
             s
         }
-        Ok(_) => { skip(results, "GetOptionSymbols(HK)", "empty result"); return; }
-        Err(e) if e.to_string().contains("does not support") || e.to_string().contains("code=4") => {
-            skip(results, "GetOptionSymbols(HK)", "not supported by this account tier");
+        Ok(_) => {
+            skip(results, "GetOptionSymbols(HK)", "empty result");
             return;
         }
-        Err(e) => { fail(results, "GetOptionSymbols(HK)", e); return; }
+        Err(e)
+            if e.to_string().contains("does not support") || e.to_string().contains("code=4") =>
+        {
+            skip(
+                results,
+                "GetOptionSymbols(HK)",
+                "not supported by this account tier",
+            );
+            return;
+        }
+        Err(e) => {
+            fail(results, "GetOptionSymbols(HK)", e);
+            return;
+        }
     };
 
     // Step 2: get_option_expiration — underlying for HK options is "TCH.HK" format (not numeric)
@@ -1592,13 +2000,20 @@ async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, r
             match qc.get_option_expiration(&[sym.as_str()], Some("HK")).await {
                 Ok(exps) => {
                     let min_ts = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as i64
                         + 30 * 86_400_000;
-                    let ts = exps.iter()
+                    let ts = exps
+                        .iter()
                         .flat_map(|e| e.timestamps.iter().copied())
                         .find(|&t| t >= min_ts);
                     if let Some(ts) = ts {
-                        ok(results, "GetOptionExpiration(HK)", format!("sym={} ts={}", sym, ts));
+                        ok(
+                            results,
+                            "GetOptionExpiration(HK)",
+                            format!("sym={} ts={}", sym, ts),
+                        );
                         result = Some((sym.clone(), ts));
                         break;
                     }
@@ -1618,55 +2033,91 @@ async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, r
         None => {
             skip(results, "GetOptionChain→Quote→Kline(HK)", "no expiry found");
             // still run analysis
-            match qc.get_option_analysis(tigeropen::model::quote_requests::OptionAnalysisRequest {
-                symbols: Some(vec![symbol.to_string()]),
-                market: Some("HK".to_string()),
-                period: Some("52week".to_string()),
-                ..Default::default()
-            }).await {
-                Ok(items) => ok(results, &format!("GetOptionAnalysis({} HK)", symbol),
-                    format!("count={} iv30d={:.4} hv={:.4}",
+            match qc
+                .get_option_analysis(tigeropen::model::quote_requests::OptionAnalysisRequest {
+                    symbols: Some(vec![symbol.to_string()]),
+                    market: Some("HK".to_string()),
+                    period: Some("52week".to_string()),
+                    ..Default::default()
+                })
+                .await
+            {
+                Ok(items) => ok(
+                    results,
+                    &format!("GetOptionAnalysis({} HK)", symbol),
+                    format!(
+                        "count={} iv30d={:.4} hv={:.4}",
                         items.len(),
                         items.first().map(|i| i.implied_vol30_days).unwrap_or(0.0),
-                        items.first().map(|i| i.his_volatility).unwrap_or(0.0))),
+                        items.first().map(|i| i.his_volatility).unwrap_or(0.0)
+                    ),
+                ),
                 Err(e) => fail(results, &format!("GetOptionAnalysis({} HK)", symbol), e),
             }
             return;
         }
     };
     let hk_chain_tag = format!("GetOptionChain({} HK)", hk_opt_symbol);
-    let opt_identifier = match qc.get_option_chain(OptionChainRequest {
-        option_basic: Some(vec![OptionChainItem::new(hk_opt_symbol.as_str(), hk_expiry_ms)]),
-        market: Some("HK".to_string()),
-        ..Default::default()
-    }).await {
+    let opt_identifier = match qc
+        .get_option_chain(OptionChainRequest {
+            option_basic: Some(vec![OptionChainItem::new(
+                hk_opt_symbol.as_str(),
+                hk_expiry_ms,
+            )]),
+            market: Some("HK".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(chains) => {
             // Pick call with OI > 0; if none, take the middle strike (closest to ATM).
             let all_items: Vec<_> = chains.iter().flat_map(|c| c.items.iter()).collect();
-            let best_id = all_items.iter()
+            let best_id = all_items
+                .iter()
                 .filter_map(|row| row.call.as_ref())
                 .filter(|leg| leg.open_interest > 0 && !leg.identifier.is_empty())
                 .max_by_key(|leg| leg.open_interest)
                 .map(|leg| leg.identifier.clone());
             let first_id = best_id.or_else(|| {
                 let mid_idx = all_items.len() / 2;
-                all_items[mid_idx].call.as_ref()
+                all_items[mid_idx]
+                    .call
+                    .as_ref()
                     .map(|l| l.identifier.clone())
-                    .or_else(|| all_items[mid_idx].put.as_ref().map(|l| l.identifier.clone()))
+                    .or_else(|| {
+                        all_items[mid_idx]
+                            .put
+                            .as_ref()
+                            .map(|l| l.identifier.clone())
+                    })
                     .filter(|id| !id.is_empty())
                     .or_else(|| {
-                        all_items.iter().find_map(|row| {
-                            row.call.as_ref().map(|l| l.identifier.clone())
-                                .or_else(|| row.put.as_ref().map(|l| l.identifier.clone()))
-                        }).filter(|id| !id.is_empty())
+                        all_items
+                            .iter()
+                            .find_map(|row| {
+                                row.call
+                                    .as_ref()
+                                    .map(|l| l.identifier.clone())
+                                    .or_else(|| row.put.as_ref().map(|l| l.identifier.clone()))
+                            })
+                            .filter(|id| !id.is_empty())
                     })
             });
             match first_id {
-                Some(id) => { ok(results, &hk_chain_tag, format!("identifier={}", id.trim())); id }
-                None => { ok(results, &hk_chain_tag, "(empty chain)"); return; }
+                Some(id) => {
+                    ok(results, &hk_chain_tag, format!("identifier={}", id.trim()));
+                    id
+                }
+                None => {
+                    ok(results, &hk_chain_tag, "(empty chain)");
+                    return;
+                }
             }
         }
-        Err(e) => { fail(results, &hk_chain_tag, e); return; }
+        Err(e) => {
+            fail(results, &hk_chain_tag, e);
+            return;
+        }
     };
 
     // Step 4: get_option_quote using the identifier from chain
@@ -1674,12 +2125,22 @@ async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, r
     let quote_tag = format!("GetOptionQuote({} HK)", opt_id_trimmed);
     let contract_item = match OptionContractItem::from_occ(&opt_id_trimmed) {
         Ok(c) => c,
-        Err(e) => { fail(results, &quote_tag, e); return; }
+        Err(e) => {
+            fail(results, &quote_tag, e);
+            return;
+        }
     };
-    match qc.get_option_quote(OptionQuoteRequest::new(vec![contract_item])).await {
+    match qc
+        .get_option_quote(OptionQuoteRequest::new(vec![contract_item]))
+        .await
+    {
         Ok(briefs) if !briefs.is_empty() => ok(
-            results, &quote_tag,
-            format!("{} latestPrice={:.4}", briefs[0].symbol, briefs[0].latest_price),
+            results,
+            &quote_tag,
+            format!(
+                "{} latestPrice={:.4}",
+                briefs[0].symbol, briefs[0].latest_price
+            ),
         ),
         Ok(_) => ok(results, &quote_tag, "(empty)"),
         Err(e) => fail(results, &quote_tag, e),
@@ -1688,33 +2149,53 @@ async fn run_hk_option_smoke(qc: &tigeropen::quote::QuoteClient, symbol: &str, r
     // Step 5: get_option_kline using same identifier, last 30 days
     let kline_tag = format!("GetOptionKline({} HK)", opt_id_trimmed);
     let end_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
     let begin_ms = end_ms - 90 * 86_400_000;
     let kline_item = match OptionKlineItem::from_occ(&opt_id_trimmed, "day") {
-        Ok(mut k) => { k.begin_time = Some(begin_ms); k.end_time = Some(end_ms); k }
-        Err(e) => { fail(results, &kline_tag, e); return; }
+        Ok(mut k) => {
+            k.begin_time = Some(begin_ms);
+            k.end_time = Some(end_ms);
+            k
+        }
+        Err(e) => {
+            fail(results, &kline_tag, e);
+            return;
+        }
     };
-    match qc.get_option_kline(OptionKlineRequest {
-        option_query: Some(vec![kline_item]),
-        ..Default::default()
-    }).await {
+    match qc
+        .get_option_kline(OptionKlineRequest {
+            option_query: Some(vec![kline_item]),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(ks) if !ks.is_empty() => ok(results, &kline_tag, format!("bars={}", ks[0].items.len())),
         Ok(_) => ok(results, &kline_tag, "(empty)"),
         Err(e) => fail(results, &kline_tag, e),
     }
 
     // Step 6: get_option_analysis for the underlying symbol (HK) — enhanced with iv30d and hv
-    match qc.get_option_analysis(OptionAnalysisRequest {
-        symbols: Some(vec![symbol.to_string()]),
-        market: Some("HK".to_string()),
-        period: Some("52week".to_string()),
-        ..Default::default()
-    }).await {
-        Ok(items) => ok(results, &format!("GetOptionAnalysis({} HK)", symbol),
-            format!("count={} iv30d={:.4} hv={:.4}",
+    match qc
+        .get_option_analysis(OptionAnalysisRequest {
+            symbols: Some(vec![symbol.to_string()]),
+            market: Some("HK".to_string()),
+            period: Some("52week".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(items) => ok(
+            results,
+            &format!("GetOptionAnalysis({} HK)", symbol),
+            format!(
+                "count={} iv30d={:.4} hv={:.4}",
                 items.len(),
                 items.first().map(|i| i.implied_vol30_days).unwrap_or(0.0),
-                items.first().map(|i| i.his_volatility).unwrap_or(0.0))),
+                items.first().map(|i| i.his_volatility).unwrap_or(0.0)
+            ),
+        ),
         Err(e) => fail(results, &format!("GetOptionAnalysis({} HK)", symbol), e),
     }
 }

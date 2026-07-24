@@ -37,7 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         on_tick: Some(Arc::new(|data| {
             println!(
                 "[Tick] {} sn={} prices={} volumes={}",
-                data.symbol, data.sn, data.price.len(), data.volume.len()
+                data.symbol,
+                data.sn,
+                data.price.len(),
+                data.volume.len()
             );
         })),
         on_depth: Some(Arc::new(|data| {
@@ -111,7 +114,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // --- Connection lifecycle callbacks ---
         on_connect: Some(Arc::new(|| println!("[Connected] push server connected"))),
-        on_disconnect: Some(Arc::new(|| println!("[Disconnected] push server disconnected"))),
+        on_disconnect: Some(Arc::new(|| {
+            println!("[Disconnected] push server disconnected")
+        })),
         on_error: Some(Arc::new(|msg| println!("[Error] {}", msg))),
         on_kickout: Some(Arc::new(|msg| println!("[Kickout] {}", msg))),
 

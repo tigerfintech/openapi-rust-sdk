@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] - 2026-07-24
+
+### Added
+- `TradeClient` / `QuoteClient`：新增 `query_token()` / `refresh_token()` / `start_token_auto_refresh()` 方法
+- `SANDBOX_TIGER_PUBLIC_KEY` 常量，支持非生产环境公钥配置
+- properties 文件支持 `server_url`、`quote_server_url`、`tiger_public_key` 字段
+- 订单工具函数：新增 `market_order_by_amount`、`limit_order_by_amount`、`trail_order_by_price`、`limit_order_with_legs`、`combo_order`、`oca_order`、`contract_leg`
+- `iceberg_order` 合并可选参数（原基础版与全参版统一为一个函数）
+
+### Fixed
+- token 文件与 config 文件同目录自动加载，不再依赖当前工作目录
+- `query_token` / `query_token_from_config` 正确处理服务端 `data` 双重编码的 JSON 响应
+- `inject_secret_key_json`：正确判断 `secret_key` 是否已设置（类型感知）
+
+### Changed
+- `TradeClient` / `QuoteClient` 所有交易方法统一通过 `inject_secret_key_json` 注入 `secret_key`
+
+## [0.5.7] - 2026-07-23
+
+### Added
+- `get_corporate_symbol_change` — 股票代码变更查询，返回 `Vec<CorporateSymbolChange>`
+- `get_corporate_delisting` — 退市事件查询，返回 `Vec<CorporateDelisting>`
+- `get_corporate_ipo` — 新股上市查询，返回 `Vec<CorporateIPO>`
+- `CorporateActionType`：新增 `SymbolChange`、`Delisting`、`Ipo`
+
+## [0.5.6] - 2026-07-22
+### Fixed
+- 修复 `parse_api_response` 反序列化失败时返回 `TigerError::Config` 语义错误的问题，改为新增的 `TigerError::Parse` 变体。**注意**：若代码中对 `TigerError` 使用穷举 `match`（无 `_ =>`），需补充 `TigerError::Parse(_)` 分支。
+- 修复 properties 配置文件续行（`\`）解析：注释行不再被拼入值，`\\` 不再触发续行。
+
 ## [0.5.5] - 2026-07-13
 
 ### Bug Fixes

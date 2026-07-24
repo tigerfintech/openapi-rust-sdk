@@ -1,12 +1,15 @@
 //! PushClient tests
 
 use super::*;
-use std::sync::{Arc, atomic::{AtomicI32, Ordering}};
+use std::sync::{
+    atomic::{AtomicI32, Ordering},
+    Arc,
+};
 
-use prost::Message;
 use super::pb;
 use super::pb::socket_common::{Command, DataType};
 use super::varint::encode_varint32;
+use prost::Message;
 
 fn test_config() -> crate::config::ClientConfig {
     crate::config::ClientConfig {
@@ -40,9 +43,13 @@ fn encode_response(response: &pb::Response) -> Vec<u8> {
 
 #[test]
 fn test_subscription_state_management() {
-    let client = PushClient::new(test_config(), Some(PushClientOptions {
-        auto_reconnect: Some(false), ..Default::default()
-    }));
+    let client = PushClient::new(
+        test_config(),
+        Some(PushClientOptions {
+            auto_reconnect: Some(false),
+            ..Default::default()
+        }),
+    );
     assert_eq!(client.state(), ConnectionState::Disconnected);
 
     // 添加订阅
@@ -502,11 +509,13 @@ fn test_transaction_callback() {
         msg: None,
         body: Some(pb::PushData {
             data_type: DataType::OrderTransaction as i32,
-            body: Some(pb::push_data::Body::OrderTransactionData(pb::OrderTransactionData {
-                account: "acc".into(),
-                symbol: "AAPL".into(),
-                ..Default::default()
-            })),
+            body: Some(pb::push_data::Body::OrderTransactionData(
+                pb::OrderTransactionData {
+                    account: "acc".into(),
+                    symbol: "AAPL".into(),
+                    ..Default::default()
+                },
+            )),
         }),
     };
     client.handle_message(&encode_response(&response));

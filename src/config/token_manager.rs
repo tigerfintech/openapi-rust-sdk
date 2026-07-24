@@ -3,10 +3,10 @@
 //! 从 tiger_openapi_token.properties 文件加载 Token，
 //! 支持后台定期刷新，更新内存和文件中的 Token。
 
+use super::config_parser;
+use crate::error::TigerError;
 use std::sync::{Arc, RwLock};
 use tokio::sync::oneshot;
-use crate::error::TigerError;
-use super::config_parser;
 
 /// 默认 Token 文件名
 const DEFAULT_TOKEN_FILE: &str = "tiger_openapi_token.properties";
@@ -95,7 +95,11 @@ impl TokenManager {
 
     /// 设置后台检查间隔（秒）
     pub fn set_check_interval(&mut self, secs: u64) {
-        self.check_interval_secs = if secs == 0 { DEFAULT_CHECK_INTERVAL_SECS } else { secs };
+        self.check_interval_secs = if secs == 0 {
+            DEFAULT_CHECK_INTERVAL_SECS
+        } else {
+            secs
+        };
     }
 
     /// 注册 token 刷新写入后的回调
@@ -119,9 +123,8 @@ impl TokenManager {
     /// 从 properties 文件（或自定义 loader）加载 Token
     pub fn load_token(&self) -> Result<String, TigerError> {
         if let Some(ref loader) = self.token_loader {
-            let token = loader().map_err(|e| {
-                TigerError::Config(format!("自定义 token 加载失败: {}", e))
-            })?;
+            let token = loader()
+                .map_err(|e| TigerError::Config(format!("自定义 token 加载失败: {}", e)))?;
             if token.is_empty() {
                 return Err(TigerError::Config("自定义 token 加载返回空值".to_string()));
             }
@@ -334,15 +337,13 @@ fn write_token_to_file(file_path: &str, token: &str) -> Result<(), TigerError> {
     let path = std::path::Path::new(file_path);
     if let Some(dir) = path.parent() {
         if !dir.as_os_str().is_empty() {
-            std::fs::create_dir_all(dir).map_err(|e| {
-                TigerError::Config(format!("创建目录失败: {}", e))
-            })?;
+            std::fs::create_dir_all(dir)
+                .map_err(|e| TigerError::Config(format!("创建目录失败: {}", e)))?;
         }
     }
     let content = format!("token={}\n", token);
-    std::fs::write(file_path, content).map_err(|e| {
-        TigerError::Config(format!("写入 Token 文件失败: {}", e))
-    })
+    std::fs::write(file_path, content)
+        .map_err(|e| TigerError::Config(format!("写入 Token 文件失败: {}", e)))
 }
 
 #[cfg(test)]
@@ -528,7 +529,7 @@ mod tests {
 
         let mut m = TokenManager::with_refresh_duration(None, 30);
         m.set_check_interval(0); // will be forced to default, use a short one
-        // Override to 50ms for test speed
+                                 // Override to 50ms for test speed
         m.check_interval_secs = 0; // we'll set it properly below
         m.check_interval_secs = 1; // 1 second interval for test
         m.set_token(&expired_token).unwrap();
@@ -550,7 +551,10 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
         m.stop_auto_refresh();
 
-        assert!(*call_count.lock().unwrap() > 0, "refresh should have been called");
+        assert!(
+            *call_count.lock().unwrap() > 0,
+            "refresh should have been called"
+        );
         assert_eq!(m.get_token(), "refreshed_token");
         assert_eq!(*updated_token.lock().unwrap(), "refreshed_token");
     }
@@ -586,6 +590,9 @@ mod tests {
         // Wait more time; count should not increase after stop
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
         let count_final = *call_count.lock().unwrap();
-        assert_eq!(count_after_stop, count_final, "no more refreshes after stop");
+        assert_eq!(
+            count_after_stop, count_final,
+            "no more refreshes after stop"
+        );
     }
 }
