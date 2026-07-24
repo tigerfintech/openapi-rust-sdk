@@ -2,14 +2,14 @@
 //! 包含 Property 13/14/15 属性测试和单元测试。
 
 use super::*;
-use std::time::Duration;
 use proptest::prelude::*;
-use wiremock::{MockServer, Mock, ResponseTemplate};
-use wiremock::matchers::method;
-use rsa::RsaPrivateKey;
 use rsa::pkcs8::EncodePrivateKey;
 use rsa::pkcs8::LineEnding;
+use rsa::RsaPrivateKey;
 use std::sync::OnceLock;
+use std::time::Duration;
+use wiremock::matchers::method;
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// 缓存测试用 RSA 私钥（避免每次测试都生成，太慢）
 fn cached_test_private_key() -> &'static str {
@@ -51,7 +51,10 @@ fn test_config(server_url: &str) -> ClientConfig {
 
 #[test]
 fn test_user_agent() {
-    assert_eq!(HttpClient::user_agent(), format!("openapi-rust-sdk-{}", crate::VERSION));
+    assert_eq!(
+        HttpClient::user_agent(),
+        format!("openapi-rust-sdk-{}", crate::VERSION)
+    );
 }
 
 #[test]
@@ -105,7 +108,8 @@ async fn test_execute_sends_request_and_returns_raw_response() {
 #[tokio::test]
 async fn test_execute_request_parses_success_response() {
     let mock_server = MockServer::start().await;
-    let response_body = r#"{"code":0,"message":"success","data":{"market":"US"},"timestamp":1234567890}"#;
+    let response_body =
+        r#"{"code":0,"message":"success","data":{"market":"US"},"timestamp":1234567890}"#;
 
     Mock::given(method("POST"))
         .respond_with(ResponseTemplate::new(200).set_body_string(response_body))
@@ -326,9 +330,10 @@ async fn test_authorization_header_with_token() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"code":0,"message":"success","data":null}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"code":0,"message":"success","data":null}"#),
+        )
         .mount(&mock_server)
         .await;
 
@@ -353,9 +358,10 @@ async fn test_no_authorization_header_without_token() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"code":0,"message":"success","data":null}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"code":0,"message":"success","data":null}"#),
+        )
         .mount(&mock_server)
         .await;
 
@@ -396,9 +402,10 @@ async fn test_query_token_success() {
 async fn test_query_token_api_error() {
     let mock_server = MockServer::start().await;
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"code":40001,"message":"unauthorized","data":null}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"code":40001,"message":"unauthorized","data":null}"#),
+        )
         .mount(&mock_server)
         .await;
 
@@ -411,9 +418,10 @@ async fn test_query_token_api_error() {
 async fn test_query_token_empty_token() {
     let mock_server = MockServer::start().await;
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"code":0,"message":"success","data":{"token":""}}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"code":0,"message":"success","data":{"token":""}}"#),
+        )
         .mount(&mock_server)
         .await;
 
@@ -426,9 +434,11 @@ async fn test_query_token_empty_token() {
 async fn test_refresh_token_updates_config() {
     let mock_server = MockServer::start().await;
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"code":0,"message":"success","data":{"token":"refreshed_xyz"}}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string(
+                r#"{"code":0,"message":"success","data":{"token":"refreshed_xyz"}}"#,
+            ),
+        )
         .mount(&mock_server)
         .await;
 
@@ -436,7 +446,10 @@ async fn test_refresh_token_updates_config() {
     config.token = Some("old_token".to_string());
     let client = HttpClient::new(config);
     client.refresh_token(None).await.unwrap();
-    assert_eq!(client.config.read().unwrap().token, Some("refreshed_xyz".to_string()));
+    assert_eq!(
+        client.config.read().unwrap().token,
+        Some("refreshed_xyz".to_string())
+    );
 }
 
 #[tokio::test]
@@ -451,7 +464,8 @@ async fn test_refresh_token_persists_to_file() {
 
     let tmpdir = std::env::temp_dir();
     let token_file = tmpdir.join("rust_http_client_token_test.properties");
-    let tm = crate::config::token_manager::TokenManager::with_file_path(token_file.to_str().unwrap());
+    let tm =
+        crate::config::token_manager::TokenManager::with_file_path(token_file.to_str().unwrap());
 
     let config = test_config(&mock_server.uri());
     let client = HttpClient::new(config);
@@ -466,9 +480,11 @@ async fn test_refresh_token_persists_to_file() {
 async fn test_refresh_token_triggers_writer() {
     let mock_server = MockServer::start().await;
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"code":0,"message":"success","data":{"token":"callback_token"}}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string(
+                r#"{"code":0,"message":"success","data":{"token":"callback_token"}}"#,
+            ),
+        )
         .mount(&mock_server)
         .await;
 
@@ -478,7 +494,8 @@ async fn test_refresh_token_triggers_writer() {
 
     let tmpdir = std::env::temp_dir();
     let token_file = tmpdir.join("rust_http_client_writer_test.properties");
-    let mut tm = crate::config::token_manager::TokenManager::with_file_path(token_file.to_str().unwrap());
+    let mut tm =
+        crate::config::token_manager::TokenManager::with_file_path(token_file.to_str().unwrap());
     tm.set_token_writer(move |t| {
         *captured_clone.lock().unwrap() = t;
     });
@@ -500,7 +517,10 @@ fn make_expired_token(seconds_ago: i64) -> String {
         .as_millis() as i64;
     let gen_ts_ms = now_ms - seconds_ago * 1000;
     let expire_ts_ms = gen_ts_ms + 3_600_000;
-    let payload = format!("{:013},{:013}some_extra_payload_data", gen_ts_ms, expire_ts_ms);
+    let payload = format!(
+        "{:013},{:013}some_extra_payload_data",
+        gen_ts_ms, expire_ts_ms
+    );
     base64::engine::general_purpose::STANDARD.encode(payload.as_bytes())
 }
 
@@ -565,9 +585,11 @@ async fn test_new_http_client_no_auto_refresh_when_zero() {
 async fn test_close_stops_background_task() {
     let mock_server = MockServer::start().await;
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"code":0,"message":"success","data":{"token":"stopped_token"}}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string(
+                r#"{"code":0,"message":"success","data":{"token":"stopped_token"}}"#,
+            ),
+        )
         .mount(&mock_server)
         .await;
 
@@ -584,5 +606,8 @@ async fn test_close_stops_background_task() {
     tokio::time::sleep(Duration::from_millis(300)).await;
     let count_final = mock_server.received_requests().await.unwrap().len();
 
-    assert_eq!(count_after_close, count_final, "no more requests after close()");
+    assert_eq!(
+        count_after_close, count_final,
+        "no more requests after close()"
+    );
 }

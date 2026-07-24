@@ -28,7 +28,11 @@ impl ApiRequest {
     }
 
     /// Create an API request with a specific API version
-    pub fn with_version(method: impl Into<String>, biz_content: impl Into<String>, version: impl Into<String>) -> Self {
+    pub fn with_version(
+        method: impl Into<String>,
+        biz_content: impl Into<String>,
+        version: impl Into<String>,
+    ) -> Self {
         Self {
             method: method.into(),
             biz_content: biz_content.into(),
@@ -37,7 +41,10 @@ impl ApiRequest {
     }
 
     /// Create an API request from serializable business parameters
-    pub fn from_params<T: Serialize>(method: impl Into<String>, params: &T) -> Result<Self, serde_json::Error> {
+    pub fn from_params<T: Serialize>(
+        method: impl Into<String>,
+        params: &T,
+    ) -> Result<Self, serde_json::Error> {
         let biz_content = serde_json::to_string(params)?;
         Ok(Self {
             method: method.into(),

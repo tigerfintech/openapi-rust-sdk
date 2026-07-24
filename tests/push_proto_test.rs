@@ -1,14 +1,17 @@
 //! 独立的推送模块 Protobuf 协议测试
-//! 
+//!
 //! 验证 push_client 的 Protobuf 消息处理逻辑。
 
-use std::sync::{Arc, atomic::{AtomicI32, Ordering}};
 use prost::Message;
+use std::sync::{
+    atomic::{AtomicI32, Ordering},
+    Arc,
+};
 
-use tigeropen::push::*;
 use tigeropen::push::pb;
 use tigeropen::push::pb::socket_common::{Command, DataType};
 use tigeropen::push::varint::encode_varint32;
+use tigeropen::push::*;
 
 fn test_config() -> tigeropen::config::ClientConfig {
     tigeropen::config::ClientConfig {
@@ -437,11 +440,13 @@ fn test_transaction_callback() {
         msg: None,
         body: Some(pb::PushData {
             data_type: DataType::OrderTransaction as i32,
-            body: Some(pb::push_data::Body::OrderTransactionData(pb::OrderTransactionData {
-                account: "acc".into(),
-                symbol: "AAPL".into(),
-                ..Default::default()
-            })),
+            body: Some(pb::push_data::Body::OrderTransactionData(
+                pb::OrderTransactionData {
+                    account: "acc".into(),
+                    symbol: "AAPL".into(),
+                    ..Default::default()
+                },
+            )),
         }),
     };
     client.handle_message(&encode_response(&response));
@@ -450,9 +455,13 @@ fn test_transaction_callback() {
 
 #[test]
 fn test_subscription_state_management() {
-    let client = PushClient::new(test_config(), Some(PushClientOptions {
-        auto_reconnect: Some(false), ..Default::default()
-    }));
+    let client = PushClient::new(
+        test_config(),
+        Some(PushClientOptions {
+            auto_reconnect: Some(false),
+            ..Default::default()
+        }),
+    );
     assert_eq!(client.state(), ConnectionState::Disconnected);
 
     client.add_subscription(SubjectType::Quote, &["AAPL".into(), "TSLA".into()]);

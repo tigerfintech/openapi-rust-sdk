@@ -13,13 +13,13 @@ use rsa::RsaPrivateKey;
 use crate::client::http_client::HttpClient;
 use crate::config::client_config::ClientConfig;
 use crate::model::quote::{
-    CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest,
-    MarketScannerRequest,
+    CorporateActionRequest, FinancialDailyRequest, FinancialReportRequest, MarketScannerRequest,
 };
 use crate::model::quote_requests::{
-    BriefRequest, QuoteDepthRequest, FutureRealTimeQuoteRequest, FutureKlineRequest, KlineRequest,
-    OptionChainItem, OptionChainFilter, OptionChainRequest, OptionContractItem, OptionKlineItem,
-    OptionKlineRequest, OptionQuoteRequest, OptionAnalysisSymbol, RangeF64,
+    BriefRequest, FutureKlineRequest, FutureRealTimeQuoteRequest, KlineRequest,
+    OptionAnalysisSymbol, OptionChainFilter, OptionChainItem, OptionChainRequest,
+    OptionContractItem, OptionKlineItem, OptionKlineRequest, OptionQuoteRequest, QuoteDepthRequest,
+    RangeF64,
 };
 
 fn cached_test_private_key() -> &'static str {
@@ -92,10 +92,11 @@ fn biz_of(req: &wiremock::Request) -> serde_json::Value {
 
 #[tokio::test]
 async fn test_get_market_state_parses_typed() {
-    let server =
-        mock_success_server(r#"[{"market":"US","marketStatus":"Trading","status":"TRADING","openTime":"09:30"}]"#)
-            .await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let server = mock_success_server(
+        r#"[{"market":"US","marketStatus":"Trading","status":"TRADING","openTime":"09:30"}]"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let states = qc.get_market_state("US").await.unwrap();
     assert_eq!(states.len(), 1);
@@ -110,7 +111,7 @@ async fn test_get_real_time_quote_parses_typed() {
         r#"[{"symbol":"AAPL","latestPrice":150.0,"askPrice":150.1,"askSize":100,"volume":1000000}]"#,
     )
     .await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let briefs = qc
         .get_real_time_quote(BriefRequest {
@@ -131,9 +132,16 @@ async fn test_get_kline_parses_typed() {
         r#"[{"symbol":"AAPL","period":"day","items":[{"time":1700000000,"open":150.0,"close":151.0,"high":152.0,"low":149.0,"volume":1000}]}]"#,
     )
     .await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
-    let kline = qc.get_kline(KlineRequest { symbols: Some(vec!["AAPL".into()]), period: Some("day".into()), ..Default::default() }).await.unwrap();
+    let kline = qc
+        .get_kline(KlineRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            period: Some("day".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     assert_eq!(kline.len(), 1);
     assert_eq!(kline[0].symbol, "AAPL");
     assert_eq!(kline[0].items.len(), 1);
@@ -146,7 +154,7 @@ async fn test_get_quote_depth_parses_typed() {
         r#"[{"symbol":"AAPL","asks":[{"price":150.0,"count":1,"volume":100}],"bids":[{"price":149.5,"count":1,"volume":200}]}]"#,
     )
     .await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let d = qc
         .get_quote_depth(QuoteDepthRequest {
@@ -165,7 +173,7 @@ async fn test_get_quote_depth_parses_typed() {
 #[tokio::test]
 async fn test_grab_quote_permission_parses_typed() {
     let server = mock_success_server(r#"[{"name":"usStockQuote","expireAt":1700000000}]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let ps = qc.grab_quote_permission().await.unwrap();
     assert_eq!(ps.len(), 1);
@@ -179,7 +187,7 @@ async fn test_get_corporate_action_flattens_grouped() {
         r#"{"AAPL":[{"symbol":"AAPL","market":"US","actionType":"DIVIDEND","executeDate":"2025-01-01","amount":0.25}]}"#,
     )
     .await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let actions = qc
         .get_corporate_action(CorporateActionRequest {
@@ -197,12 +205,70 @@ async fn test_get_corporate_action_flattens_grouped() {
 }
 
 #[tokio::test]
-async fn test_get_capital_distribution_option_some() {
+async fn test_get_corporate_symbol_change() {
     let server = mock_success_server(
-        r#"{"symbol":"AAPL","netInflow":1000.0,"inAll":2000.0,"inBig":500.0}"#,
+        r#"{"META":[{"symbol":"META","market":"US","actionType":"symbol_change","executeDate":"2022-06-09","oldSymbol":"FB","newSymbol":"META"}]}"#,
     )
     .await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let items = qc
+        .get_corporate_symbol_change(CorporateActionRequest {
+            symbols: vec!["META".into()],
+            market: "US".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].old_symbol, "FB");
+    assert_eq!(items[0].new_symbol, "META");
+}
+
+#[tokio::test]
+async fn test_get_corporate_delisting() {
+    let server = mock_success_server(
+        r#"{"TWTR":[{"symbol":"TWTR","market":"US","actionType":"delisting","executeDate":"2022-10-28","announcedDate":"2022-10-27","reason":"acquired"}]}"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let items = qc
+        .get_corporate_delisting(CorporateActionRequest {
+            symbols: vec!["TWTR".into()],
+            market: "US".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].reason, "acquired");
+}
+
+#[tokio::test]
+async fn test_get_corporate_ipo() {
+    let server = mock_success_server(
+        r#"{"RIVN":[{"symbol":"RIVN","market":"US","actionType":"ipo","executeDate":"2021-11-10","ipoName":"Rivian Automotive","listingDate":"2021-11-10","listingPrice":78.0,"sharesOutstanding":864000000,"sharesFloat":153000000,"offerAmount":11932000000.0,"priceRange":"72-74","currency":"USD","minPurchaseQuantity":1,"leverageRatio":1.0}]}"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let items = qc
+        .get_corporate_ipo(CorporateActionRequest {
+            symbols: vec!["RIVN".into()],
+            market: "US".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].ipo_name, "Rivian Automotive");
+    assert!((items[0].listing_price - 78.0).abs() < 0.001);
+}
+
+#[tokio::test]
+async fn test_get_capital_distribution_option_some() {
+    let server =
+        mock_success_server(r#"{"symbol":"AAPL","netInflow":1000.0,"inAll":2000.0,"inBig":500.0}"#)
+            .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let cd = qc.get_capital_distribution("AAPL", "US").await.unwrap();
     let cd = cd.expect("should have data");
@@ -216,7 +282,7 @@ async fn test_market_scanner_typed() {
         r#"{"page":0,"totalPage":1,"totalCount":1,"pageSize":10,"items":[{"symbol":"AAPL","market":"US"}]}"#,
     )
     .await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let res = qc
         .market_scanner(MarketScannerRequest {
@@ -238,7 +304,7 @@ async fn test_market_scanner_typed() {
 #[tokio::test]
 async fn test_get_market_state_sends_snake_case_and_method() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc.get_market_state("US").await;
 
     let received = server.received_requests().await.unwrap();
@@ -251,7 +317,7 @@ async fn test_get_market_state_sends_snake_case_and_method() {
 #[tokio::test]
 async fn test_get_real_time_quote_uses_wire_method() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc
         .get_real_time_quote(BriefRequest {
             symbols: Some(vec!["AAPL".into()]),
@@ -267,12 +333,15 @@ async fn test_get_real_time_quote_uses_wire_method() {
 #[tokio::test]
 async fn test_get_future_contracts_sends_exchange_code() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc.get_future_contracts("CME").await;
 
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
-    assert_eq!(req["method"].as_str().unwrap(), "future_contract_by_exchange_code");
+    assert_eq!(
+        req["method"].as_str().unwrap(),
+        "future_contract_by_exchange_code"
+    );
     let biz = biz_of(&received[0]);
     assert_eq!(biz["exchange_code"].as_str().unwrap(), "CME");
 }
@@ -280,7 +349,7 @@ async fn test_get_future_contracts_sends_exchange_code() {
 #[tokio::test]
 async fn test_get_future_real_time_quote_sends_contract_codes() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc
         .get_future_real_time_quote(FutureRealTimeQuoteRequest {
             contract_codes: Some(vec!["CL2609".into()]),
@@ -296,7 +365,7 @@ async fn test_get_future_real_time_quote_sends_contract_codes() {
 #[tokio::test]
 async fn test_get_future_kline_snake_case_wire() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc
         .get_future_kline(FutureKlineRequest {
             contract_codes: Some(vec!["CL2609".into()]),
@@ -319,7 +388,7 @@ async fn test_get_future_kline_snake_case_wire() {
 #[tokio::test]
 async fn test_get_financial_daily_wire_snake_case() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc
         .get_financial_daily(FinancialDailyRequest {
             symbols: vec!["AAPL".into()],
@@ -340,7 +409,7 @@ async fn test_get_financial_daily_wire_snake_case() {
 #[tokio::test]
 async fn test_get_financial_report_wire_snake_case() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc
         .get_financial_report(FinancialReportRequest {
             symbols: vec!["AAPL".into()],
@@ -360,10 +429,14 @@ async fn test_get_financial_report_wire_snake_case() {
 #[tokio::test]
 async fn test_get_option_chain_sends_expiry_ms() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc.get_option_chain(OptionChainRequest::new(vec![
-        OptionChainItem::from_date("AAPL", "2024-01-19").unwrap(),
-    ])).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_option_chain(OptionChainRequest::new(vec![OptionChainItem::from_date(
+            "AAPL",
+            "2024-01-19",
+        )
+        .unwrap()]))
+        .await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
@@ -376,10 +449,13 @@ async fn test_get_option_chain_sends_expiry_ms() {
 #[tokio::test]
 async fn test_get_option_quote_parses_identifier() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc.get_option_quote(OptionQuoteRequest::new(vec![
-        OptionContractItem::from_occ("AAPL 240119C00150000").unwrap(),
-    ])).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_option_quote(OptionQuoteRequest::new(vec![OptionContractItem::from_occ(
+            "AAPL 240119C00150000",
+        )
+        .unwrap()]))
+        .await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
@@ -394,13 +470,17 @@ async fn test_get_option_quote_parses_identifier() {
 #[tokio::test]
 async fn test_get_option_kline_uses_option_query_key() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc.get_option_kline(OptionKlineRequest {
-        option_query: Some(vec![
-            OptionKlineItem::from_occ("AAPL 240119C00150000", "day").unwrap(),
-        ]),
-        ..Default::default()
-    }).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_option_kline(OptionKlineRequest {
+            option_query: Some(vec![OptionKlineItem::from_occ(
+                "AAPL 240119C00150000",
+                "day",
+            )
+            .unwrap()]),
+            ..Default::default()
+        })
+        .await;
 
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
@@ -412,11 +492,15 @@ async fn test_get_option_kline_uses_option_query_key() {
 async fn test_option_chain_return_greek_value_serialized() {
     let server = mock_success_server(r#"[]"#).await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc.get_option_chain(OptionChainRequest {
-        option_basic: Some(vec![OptionChainItem::from_date("AAPL", "2024-01-19").unwrap()]),
-        return_greek_value: Some(true),
-        ..Default::default()
-    }).await;
+    let _ = qc
+        .get_option_chain(OptionChainRequest {
+            option_basic: Some(vec![
+                OptionChainItem::from_date("AAPL", "2024-01-19").unwrap()
+            ]),
+            return_greek_value: Some(true),
+            ..Default::default()
+        })
+        .await;
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
     assert_eq!(biz["return_greek_value"].as_bool().unwrap(), true);
@@ -426,20 +510,41 @@ async fn test_option_chain_return_greek_value_serialized() {
 async fn test_option_chain_filter_serialized() {
     let server = mock_success_server(r#"[]"#).await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc.get_option_chain(OptionChainRequest {
-        option_basic: Some(vec![OptionChainItem::from_date("AAPL", "2024-01-19").unwrap()]),
-        option_filter: Some(OptionChainFilter {
-            in_the_money: Some(true),
-            implied_volatility: Some(RangeF64::new(0.1, 1.0)),
+    let _ = qc
+        .get_option_chain(OptionChainRequest {
+            option_basic: Some(vec![
+                OptionChainItem::from_date("AAPL", "2024-01-19").unwrap()
+            ]),
+            option_filter: Some(OptionChainFilter {
+                in_the_money: Some(true),
+                implied_volatility: Some(RangeF64::new(0.1, 1.0)),
+                ..Default::default()
+            }),
             ..Default::default()
-        }),
-        ..Default::default()
-    }).await;
+        })
+        .await;
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
-    assert_eq!(biz["option_filter"]["in_the_money"].as_bool().unwrap(), true);
-    assert!((biz["option_filter"]["implied_volatility"]["min"].as_f64().unwrap() - 0.1).abs() < 1e-9);
-    assert!((biz["option_filter"]["implied_volatility"]["max"].as_f64().unwrap() - 1.0).abs() < 1e-9);
+    assert_eq!(
+        biz["option_filter"]["in_the_money"].as_bool().unwrap(),
+        true
+    );
+    assert!(
+        (biz["option_filter"]["implied_volatility"]["min"]
+            .as_f64()
+            .unwrap()
+            - 0.1)
+            .abs()
+            < 1e-9
+    );
+    assert!(
+        (biz["option_filter"]["implied_volatility"]["max"]
+            .as_f64()
+            .unwrap()
+            - 1.0)
+            .abs()
+            < 1e-9
+    );
 }
 
 #[tokio::test]
@@ -448,10 +553,12 @@ async fn test_option_kline_sort_dir_serialized() {
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let mut item = OptionKlineItem::from_occ("AAPL 240119C00150000", "day").unwrap();
     item.sort_dir = Some("asc".to_string());
-    let _ = qc.get_option_kline(OptionKlineRequest {
-        option_query: Some(vec![item]),
-        ..Default::default()
-    }).await;
+    let _ = qc
+        .get_option_kline(OptionKlineRequest {
+            option_query: Some(vec![item]),
+            ..Default::default()
+        })
+        .await;
     let received = server.received_requests().await.unwrap();
     let biz = biz_of(&received[0]);
     assert_eq!(biz["option_query"][0]["sort_dir"].as_str().unwrap(), "asc");
@@ -472,7 +579,7 @@ fn test_option_analysis_symbol_require_volatility_list() {
 #[tokio::test]
 async fn test_get_future_exchange_sends_sec_type_fut() {
     let server = mock_success_server(r#"[]"#).await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let _ = qc.get_future_exchange().await;
 
     let received = server.received_requests().await.unwrap();
@@ -483,7 +590,7 @@ async fn test_get_future_exchange_sends_sec_type_fut() {
 #[tokio::test]
 async fn test_quote_api_error() {
     let server = mock_error_server(2100, "行情查询失败").await;
-        let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     assert!(qc.get_market_state("US").await.is_err());
 }
 
@@ -520,10 +627,7 @@ async fn test_call_into_versioned_uses_version() {
 
 #[tokio::test]
 async fn test_call_into_items_unwraps_items_key() {
-    let server = mock_success_server(
-        r#"{"items":[{"symbol":"AAPL","latestPrice":150.0}]}"#,
-    )
-    .await;
+    let server = mock_success_server(r#"{"items":[{"symbol":"AAPL","latestPrice":150.0}]}"#).await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let briefs: Vec<Brief> = qc
         .call_into_items("brief", serde_json::json!({"symbols": ["AAPL"]}))
@@ -575,10 +679,7 @@ async fn test_call_into_list_or_object_handles_single_object() {
 
 #[tokio::test]
 async fn test_call_optional_returns_some() {
-    let server = mock_success_server(
-        r#"{"symbol":"AAPL","latestPrice":150.0}"#,
-    )
-    .await;
+    let server = mock_success_server(r#"{"symbol":"AAPL","latestPrice":150.0}"#).await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let result: Option<Brief> = qc
         .call_optional("brief", serde_json::json!({"symbols": ["AAPL"]}))

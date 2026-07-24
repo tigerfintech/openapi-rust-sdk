@@ -6,9 +6,9 @@
 //! - `#` 和 `!` 注释行
 //! - 空行忽略
 
+use crate::error::TigerError;
 use std::collections::HashMap;
 use std::fs;
-use crate::error::TigerError;
 
 /// 解析 Java properties 格式的配置文件。
 ///
@@ -33,14 +33,16 @@ pub fn parse_properties(content: &str) -> Result<HashMap<String, String>, TigerE
 
     for line in content.lines() {
         if continuation {
-            // 续行：去除前导空格后拼接
             let trimmed = line.trim_start();
-            if trimmed.ends_with('\\') {
+            if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('!') {
+                continuation = false;
+            } else if ends_with_continuation(trimmed) {
                 current_line.push_str(&trimmed[..trimmed.len() - 1]);
                 continue;
+            } else {
+                current_line.push_str(trimmed);
+                continuation = false;
             }
-            current_line.push_str(trimmed);
-            continuation = false;
         } else {
             let trimmed = line.trim();
 
@@ -54,8 +56,8 @@ pub fn parse_properties(content: &str) -> Result<HashMap<String, String>, TigerE
                 continue;
             }
 
-            // 检查续行
-            if trimmed.ends_with('\\') {
+            // 检查续行（奇数个末尾反斜杠才是续行标记）
+            if ends_with_continuation(trimmed) {
                 current_line = trimmed[..trimmed.len() - 1].to_string();
                 continuation = true;
                 continue;
@@ -81,15 +83,15 @@ pub fn parse_properties(content: &str) -> Result<HashMap<String, String>, TigerE
     Ok(props)
 }
 
-/// 将键值对序列化为 properties 格式字符串。
-///
-/// 用于属性测试的 round-trip 验证。
+/// 判断一行是否以续行标记结尾（奇数个末尾反斜杠）。
+fn ends_with_continuation(line: &str) -> bool {
+    let count = line.bytes().rev().take_while(|&b| b == b'\\').count();
+    count % 2 == 1
+}
+
+/// 将键值对序列化为 properties 格式字符串（用于属性测试 round-trip）。
 pub fn serialize_properties(props: &HashMap<String, String>) -> String {
-    let mut lines: Vec<String> = props
-        .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
-        .collect();
-    // 排序以保证确定性输出
+    let mut lines: Vec<String> = props.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
     lines.sort();
     lines.join("\n")
 }
@@ -97,7 +99,6 @@ pub fn serialize_properties(props: &HashMap<String, String>) -> String {
 /// 解析单行键值对，支持 `=` 和 `:` 分隔符。
 /// 值中可以包含 `=` 或 `:`，只按第一个分隔符拆分。
 fn parse_key_value(line: &str) -> Option<(String, String)> {
-    // 找到第一个 = 或 : 的位置
     let eq_idx = line.find('=');
     let colon_idx = line.find(':');
 
@@ -173,6 +174,32 @@ mod tests {
             props.get("private_key").unwrap(),
             "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSk"
         );
+    }
+
+    /// fix/bug-fixes: 续行后遇到注释行不应将注释内容拼入值
+    #[test]
+    fn test_parse_continuation_with_comment() {
+        let content = "key=value1\\\n# this is a comment\nkey2=value2\n";
+        let props = parse_properties(content).unwrap();
+        assert_eq!(props.get("key").unwrap(), "value1");
+        assert_eq!(props.get("key2").unwrap(), "value2");
+    }
+
+    /// fix/bug-fixes: 双反斜杠（转义的字面反斜杠）不应触发续行
+    #[test]
+    fn test_parse_escaped_backslash_no_continuation() {
+        let content = "path=C:\\\\Windows\\\\\nother=val\n";
+        let props = parse_properties(content).unwrap();
+        assert_eq!(props.get("path").unwrap(), "C:\\\\Windows\\\\");
+        assert_eq!(props.get("other").unwrap(), "val");
+    }
+
+    /// fix/bug-fixes: 单反斜杠仍触发续行
+    #[test]
+    fn test_parse_single_backslash_continuation() {
+        let content = "key=part1\\\npart2\n";
+        let props = parse_properties(content).unwrap();
+        assert_eq!(props.get("key").unwrap(), "part1part2");
     }
 
     /// 测试键值对前后空格被去除

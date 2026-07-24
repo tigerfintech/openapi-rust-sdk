@@ -352,7 +352,10 @@ pub struct OrderRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attach_type: Option<String>,
     /// 止盈订单 ID
-    #[serde(rename = "profit_taker_orderId", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "profit_taker_orderId",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub profit_taker_order_id: Option<i64>,
     /// 止盈价格
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -401,7 +404,13 @@ pub struct OrderRequest {
 // ========== 订单请求构造工具函数 ==========
 
 /// 构造市价单
-pub fn market_order(account: &str, symbol: &str, sec_type: &str, action: &str, quantity: i64) -> OrderRequest {
+pub fn market_order(
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+) -> OrderRequest {
     OrderRequest {
         account: Some(account.to_string()),
         symbol: Some(symbol.to_string()),
@@ -415,7 +424,14 @@ pub fn market_order(account: &str, symbol: &str, sec_type: &str, action: &str, q
 }
 
 /// 构造限价单
-pub fn limit_order(account: &str, symbol: &str, sec_type: &str, action: &str, quantity: i64, limit_price: f64) -> OrderRequest {
+pub fn limit_order(
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    limit_price: f64,
+) -> OrderRequest {
     OrderRequest {
         account: Some(account.to_string()),
         symbol: Some(symbol.to_string()),
@@ -430,7 +446,14 @@ pub fn limit_order(account: &str, symbol: &str, sec_type: &str, action: &str, qu
 }
 
 /// 构造止损单
-pub fn stop_order(account: &str, symbol: &str, sec_type: &str, action: &str, quantity: i64, aux_price: f64) -> OrderRequest {
+pub fn stop_order(
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    aux_price: f64,
+) -> OrderRequest {
     OrderRequest {
         account: Some(account.to_string()),
         symbol: Some(symbol.to_string()),
@@ -446,8 +469,13 @@ pub fn stop_order(account: &str, symbol: &str, sec_type: &str, action: &str, qua
 
 /// 构造止损限价单
 pub fn stop_limit_order(
-    account: &str, symbol: &str, sec_type: &str, action: &str,
-    quantity: i64, limit_price: f64, aux_price: f64,
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    limit_price: f64,
+    aux_price: f64,
 ) -> OrderRequest {
     OrderRequest {
         account: Some(account.to_string()),
@@ -465,8 +493,12 @@ pub fn stop_limit_order(
 
 /// 构造跟踪止损单
 pub fn trail_order(
-    account: &str, symbol: &str, sec_type: &str, action: &str,
-    quantity: i64, trailing_percent: f64,
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    trailing_percent: f64,
 ) -> OrderRequest {
     OrderRequest {
         account: Some(account.to_string()),
@@ -483,8 +515,12 @@ pub fn trail_order(
 
 /// 构造竞价限价单
 pub fn auction_limit_order(
-    account: &str, symbol: &str, sec_type: &str, action: &str,
-    quantity: i64, limit_price: f64,
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    limit_price: f64,
 ) -> OrderRequest {
     OrderRequest {
         account: Some(account.to_string()),
@@ -500,7 +536,13 @@ pub fn auction_limit_order(
 }
 
 /// 构造竞价市价单
-pub fn auction_market_order(account: &str, symbol: &str, sec_type: &str, action: &str, quantity: i64) -> OrderRequest {
+pub fn auction_market_order(
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+) -> OrderRequest {
     OrderRequest {
         account: Some(account.to_string()),
         symbol: Some(symbol.to_string()),
@@ -515,8 +557,14 @@ pub fn auction_market_order(account: &str, symbol: &str, sec_type: &str, action:
 
 /// 构造算法订单（TWAP/VWAP）
 pub fn algo_order(
-    account: &str, symbol: &str, sec_type: &str, action: &str,
-    quantity: i64, limit_price: f64, algo_type: &str, params: AlgoParamsRequest,
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    limit_price: f64,
+    algo_type: &str,
+    params: AlgoParamsRequest,
 ) -> OrderRequest {
     OrderRequest {
         account: Some(account.to_string()),
@@ -534,8 +582,18 @@ pub fn algo_order(
 
 /// 构造冰山单（最简参数）
 pub fn iceberg_order(
-    account: &str, symbol: &str, sec_type: &str, action: &str,
-    quantity: i64, limit_price: f64, display_size: i64,
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    limit_price: f64,
+    display_size: i64,
+    min_display_size: Option<i64>,
+    check_intervals: Option<i64>,
+    price_type: Option<&str>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
 ) -> OrderRequest {
     OrderRequest {
         account: Some(account.to_string()),
@@ -547,8 +605,174 @@ pub fn iceberg_order(
         limit_price: Some(limit_price),
         time_in_force: Some("DAY".to_string()),
         display_size: Some(display_size),
-        price_type: Some("LIMIT_PRICE".to_string()),
+        price_type: Some(price_type.unwrap_or("LIMIT_PRICE").to_string()),
+        min_display_size,
+        check_intervals,
+        start_time: start_time.filter(|&v| v > 0),
+        end_time: end_time.filter(|&v| v > 0),
         ..OrderRequest::default()
+    }
+}
+
+/// 构造按金额市价单
+pub fn market_order_by_amount(
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    amount: f64,
+) -> OrderRequest {
+    OrderRequest {
+        account: Some(account.to_string()),
+        symbol: Some(symbol.to_string()),
+        sec_type: Some(sec_type.to_string()),
+        action: Some(action.to_string()),
+        order_type: Some("MKT".to_string()),
+        total_quantity: Some(0),
+        cash_amount: Some(amount),
+        time_in_force: Some("DAY".to_string()),
+        ..OrderRequest::default()
+    }
+}
+
+/// 构造按金额限价单
+pub fn limit_order_by_amount(
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    amount: f64,
+    limit_price: f64,
+) -> OrderRequest {
+    OrderRequest {
+        account: Some(account.to_string()),
+        symbol: Some(symbol.to_string()),
+        sec_type: Some(sec_type.to_string()),
+        action: Some(action.to_string()),
+        order_type: Some("LMT".to_string()),
+        total_quantity: Some(0),
+        cash_amount: Some(amount),
+        limit_price: Some(limit_price),
+        time_in_force: Some("DAY".to_string()),
+        ..OrderRequest::default()
+    }
+}
+
+/// 构造按价差跟踪止损单（使用 aux_price 而非百分比）
+pub fn trail_order_by_price(
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    aux_price: f64,
+) -> OrderRequest {
+    OrderRequest {
+        account: Some(account.to_string()),
+        symbol: Some(symbol.to_string()),
+        sec_type: Some(sec_type.to_string()),
+        action: Some(action.to_string()),
+        order_type: Some("TRAIL".to_string()),
+        total_quantity: Some(quantity),
+        aux_price: Some(aux_price),
+        time_in_force: Some("DAY".to_string()),
+        ..OrderRequest::default()
+    }
+}
+
+/// 构造限价单 + 附加止盈/止损腿（bracket 单，最多 2 腿）
+pub fn limit_order_with_legs(
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    limit_price: f64,
+    order_legs: Vec<OrderLegRequest>,
+) -> OrderRequest {
+    assert!(order_legs.len() <= 2, "At most 2 order legs are supported");
+    OrderRequest {
+        account: Some(account.to_string()),
+        symbol: Some(symbol.to_string()),
+        sec_type: Some(sec_type.to_string()),
+        action: Some(action.to_string()),
+        order_type: Some("LMT".to_string()),
+        total_quantity: Some(quantity),
+        limit_price: Some(limit_price),
+        order_legs: Some(order_legs),
+        time_in_force: Some("DAY".to_string()),
+        ..OrderRequest::default()
+    }
+}
+
+/// 构造多腿组合单（MLEG）
+pub fn combo_order(
+    account: &str,
+    action: &str,
+    quantity: i64,
+    order_type: &str,
+    contract_legs: Vec<ContractLegRequest>,
+    combo_type: Option<&str>,
+    limit_price: Option<f64>,
+    aux_price: Option<f64>,
+    trailing_percent: Option<f64>,
+) -> OrderRequest {
+    OrderRequest {
+        account: Some(account.to_string()),
+        sec_type: Some("MLEG".to_string()),
+        action: Some(action.to_string()),
+        order_type: Some(order_type.to_string()),
+        total_quantity: Some(quantity),
+        limit_price,
+        aux_price,
+        trailing_percent,
+        contract_legs: Some(contract_legs),
+        combo_type: combo_type.map(|s| s.to_string()),
+        time_in_force: Some("DAY".to_string()),
+        ..OrderRequest::default()
+    }
+}
+
+/// 构造 OCA（One-Cancels-All）单
+pub fn oca_order(
+    account: &str,
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    quantity: i64,
+    oca_orders: Vec<Box<OrderRequest>>,
+) -> OrderRequest {
+    OrderRequest {
+        account: Some(account.to_string()),
+        symbol: Some(symbol.to_string()),
+        sec_type: Some(sec_type.to_string()),
+        action: Some(action.to_string()),
+        order_type: Some("OCA".to_string()),
+        total_quantity: Some(quantity),
+        oca_orders: Some(oca_orders),
+        time_in_force: Some("DAY".to_string()),
+        ..OrderRequest::default()
+    }
+}
+
+/// 构造多腿组合单的子腿
+pub fn contract_leg(
+    symbol: &str,
+    sec_type: &str,
+    action: &str,
+    ratio: i32,
+    expiry: Option<&str>,
+    strike: Option<&str>,
+    right: Option<&str>,
+) -> ContractLegRequest {
+    ContractLegRequest {
+        symbol: Some(symbol.to_string()),
+        sec_type: Some(sec_type.to_string()),
+        action: Some(action.to_string()),
+        ratio: Some(ratio),
+        expiry: expiry.map(|s| s.to_string()),
+        strike: strike.map(|s| s.to_string()),
+        right: right.map(|s| s.to_string()),
     }
 }
 
@@ -599,10 +823,22 @@ mod tests {
 
         // snake_case 请求体
         assert!(obj.contains_key("sec_type"), "request should use sec_type");
-        assert!(obj.contains_key("order_type"), "request should use order_type");
-        assert!(obj.contains_key("total_quantity"), "request should use total_quantity");
-        assert!(obj.contains_key("limit_price"), "request should use limit_price");
-        assert!(obj.contains_key("time_in_force"), "request should use time_in_force");
+        assert!(
+            obj.contains_key("order_type"),
+            "request should use order_type"
+        );
+        assert!(
+            obj.contains_key("total_quantity"),
+            "request should use total_quantity"
+        );
+        assert!(
+            obj.contains_key("limit_price"),
+            "request should use limit_price"
+        );
+        assert!(
+            obj.contains_key("time_in_force"),
+            "request should use time_in_force"
+        );
 
         // 不应出现 camelCase
         assert!(!obj.contains_key("secType"));
@@ -680,7 +916,7 @@ mod tests {
 
     #[test]
     fn test_iceberg_order_basic() {
-        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100);
+        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, None, None);
         assert_eq!(o.order_type, Some("ICEBERG".to_string()));
         assert_eq!(o.total_quantity, Some(1000));
         assert_eq!(o.limit_price, Some(180.0));
@@ -694,13 +930,10 @@ mod tests {
     fn test_iceberg_order_with_optional_fields() {
         let start_time: i64 = 1782293585902;
         let end_time: i64 = 1782297185902;
-        let mut o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100);
-        o.min_display_size = Some(50);
-        o.check_intervals = Some(30);
-        o.price_type = Some("LIMIT_PRICE".to_string());
-        o.start_time = Some(start_time);
-        o.end_time = Some(end_time);
-
+        let o = iceberg_order(
+            "ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100,
+            Some(50), Some(30), Some("LIMIT_PRICE"), Some(start_time), Some(end_time),
+        );
         assert_eq!(o.order_type, Some("ICEBERG".to_string()));
         assert_eq!(o.display_size, Some(100));
         assert_eq!(o.min_display_size, Some(50));
@@ -712,11 +945,7 @@ mod tests {
 
     #[test]
     fn test_iceberg_order_no_time_window() {
-        let mut o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100);
-        o.min_display_size = Some(50);
-        o.check_intervals = Some(30);
-        o.price_type = Some("ASK_PRICE".to_string());
-
+        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, Some(50), Some(30), Some("ASK_PRICE"), None, None);
         assert_eq!(o.price_type, Some("ASK_PRICE".to_string()));
         assert_eq!(o.start_time, None);
         assert_eq!(o.end_time, None);
@@ -724,11 +953,17 @@ mod tests {
 
     #[test]
     fn test_iceberg_request_serializes_snake_case() {
-        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100);
+        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, None, None);
         let json_value: serde_json::Value = serde_json::to_value(&o).unwrap();
         let obj = json_value.as_object().unwrap();
-        assert!(obj.contains_key("display_size"), "should serialize display_size");
-        assert!(!obj.contains_key("min_display_size"), "None fields should be omitted");
+        assert!(
+            obj.contains_key("display_size"),
+            "should serialize display_size"
+        );
+        assert!(
+            !obj.contains_key("min_display_size"),
+            "None fields should be omitted"
+        );
     }
 
     #[test]

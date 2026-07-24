@@ -62,11 +62,7 @@ fn valid_api_method() -> impl Strategy<Value = String> {
 
 /// 生成有效的业务参数（BTreeMap 保证键按字母序）
 fn valid_biz_params() -> impl Strategy<Value = BTreeMap<String, String>> {
-    proptest::collection::btree_map(
-        "[a-z_]{1,15}",
-        "[a-zA-Z0-9]{1,20}",
-        0..5,
-    )
+    proptest::collection::btree_map("[a-z_]{1,15}", "[a-zA-Z0-9]{1,20}", 0..5)
 }
 
 // **Validates: Requirements 4.1-4.12, 5.1-5.12**

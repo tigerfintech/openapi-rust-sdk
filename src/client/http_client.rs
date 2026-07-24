@@ -3,13 +3,13 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use super::api_request::ApiRequest;
+use super::api_response::{parse_api_response, ApiResponse};
+use super::retry::RetryPolicy;
 use crate::config::client_config::ClientConfig;
 use crate::config::token_manager::TokenManager;
 use crate::error::TigerError;
 use crate::signer::{get_sign_content, sign_with_rsa, verify_with_rsa};
-use super::api_request::ApiRequest;
-use super::api_response::{ApiResponse, parse_api_response};
-use super::retry::RetryPolicy;
 
 /// User-Agent 前缀
 const USER_AGENT_PREFIX: &str = "openapi-rust-sdk-";
@@ -102,10 +102,12 @@ impl HttpClient {
         // Auto-start token refresh when token_refresh_duration is configured
         if let Some(dur) = refresh_duration {
             if !dur.is_zero() {
-                let interval_secs = check_interval
-                    .map(|d| d.as_secs())
-                    .unwrap_or(300);
-                let interval_secs = if interval_secs == 0 { 300 } else { interval_secs };
+                let interval_secs = check_interval.map(|d| d.as_secs()).unwrap_or(300);
+                let interval_secs = if interval_secs == 0 {
+                    300
+                } else {
+                    interval_secs
+                };
                 let refresh_secs = dur.as_secs() as i64;
 
                 let mut tm = TokenManager::with_refresh_duration(None, refresh_secs);
@@ -168,15 +170,26 @@ impl HttpClient {
 
     /// Build common request parameters.
     /// `version` allows per-request API version override; defaults to DEFAULT_VERSION.
-    fn build_common_params(&self, api_method: &str, biz_content: &str, version: Option<&str>) -> BTreeMap<String, String> {
+    fn build_common_params(
+        &self,
+        api_method: &str,
+        biz_content: &str,
+        version: Option<&str>,
+    ) -> BTreeMap<String, String> {
         let config = self.config.read().unwrap();
         let mut params = BTreeMap::new();
         params.insert("tiger_id".to_string(), config.tiger_id.clone());
         params.insert("method".to_string(), api_method.to_string());
         params.insert("charset".to_string(), DEFAULT_CHARSET.to_string());
         params.insert("sign_type".to_string(), DEFAULT_SIGN_TYPE.to_string());
-        params.insert("timestamp".to_string(), chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
-        params.insert("version".to_string(), version.unwrap_or(DEFAULT_VERSION).to_string());
+        params.insert(
+            "timestamp".to_string(),
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        );
+        params.insert(
+            "version".to_string(),
+            version.unwrap_or(DEFAULT_VERSION).to_string(),
+        );
         params.insert("biz_content".to_string(), biz_content.to_string());
         if !config.device_id.is_empty() {
             params.insert("device_id".to_string(), config.device_id.clone());
@@ -193,7 +206,11 @@ impl HttpClient {
 
     /// Execute a structured API request, returning a parsed ApiResponse
     pub async fn execute_request(&self, request: &ApiRequest) -> Result<ApiResponse, TigerError> {
-        let mut params = self.build_common_params(&request.method, &request.biz_content, request.version.as_deref());
+        let mut params = self.build_common_params(
+            &request.method,
+            &request.biz_content,
+            request.version.as_deref(),
+        );
         let sign = self.sign_params(&params)?;
         params.insert("sign".to_string(), sign);
 
@@ -237,14 +254,20 @@ impl HttpClient {
     /// api_method: API method name (e.g. "market_state", "place_order")
     /// request_json: raw biz_content JSON string
     /// Returns raw response JSON string without any parsing
-    pub async fn execute(&self, api_method: &str, request_json: &str) -> Result<String, TigerError> {
+    pub async fn execute(
+        &self,
+        api_method: &str,
+        request_json: &str,
+    ) -> Result<String, TigerError> {
         // Parameter validation
         if api_method.is_empty() {
             return Err(TigerError::Config("api_method 不能为空".to_string()));
         }
         // Validate request_json is valid JSON
         if serde_json::from_str::<serde_json::Value>(request_json).is_err() {
-            return Err(TigerError::Config("request_json 不是有效的 JSON".to_string()));
+            return Err(TigerError::Config(
+                "request_json 不是有效的 JSON".to_string(),
+            ));
         }
 
         let mut params = self.build_common_params(api_method, request_json, None);
@@ -292,8 +315,12 @@ impl HttpClient {
     /// Extracts the `sign` field from the response JSON, then verifies it
     /// against the request timestamp using SHA1WithRSA.
     fn verify_response_sign(&self, body: &[u8], timestamp: &str) -> Result<(), TigerError> {
-        let json: serde_json::Value = serde_json::from_slice(body)
-            .map_err(|e| TigerError::Config(format!("failed to parse response JSON for sign verification: {}", e)))?;
+        let json: serde_json::Value = serde_json::from_slice(body).map_err(|e| {
+            TigerError::Config(format!(
+                "failed to parse response JSON for sign verification: {}",
+                e
+            ))
+        })?;
 
         if let Some(sign) = json.get("sign").and_then(|s| s.as_str()) {
             if !sign.is_empty() {
@@ -308,12 +335,17 @@ impl HttpClient {
     async fn do_http_post(&self, params: &BTreeMap<String, String>) -> Result<Vec<u8>, TigerError> {
         let (url, token) = {
             let config = self.config.read().unwrap();
-            let url = self.url_override.as_deref().unwrap_or(&config.server_url).to_string();
+            let url = self
+                .url_override
+                .as_deref()
+                .unwrap_or(&config.server_url)
+                .to_string();
             let token = config.token.clone();
             (url, token)
         };
 
-        let mut request = self.client
+        let mut request = self
+            .client
             .post(&url)
             .header("Content-Type", "application/json;charset=UTF-8")
             .header("User-Agent", Self::user_agent());
@@ -324,10 +356,7 @@ impl HttpClient {
             }
         }
 
-        let resp = request
-            .json(params)
-            .send()
-            .await?;
+        let resp = request.json(params).send().await?;
 
         let body = resp.bytes().await?;
         Ok(body.to_vec())
@@ -349,21 +378,26 @@ impl HttpClient {
 
         let code = json.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
         if code != 0 {
-            let msg = json.get("message").and_then(|v| v.as_str()).unwrap_or("unknown");
-            return Err(TigerError::Config(format!("token 刷新接口返回错误: code={}, message={}", code, msg)));
+            let msg = json
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            return Err(TigerError::Config(format!(
+                "token 刷新接口返回错误: code={}, message={}",
+                code, msg
+            )));
         }
 
-        let token = json
-            .get("data")
-            .and_then(|d| d.get("token"))
-            .and_then(|t| t.as_str())
-            .unwrap_or("");
+        let token = {
+            // data may be a JSON string (server double-encodes it) or an object
+            extract_token_owned(&json)
+        };
 
         if token.is_empty() {
             return Err(TigerError::Config("服务端返回空 token".to_string()));
         }
 
-        Ok(token.to_string())
+        Ok(token)
     }
 
     /// Refresh the token: call the API, update `config.token`, optionally persist
@@ -372,7 +406,10 @@ impl HttpClient {
     /// - If an internal TokenManager was created by `new()` (auto-start), its in-memory
     ///   token is kept in sync via `sync_token` so `should_token_refresh` stays accurate.
     /// - If `token_manager` is `Some`, the new token is written there (file + callback).
-    pub async fn refresh_token(&self, token_manager: Option<&TokenManager>) -> Result<(), TigerError> {
+    pub async fn refresh_token(
+        &self,
+        token_manager: Option<&TokenManager>,
+    ) -> Result<(), TigerError> {
         let new_token = self.query_token().await?;
         tracing::info!("[token] refreshed (new len={})", new_token.len());
 
@@ -421,7 +458,13 @@ impl HttpClient {
                 new_tm.set_token_writer(writer);
             }
             // Sync current config token into manager
-            let current_token = self.config.read().unwrap().token.clone().unwrap_or_default();
+            let current_token = self
+                .config
+                .read()
+                .unwrap()
+                .token
+                .clone()
+                .unwrap_or_default();
             if !current_token.is_empty() {
                 let _ = new_tm.set_token(&current_token);
             }
@@ -455,7 +498,28 @@ impl Drop for HttpClient {
 
 // ──────────────────────────────── free helpers ────────────────────────────────
 
-/// Standalone helper: call user_token_refresh using a config snapshot.
+/// Extract the `token` field from a `user_token_refresh` response JSON.
+///
+/// The server may double-encode `data` as a JSON string; this helper handles
+/// Extract the `token` field, handling potential double-encoded JSON string in `data`.
+/// Returns an owned String to cover the double-encoded case.
+fn extract_token_owned(json: &serde_json::Value) -> String {
+    match json.get("data") {
+        Some(serde_json::Value::String(s)) => serde_json::from_str::<serde_json::Value>(s)
+            .ok()
+            .as_ref()
+            .and_then(|d| d.get("token"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string(),
+        Some(v) => v
+            .get("token")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string(),
+        None => String::new(),
+    }
+}
 /// Used inside the spawned tokio task (avoids borrowing self).
 async fn query_token_from_config(config: &ClientConfig) -> Result<String, TigerError> {
     let client = reqwest::Client::builder()
@@ -469,7 +533,10 @@ async fn query_token_from_config(config: &ClientConfig) -> Result<String, TigerE
     params.insert("method".to_string(), METHOD_TOKEN_REFRESH.to_string());
     params.insert("charset".to_string(), DEFAULT_CHARSET.to_string());
     params.insert("sign_type".to_string(), DEFAULT_SIGN_TYPE.to_string());
-    params.insert("timestamp".to_string(), chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
+    params.insert(
+        "timestamp".to_string(),
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+    );
     params.insert("version".to_string(), DEFAULT_VERSION.to_string());
     params.insert("biz_content".to_string(), biz_content);
     if !config.device_id.is_empty() {
@@ -483,7 +550,10 @@ async fn query_token_from_config(config: &ClientConfig) -> Result<String, TigerE
     let mut request = client
         .post(&config.server_url)
         .header("Content-Type", "application/json;charset=UTF-8")
-        .header("User-Agent", format!("{}{}", USER_AGENT_PREFIX, crate::VERSION));
+        .header(
+            "User-Agent",
+            format!("{}{}", USER_AGENT_PREFIX, crate::VERSION),
+        );
 
     if let Some(ref token) = config.token {
         if !token.is_empty() {
@@ -491,9 +561,14 @@ async fn query_token_from_config(config: &ClientConfig) -> Result<String, TigerE
         }
     }
 
-    let resp = request.json(&params).send().await
+    let resp = request
+        .json(&params)
+        .send()
+        .await
         .map_err(|e| TigerError::Config(format!("token 刷新 HTTP 请求失败: {}", e)))?;
-    let body = resp.bytes().await
+    let body = resp
+        .bytes()
+        .await
         .map_err(|e| TigerError::Config(format!("读取 token 刷新响应失败: {}", e)))?;
 
     let json: serde_json::Value = serde_json::from_slice(&body)
@@ -501,15 +576,17 @@ async fn query_token_from_config(config: &ClientConfig) -> Result<String, TigerE
 
     let code = json.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
     if code != 0 {
-        let msg = json.get("message").and_then(|v| v.as_str()).unwrap_or("unknown");
-        return Err(TigerError::Config(format!("token 刷新接口返回错误: code={}, message={}", code, msg)));
+        let msg = json
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        return Err(TigerError::Config(format!(
+            "token 刷新接口返回错误: code={}, message={}",
+            code, msg
+        )));
     }
 
-    let token = json
-        .get("data")
-        .and_then(|d| d.get("token"))
-        .and_then(|t| t.as_str())
-        .unwrap_or("");
+    let token = extract_token_owned(&json);
 
     if token.is_empty() {
         return Err(TigerError::Config("服务端返回空 token".to_string()));

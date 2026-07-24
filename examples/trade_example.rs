@@ -18,12 +18,11 @@ use tigeropen::config::ClientConfig;
 use tigeropen::model::order::limit_order;
 use tigeropen::model::trade_requests::{
     AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, DerivativeContractsRequest,
-    EstimateTradableQuantityRequest, FundDetailsRequest, FundingHistoryRequest,
-    GetOrderRequest, ManagedAccountsRequest, OptionExerciseCheckRequest,
-    OptionExercisePositionRequest, OptionExerciseRecordsRequest,
-    OrderTransactionsRequest, OrdersRequest,
-    PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest,
-    PositionsRequest, SegmentFundRequest,
+    EstimateTradableQuantityRequest, FundDetailsRequest, FundingHistoryRequest, GetOrderRequest,
+    ManagedAccountsRequest, OptionExerciseCheckRequest, OptionExercisePositionRequest,
+    OptionExerciseRecordsRequest, OrderTransactionsRequest, OrdersRequest,
+    PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest, PositionsRequest,
+    SegmentFundRequest,
 };
 use tigeropen::trade::TradeClient;
 
@@ -42,19 +41,31 @@ struct RunResult {
 fn ok(results: &mut Vec<RunResult>, name: &str, note: impl Into<String>) {
     let note = note.into();
     println!("[ OK ] {:<50} {}", name, note);
-    results.push(RunResult { name: name.into(), outcome: Outcome::Pass, detail: note });
+    results.push(RunResult {
+        name: name.into(),
+        outcome: Outcome::Pass,
+        detail: note,
+    });
 }
 
 fn fail(results: &mut Vec<RunResult>, name: &str, err: impl std::fmt::Display) {
     let detail = format!("{}", err);
     println!("[FAIL] {:<50} {}", name, detail);
-    results.push(RunResult { name: name.into(), outcome: Outcome::Fail, detail });
+    results.push(RunResult {
+        name: name.into(),
+        outcome: Outcome::Fail,
+        detail,
+    });
 }
 
 fn skip(results: &mut Vec<RunResult>, name: &str, reason: impl Into<String>) {
     let reason = reason.into();
     println!("[SKIP] {:<50} {}", name, reason);
-    results.push(RunResult { name: name.into(), outcome: Outcome::Skip, detail: reason });
+    results.push(RunResult {
+        name: name.into(),
+        outcome: Outcome::Skip,
+        detail: reason,
+    });
 }
 
 fn print_summary(results: &[RunResult]) {
@@ -67,7 +78,13 @@ fn print_summary(results: &[RunResult]) {
         }
     }
     println!("\n================ SUMMARY ================");
-    println!("PASS={}  FAIL={}  SKIP={}  TOTAL={}", p, f, s, results.len());
+    println!(
+        "PASS={}  FAIL={}  SKIP={}  TOTAL={}",
+        p,
+        f,
+        s,
+        results.len()
+    );
     if f > 0 {
         println!("\nFailures:");
         for r in results {
@@ -175,10 +192,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match tc.get_positions(PositionsRequest::default()).await {
         Ok(ps) => {
-            let total_mv: f64 = ps
-                .iter()
-                .map(|p| p.market_value.unwrap_or(0.0))
-                .sum();
+            let total_mv: f64 = ps.iter().map(|p| p.market_value.unwrap_or(0.0)).sum();
             ok(
                 &mut results,
                 "Positions",
@@ -198,7 +212,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "ActiveOrders", e),
     }
     match tc.get_inactive_orders(OrdersRequest::default()).await {
-        Ok(os) => ok(&mut results, "InactiveOrders", format!("count={}", os.len())),
+        Ok(os) => ok(
+            &mut results,
+            "InactiveOrders",
+            format!("count={}", os.len()),
+        ),
         Err(e) => fail(&mut results, "InactiveOrders", e),
     }
     let now = now_ms();
@@ -235,7 +253,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .await
         {
-            Ok(Some(o)) => ok(&mut results, &name, format!("symbol={} status={:?}", o.symbol, o.status)),
+            Ok(Some(o)) => ok(
+                &mut results,
+                &name,
+                format!("symbol={} status={:?}", o.symbol, o.status),
+            ),
             Ok(None) => ok(&mut results, &name, "(empty)"),
             Err(e) => fail(&mut results, &name, e),
         }
@@ -316,8 +338,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== v0.4.0 新增 smoke tests ===");
 
     // ManagedAccounts
-    match tc.get_managed_accounts(ManagedAccountsRequest::default()).await {
-        Ok(accs) => ok(&mut results, "ManagedAccounts", format!("count={}", accs.len())),
+    match tc
+        .get_managed_accounts(ManagedAccountsRequest::default())
+        .await
+    {
+        Ok(accs) => ok(
+            &mut results,
+            "ManagedAccounts",
+            format!("count={}", accs.len()),
+        ),
         Err(e) => fail(&mut results, "ManagedAccounts", e),
     }
 
@@ -331,12 +360,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await
     {
-        Ok(items) => ok(&mut results, "AnalyticsAsset", format!("count={}", items.len())),
+        Ok(items) => ok(
+            &mut results,
+            "AnalyticsAsset",
+            format!("count={}", items.len()),
+        ),
         Err(e) => fail(&mut results, "AnalyticsAsset", e),
     }
 
     // AggregateAssets
-    match tc.get_aggregate_assets(AggregateAssetsRequest::default()).await {
+    match tc
+        .get_aggregate_assets(AggregateAssetsRequest::default())
+        .await
+    {
         Ok(Some(a)) => ok(
             &mut results,
             "AggregateAssets",
@@ -361,7 +397,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(Some(q)) => ok(
             &mut results,
             "EstimateTradableQuantity",
-            format!("tradable={} cashBuy={}", q.tradable_quantity, q.max_cash_buy_quantity),
+            format!(
+                "tradable={} cashBuy={}",
+                q.tradable_quantity, q.max_cash_buy_quantity
+            ),
         ),
         Ok(None) => ok(&mut results, "EstimateTradableQuantity", "(empty)"),
         Err(e) => fail(&mut results, "EstimateTradableQuantity", e),
@@ -377,7 +416,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await
     {
-        Ok(funds) => ok(&mut results, "SegmentFundAvailable", format!("count={}", funds.len())),
+        Ok(funds) => ok(
+            &mut results,
+            "SegmentFundAvailable",
+            format!("count={}", funds.len()),
+        ),
         Err(e) => fail(&mut results, "SegmentFundAvailable", e),
     }
 
@@ -389,7 +432,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await
     {
-        Ok(items) => ok(&mut results, "SegmentFundHistory", format!("count={}", items.len())),
+        Ok(items) => ok(
+            &mut results,
+            "SegmentFundHistory",
+            format!("count={}", items.len()),
+        ),
         Err(e) => fail(&mut results, "SegmentFundHistory", e),
     }
 
@@ -443,7 +490,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GetOptionExercisePositions(Exercise)",
             format!("rows={} pageCount={}", r.items.len(), r.page_count),
         ),
-        Ok(None) => ok(&mut results, "GetOptionExercisePositions(Exercise)", "(empty)"),
+        Ok(None) => ok(
+            &mut results,
+            "GetOptionExercisePositions(Exercise)",
+            "(empty)",
+        ),
         Err(e) => fail(&mut results, "GetOptionExercisePositions(Exercise)", e),
     }
 
@@ -464,7 +515,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             r.items
         }
         Ok(None) => {
-            ok(&mut results, "GetOptionExercisePositions(Expire)", "(empty)");
+            ok(
+                &mut results,
+                "GetOptionExercisePositions(Expire)",
+                "(empty)",
+            );
             vec![]
         }
         Err(e) => {
@@ -511,7 +566,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(e) => fail(&mut results, "CheckOptionExercise", e),
         }
     } else {
-        skip(&mut results, "CheckOptionExercise", "no exercisable positions");
+        skip(
+            &mut results,
+            "CheckOptionExercise",
+            "no exercisable positions",
+        );
     }
 
     // ── low-level call_* API ──────────────────────────────────────────────
@@ -566,7 +625,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(items) => {
             if items.is_empty() {
-                skip(&mut results, "GetDerivativeContracts", "no contracts for 20260619");
+                skip(
+                    &mut results,
+                    "GetDerivativeContracts",
+                    "no contracts for 20260619",
+                );
             } else {
                 let first = &items[0];
                 ok(
@@ -609,12 +672,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     match tc
-        .get_funding_history(FundingHistoryRequest { ..Default::default() })
+        .get_funding_history(FundingHistoryRequest {
+            ..Default::default()
+        })
         .await
     {
         Ok(items) => {
             if items.is_empty() {
-                skip(&mut results, "GetFundingHistory", "no transfer_fund records");
+                skip(
+                    &mut results,
+                    "GetFundingHistory",
+                    "no transfer_fund records",
+                );
             } else {
                 ok(
                     &mut results,
@@ -638,7 +707,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(items) => {
             if items.is_empty() {
-                skip(&mut results, "GetSegmentFundAvailable", "no segment_fund_available items");
+                skip(
+                    &mut results,
+                    "GetSegmentFundAvailable",
+                    "no segment_fund_available items",
+                );
             } else {
                 let first = &items[0];
                 ok(
@@ -657,14 +730,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     match tc
-        .get_segment_fund_history(SegmentFundRequest { ..Default::default() })
+        .get_segment_fund_history(SegmentFundRequest {
+            ..Default::default()
+        })
         .await
     {
         Ok(items) => {
             if items.is_empty() {
-                skip(&mut results, "GetSegmentFundHistory", "no segment_fund_history items");
+                skip(
+                    &mut results,
+                    "GetSegmentFundHistory",
+                    "no segment_fund_history items",
+                );
             } else {
-                ok(&mut results, "GetSegmentFundHistory", format!("count={}", items.len()));
+                ok(
+                    &mut results,
+                    "GetSegmentFundHistory",
+                    format!("count={}", items.len()),
+                );
             }
         }
         Err(e) => fail(&mut results, "GetSegmentFundHistory", e),
@@ -685,7 +768,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if items.is_empty() {
                 skip(&mut results, "GetPositionTransferRecords", "no records");
             } else {
-                ok(&mut results, "GetPositionTransferRecords", format!("count={}", items.len()));
+                ok(
+                    &mut results,
+                    "GetPositionTransferRecords",
+                    format!("count={}", items.len()),
+                );
             }
         }
         Err(e) => fail(&mut results, "GetPositionTransferRecords", e),
@@ -701,7 +788,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(items) => {
             if items.is_empty() {
-                skip(&mut results, "GetPositionTransferExternalRecords", "no records");
+                skip(
+                    &mut results,
+                    "GetPositionTransferExternalRecords",
+                    "no records",
+                );
             } else {
                 ok(
                     &mut results,

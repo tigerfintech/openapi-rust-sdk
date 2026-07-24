@@ -12,15 +12,15 @@
 //! - **业务层**（quote/trade）：QuoteClient、TradeClient
 //! - **推送层**（push）：PushClient
 
-pub mod error;
-pub mod model;
-pub mod config;
-pub mod signer;
 pub mod client;
-pub mod quote;
-pub mod trade;
-pub mod push;
+pub mod config;
+pub mod error;
 pub mod logger;
+pub mod model;
+pub mod push;
+pub mod quote;
+pub mod signer;
+pub mod trade;
 
 /// SDK 版本号（与 Cargo.toml 保持一致）
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

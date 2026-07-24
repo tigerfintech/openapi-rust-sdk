@@ -14,15 +14,15 @@ use prost::Message;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{mpsc, Notify};
 
-use crate::config::ClientConfig;
-use crate::signer::sign_with_rsa;
 use super::callbacks::Callbacks;
 use super::pb;
-use super::pb::socket_common::{Command, DataType};
 use super::pb::push_data::Body;
+use super::pb::socket_common::{Command, DataType};
 use super::proto_message;
 use super::push_message::SubjectType;
-use super::varint::{encode_varint32, decode_varint32};
+use super::varint::{decode_varint32, encode_varint32};
+use crate::config::ClientConfig;
+use crate::signer::sign_with_rsa;
 
 /// Default push server address (raw TCP + TLS)
 const DEFAULT_PUSH_URL: &str = "openapi.tigerfintech.com:9883";
@@ -95,13 +95,16 @@ impl PushClient {
             config,
             push_url: opts.push_url.unwrap_or_else(|| DEFAULT_PUSH_URL.into()),
             heartbeat_interval: Duration::from_secs(
-                opts.heartbeat_interval_secs.unwrap_or(DEFAULT_HEARTBEAT_INTERVAL_SECS),
+                opts.heartbeat_interval_secs
+                    .unwrap_or(DEFAULT_HEARTBEAT_INTERVAL_SECS),
             ),
             reconnect_interval: Duration::from_secs(
-                opts.reconnect_interval_secs.unwrap_or(DEFAULT_RECONNECT_INTERVAL_SECS),
+                opts.reconnect_interval_secs
+                    .unwrap_or(DEFAULT_RECONNECT_INTERVAL_SECS),
             ),
             connect_timeout: Duration::from_secs(
-                opts.connect_timeout_secs.unwrap_or(DEFAULT_CONNECT_TIMEOUT_SECS),
+                opts.connect_timeout_secs
+                    .unwrap_or(DEFAULT_CONNECT_TIMEOUT_SECS),
             ),
             auto_reconnect: opts.auto_reconnect.unwrap_or(true),
             state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
@@ -193,8 +196,7 @@ impl PushClient {
         market: Option<&str>,
     ) -> bool {
         let data_type = proto_message::subject_to_data_type(subject);
-        let request =
-            proto_message::build_unsubscribe_message(data_type, symbols, account, market);
+        let request = proto_message::build_unsubscribe_message(data_type, symbols, account, market);
         self.send_request(&request)
     }
 
@@ -431,7 +433,10 @@ impl PushClient {
     pub fn subscribe_cc(&self, symbols: &[&str]) -> Result<(), crate::error::TigerError> {
         let symbols_str = symbols.join(",");
         self.subscribe(&SubjectType::Cc, Some(&symbols_str), None, None);
-        self.add_subscription(SubjectType::Cc, &symbols.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        self.add_subscription(
+            SubjectType::Cc,
+            &symbols.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+        );
         Ok(())
     }
 
@@ -517,8 +522,8 @@ pub async fn connect(client: &Arc<PushClient>) -> Result<(), String> {
         .split(':')
         .next()
         .unwrap_or("openapi.tigerfintech.com");
-    let server_name = rustls::ServerName::try_from(host)
-        .map_err(|e| format!("invalid server name: {}", e))?;
+    let server_name =
+        rustls::ServerName::try_from(host).map_err(|e| format!("invalid server name: {}", e))?;
 
     let tls_stream = match tls_connector.connect(server_name, tcp_stream).await {
         Ok(stream) => stream,
