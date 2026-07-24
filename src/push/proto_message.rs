@@ -167,12 +167,7 @@ mod tests {
 
     #[test]
     fn test_build_subscribe_message() {
-        let msg = build_subscribe_message(
-            DataType::Quote as i32,
-            Some("AAPL,GOOG"),
-            None,
-            None,
-        );
+        let msg = build_subscribe_message(DataType::Quote as i32, Some("AAPL,GOOG"), None, None);
         assert_eq!(msg.command, Command::Subscribe as i32);
         assert!(msg.id > 0);
         assert!(msg.connect.is_none());
@@ -186,12 +181,8 @@ mod tests {
 
     #[test]
     fn test_build_unsubscribe_message() {
-        let msg = build_unsubscribe_message(
-            DataType::Asset as i32,
-            None,
-            Some("test_account"),
-            None,
-        );
+        let msg =
+            build_unsubscribe_message(DataType::Asset as i32, None, Some("test_account"), None);
         assert_eq!(msg.command, Command::Unsubscribe as i32);
         assert!(msg.id > 0);
 
@@ -221,21 +212,63 @@ mod tests {
 
     #[test]
     fn test_subject_to_data_type_mapping() {
-        assert_eq!(subject_to_data_type(&SubjectType::Quote), DataType::Quote as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Option), DataType::Option as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Future), DataType::Future as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Depth), DataType::QuoteDepth as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Tick), DataType::TradeTick as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::FullTick), DataType::TradeTick as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Asset), DataType::Asset as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Position), DataType::Position as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Order), DataType::OrderStatus as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Transaction), DataType::OrderTransaction as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::StockTop), DataType::StockTop as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::OptionTop), DataType::OptionTop as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Kline), DataType::Kline as i32);
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Quote),
+            DataType::Quote as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Option),
+            DataType::Option as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Future),
+            DataType::Future as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Depth),
+            DataType::QuoteDepth as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Tick),
+            DataType::TradeTick as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::FullTick),
+            DataType::TradeTick as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Asset),
+            DataType::Asset as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Position),
+            DataType::Position as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Order),
+            DataType::OrderStatus as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Transaction),
+            DataType::OrderTransaction as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::StockTop),
+            DataType::StockTop as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::OptionTop),
+            DataType::OptionTop as i32
+        );
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Kline),
+            DataType::Kline as i32
+        );
         assert_eq!(subject_to_data_type(&SubjectType::Cc), DataType::Cc as i32);
-        assert_eq!(subject_to_data_type(&SubjectType::Market), DataType::Quote as i32);
+        assert_eq!(
+            subject_to_data_type(&SubjectType::Market),
+            DataType::Quote as i32
+        );
     }
 
     // ===== Property-based tests using proptest =====

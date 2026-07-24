@@ -34,6 +34,11 @@ fn test_parse_invalid_json() {
     let body = b"not json";
     let result = parse_api_response(body);
     assert!(result.is_err());
+    // fix/bug-fixes: 解析失败应返回 TigerError::Parse，而非 TigerError::Config
+    match result.unwrap_err() {
+        TigerError::Parse(_) => {}
+        other => panic!("JSON 解析失败应返回 Parse 错误，实际: {:?}", other),
+    }
 }
 
 #[test]

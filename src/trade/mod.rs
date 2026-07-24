@@ -25,7 +25,7 @@ use crate::model::trade_requests::{
     AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, DerivativeContractsRequest,
     EstimateTradableQuantityRequest, ForexOrderRequest, FundDetailsRequest, FundingHistoryRequest,
     GetOrderRequest, ManagedAccountsRequest, OptionExerciseCancelRequest,
-    OptionExerciseCheckRequest, OptionExerciseRecordsRequest, OptionExercisePositionRequest,
+    OptionExerciseCheckRequest, OptionExercisePositionRequest, OptionExerciseRecordsRequest,
     OptionExerciseSubmitRequest, OrderTransactionsRequest, OrdersRequest,
     PositionTransferDetailRequest, PositionTransferExternalRecordsRequest,
     PositionTransferRecordsRequest, PositionTransferRequest, PositionsRequest, SegmentFundRequest,
@@ -45,7 +45,11 @@ impl TradeClient {
         let account = config.account.clone();
         let secret_key = config.secret_key.clone();
         let http_client = HttpClient::new(config);
-        Self { http_client, account, secret_key }
+        Self {
+            http_client,
+            account,
+            secret_key,
+        }
     }
 
     /// 使用已有的 HttpClient 创建交易客户端。
@@ -70,14 +74,83 @@ impl TradeClient {
         }
     }
 
+    // ── Token management ──────────────────────────────────────────────────────
+
+    /// Call `user_token_refresh` and return the new token string.
+    /// Read-only: does NOT update the stored config token.
+    /// Use [`refresh_token`] to also update config and optionally persist.
+    pub async fn query_token(&self) -> Result<String, TigerError> {
+        self.http_client.query_token().await
+    }
+
+    /// Refresh the token: call the API, update the in-memory config token, and
+    /// optionally persist via `token_manager` (file + writer callback).
+    pub async fn refresh_token(
+        &self,
+        token_manager: Option<&crate::config::TokenManager>,
+    ) -> Result<(), TigerError> {
+        self.http_client.refresh_token(token_manager).await
+    }
+
+    /// Start background token auto-refresh. Returns an `Arc<TokenManager>` that can
+    /// be used to stop the task via `tm.stop_auto_refresh()`.
+    ///
+    /// - `refresh_duration_secs` — refresh threshold in seconds (minimum 30; negative values are clamped to 30)
+    /// - `check_interval_secs` — how often to poll (default 300 s / 5 min)
+    /// - `token_writer` — optional callback invoked after each successful refresh
+    #[must_use = "retain the TokenManager handle to call stop_auto_refresh() when done; the background task runs until explicitly stopped"]
+    pub fn start_token_auto_refresh(
+        &self,
+        refresh_duration_secs: i64,
+        check_interval_secs: u64,
+        token_writer: Option<Box<dyn Fn(String) + Send + Sync + 'static>>,
+    ) -> std::sync::Arc<crate::config::TokenManager> {
+        self.http_client.start_token_auto_refresh(
+            None,
+            refresh_duration_secs,
+            check_interval_secs,
+            token_writer,
+        )
+    }
+
+    /// Serialize params to JSON, injecting `secret_key` from config if the field is absent
+    /// or null in the serialized output (institution accounts require it on every call).
+    fn inject_secret_key_json<P: Serialize>(&self, params: P) -> Result<String, TigerError> {
+        let mut value = serde_json::to_value(&params)
+            .map_err(|e| TigerError::Config(format!("serialize biz params failed: {}", e)))?;
+        if let Some(ref sk) = self.secret_key {
+            if let Some(obj) = value.as_object_mut() {
+                let has_key = obj
+                    .get("secret_key")
+                    .map(|v| match v {
+                        serde_json::Value::String(s) => !s.is_empty(),
+                        serde_json::Value::Null => false,
+                        _ => true, // number/bool/object — treat as explicitly set
+                    })
+                    .unwrap_or(false);
+                if !has_key {
+                    obj.insert(
+                        "secret_key".to_string(),
+                        serde_json::Value::String(sk.clone()),
+                    );
+                }
+            }
+        }
+        serde_json::to_string(&value)
+            .map_err(|e| TigerError::Config(format!("serialize biz params failed: {}", e)))
+    }
+
     /// call_into 的 Option 版本，没数据时返回 None 而不是 T::default()。
-    pub async fn call_optional<T, P>(&self, method: &str, params: P) -> Result<Option<T>, TigerError>
+    pub async fn call_optional<T, P>(
+        &self,
+        method: &str,
+        params: P,
+    ) -> Result<Option<T>, TigerError>
     where
         T: serde::de::DeserializeOwned,
         P: Serialize,
     {
-        let biz = serde_json::to_string(&params)
-            .map_err(|e| TigerError::Config(format!("serialize biz params failed: {}", e)))?;
+        let biz = self.inject_secret_key_json(params)?;
         let req = ApiRequest::new(method, biz);
         let resp = self.http_client.execute_request(&req).await?;
         match resp.data {
@@ -96,11 +169,12 @@ impl TradeClient {
         T: serde::de::DeserializeOwned,
         P: Serialize,
     {
-        let biz = serde_json::to_string(&params)
-            .map_err(|e| TigerError::Config(format!("serialize biz params failed: {}", e)))?;
+        let biz = self.inject_secret_key_json(params)?;
         let req = ApiRequest::new(method, biz);
         let resp = self.http_client.execute_request(&req).await?;
-        let Some(v) = resp.data else { return Ok(Vec::new()); };
+        let Some(v) = resp.data else {
+            return Ok(Vec::new());
+        };
         if v.is_null() {
             return Ok(Vec::new());
         }
@@ -129,7 +203,11 @@ impl TradeClient {
     // ========== 合约查询 ==========
 
     /// 查询单个合约
-    pub async fn get_contract(&self, symbol: &str, sec_type: &str) -> Result<Vec<Contract>, TigerError> {
+    pub async fn get_contract(
+        &self,
+        symbol: &str,
+        sec_type: &str,
+    ) -> Result<Vec<Contract>, TigerError> {
         self.call_into_items(
             "contract",
             serde_json::json!({
@@ -196,9 +274,6 @@ impl TradeClient {
     ) -> Result<Option<PlaceOrderResult>, TigerError> {
         let mut order = order;
         order.account = Some(self.account.clone());
-        if order.secret_key.is_none() {
-            order.secret_key = self.secret_key.clone();
-        }
         self.call_optional("place_order", order).await
     }
 
@@ -211,9 +286,6 @@ impl TradeClient {
         let mut order = order;
         order.account = Some(self.account.clone());
         order.id = Some(id);
-        if order.secret_key.is_none() {
-            order.secret_key = self.secret_key.clone();
-        }
         self.call_optional("modify_order", order).await
     }
 
@@ -223,12 +295,13 @@ impl TradeClient {
         struct CancelParams {
             account: String,
             id: i64,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            secret_key: Option<String>,
         }
         self.call_optional(
             "cancel_order",
-            CancelParams { account: self.account.clone(), id, secret_key: self.secret_key.clone() },
+            CancelParams {
+                account: self.account.clone(),
+                id,
+            },
         )
         .await
     }
@@ -317,7 +390,10 @@ impl TradeClient {
     }
 
     /// 查询综合账户资产（不裹 items）
-    pub async fn get_prime_assets(&self, req: AssetsRequest) -> Result<Option<PrimeAsset>, TigerError> {
+    pub async fn get_prime_assets(
+        &self,
+        req: AssetsRequest,
+    ) -> Result<Option<PrimeAsset>, TigerError> {
         let mut req = req;
         if req.account.is_none() {
             req.account = Some(self.account.clone());
@@ -520,7 +596,8 @@ impl TradeClient {
         if req.account_id.is_none() {
             req.account_id = Some(self.account.clone());
         }
-        self.call_into_items("position_transfer_external_records", req).await
+        self.call_into_items("position_transfer_external_records", req)
+            .await
     }
 
     /// 行权检验：预估行权/作废后正股持仓变化（wire: option_exercise_check）
@@ -530,9 +607,6 @@ impl TradeClient {
     ) -> Result<Option<OptionExerciseCheckResult>, TigerError> {
         if req.account.is_none() {
             req.account = Some(self.account.clone());
-        }
-        if req.secret_key.is_none() {
-            req.secret_key = self.secret_key.clone();
         }
         self.call_optional("option_exercise_check", req).await
     }
@@ -544,9 +618,6 @@ impl TradeClient {
     ) -> Result<Option<OptionExercisePositionPageResult>, TigerError> {
         if req.account.is_none() {
             req.account = Some(self.account.clone());
-        }
-        if req.secret_key.is_none() {
-            req.secret_key = self.secret_key.clone();
         }
         self.call_optional("option_exercise_position", req).await
     }
@@ -561,9 +632,6 @@ impl TradeClient {
         if req.account.is_none() {
             req.account = Some(self.account.clone());
         }
-        if req.secret_key.is_none() {
-            req.secret_key = self.secret_key.clone();
-        }
         self.call_optional("option_exercise_submit", req).await
     }
 
@@ -574,9 +642,6 @@ impl TradeClient {
     ) -> Result<Option<OptionExerciseRecordPageResult>, TigerError> {
         if req.account.is_none() {
             req.account = Some(self.account.clone());
-        }
-        if req.secret_key.is_none() {
-            req.secret_key = self.secret_key.clone();
         }
         self.call_optional("option_exercise_record", req).await
     }
@@ -589,13 +654,9 @@ impl TradeClient {
         if req.account.is_none() {
             req.account = Some(self.account.clone());
         }
-        if req.secret_key.is_none() {
-            req.secret_key = self.secret_key.clone();
-        }
         self.call_optional("option_exercise_cancel", req).await
     }
 }
-
 
 #[cfg(test)]
 mod tests;

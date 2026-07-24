@@ -2,8 +2,8 @@
 //!
 //! 所有字段使用 snake_case（与 wire 协议直接对齐），`Option<T>` + `skip_serializing_if` 跳过空值。
 
-use serde::Serialize;
 use crate::error::TigerError;
+use serde::Serialize;
 
 // ============================================================================
 // 股票基础查询
@@ -289,7 +289,10 @@ pub struct OptionChainItem {
 
 impl OptionChainItem {
     pub fn new(symbol: impl Into<String>, expiry: i64) -> Self {
-        Self { symbol: symbol.into(), expiry }
+        Self {
+            symbol: symbol.into(),
+            expiry,
+        }
     }
 
     pub fn from_date(symbol: impl Into<String>, date: &str) -> Result<Self, TigerError> {
@@ -299,7 +302,11 @@ impl OptionChainItem {
         Ok(Self { symbol, expiry })
     }
 
-    pub fn from_date_tz(symbol: impl Into<String>, date: &str, timezone: &str) -> Result<Self, TigerError> {
+    pub fn from_date_tz(
+        symbol: impl Into<String>,
+        date: &str,
+        timezone: &str,
+    ) -> Result<Self, TigerError> {
         let symbol = symbol.into();
         let expiry = date_to_expiry_ms(date, timezone)?;
         Ok(Self { symbol, expiry })
@@ -317,7 +324,10 @@ pub struct RangeF64 {
 
 impl RangeF64 {
     pub fn new(min: f64, max: f64) -> Self {
-        Self { min: Some(min), max: Some(max) }
+        Self {
+            min: Some(min),
+            max: Some(max),
+        }
     }
 }
 
@@ -332,7 +342,10 @@ pub struct RangeI32 {
 
 impl RangeI32 {
     pub fn new(min: i32, max: i32) -> Self {
-        Self { min: Some(min), max: Some(max) }
+        Self {
+            min: Some(min),
+            max: Some(max),
+        }
     }
 }
 
@@ -381,7 +394,10 @@ pub struct OptionChainRequest {
 
 impl OptionChainRequest {
     pub fn new(items: Vec<OptionChainItem>) -> Self {
-        Self { option_basic: Some(items), ..Default::default() }
+        Self {
+            option_basic: Some(items),
+            ..Default::default()
+        }
     }
 }
 
@@ -400,21 +416,41 @@ pub struct OptionContractItem {
 }
 
 impl OptionContractItem {
-    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into() }
+    pub fn new(
+        symbol: impl Into<String>,
+        expiry: i64,
+        right: impl Into<String>,
+        strike: impl Into<String>,
+    ) -> Self {
+        Self {
+            symbol: symbol.into(),
+            expiry,
+            right: right.into(),
+            strike: strike.into(),
+        }
     }
 
     pub fn from_occ(identifier: &str) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let tz = infer_option_timezone(&c.symbol);
         let expiry = date_to_expiry_ms(&c.expiry_date, tz)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike })
+        Ok(Self {
+            symbol: c.symbol,
+            expiry,
+            right: c.right,
+            strike: c.strike,
+        })
     }
 
     pub fn from_occ_tz(identifier: &str, timezone: &str) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let expiry = date_to_expiry_ms(&c.expiry_date, timezone)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike })
+        Ok(Self {
+            symbol: c.symbol,
+            expiry,
+            right: c.right,
+            strike: c.strike,
+        })
     }
 }
 
@@ -431,7 +467,11 @@ pub struct OptionQuoteRequest {
 
 impl OptionQuoteRequest {
     pub fn new(items: Vec<OptionContractItem>) -> Self {
-        Self { option_basic: Some(items), market: None, lang: None }
+        Self {
+            option_basic: Some(items),
+            market: None,
+            lang: None,
+        }
     }
 }
 
@@ -454,21 +494,61 @@ pub struct OptionKlineItem {
 }
 
 impl OptionKlineItem {
-    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: impl Into<String>, period: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into(), period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None }
+    pub fn new(
+        symbol: impl Into<String>,
+        expiry: i64,
+        right: impl Into<String>,
+        strike: impl Into<String>,
+        period: impl Into<String>,
+    ) -> Self {
+        Self {
+            symbol: symbol.into(),
+            expiry,
+            right: right.into(),
+            strike: strike.into(),
+            period: period.into(),
+            begin_time: None,
+            end_time: None,
+            limit: None,
+            sort_dir: None,
+        }
     }
 
     pub fn from_occ(identifier: &str, period: impl Into<String>) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let tz = infer_option_timezone(&c.symbol);
         let expiry = date_to_expiry_ms(&c.expiry_date, tz)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None })
+        Ok(Self {
+            symbol: c.symbol,
+            expiry,
+            right: c.right,
+            strike: c.strike,
+            period: period.into(),
+            begin_time: None,
+            end_time: None,
+            limit: None,
+            sort_dir: None,
+        })
     }
 
-    pub fn from_occ_tz(identifier: &str, period: impl Into<String>, timezone: &str) -> Result<Self, TigerError> {
+    pub fn from_occ_tz(
+        identifier: &str,
+        period: impl Into<String>,
+        timezone: &str,
+    ) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let expiry = date_to_expiry_ms(&c.expiry_date, timezone)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None })
+        Ok(Self {
+            symbol: c.symbol,
+            expiry,
+            right: c.right,
+            strike: c.strike,
+            period: period.into(),
+            begin_time: None,
+            end_time: None,
+            limit: None,
+            sort_dir: None,
+        })
     }
 }
 
@@ -492,15 +572,21 @@ pub(crate) fn date_to_expiry_ms(date: &str, timezone: &str) -> Result<i64, Tiger
     use chrono::NaiveDate;
     use chrono_tz::Tz;
 
-    let tz: Tz = timezone.parse().map_err(|_| {
-        TigerError::Config(format!("unknown timezone: {:?}", timezone))
-    })?;
+    let tz: Tz = timezone
+        .parse()
+        .map_err(|_| TigerError::Config(format!("unknown timezone: {:?}", timezone)))?;
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|e| {
-        TigerError::Config(format!("invalid date {:?}: expected YYYY-MM-DD: {}", date, e))
+        TigerError::Config(format!(
+            "invalid date {:?}: expected YYYY-MM-DD: {}",
+            date, e
+        ))
     })?;
     let dt = d.and_hms_opt(0, 0, 0).unwrap();
     let zdt = dt.and_local_timezone(tz).earliest().ok_or_else(|| {
-        TigerError::Config(format!("ambiguous or invalid local time for date {:?} in tz {:?}", date, timezone))
+        TigerError::Config(format!(
+            "ambiguous or invalid local time for date {:?} in tz {:?}",
+            date, timezone
+        ))
     })?;
     Ok(zdt.timestamp_millis())
 }
@@ -523,21 +609,35 @@ fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
     let (symbol, rest) = if trimmed.contains(' ') {
         // Space-delimited: symbol is everything before first space
         let mut parts = trimmed.splitn(2, ' ');
-        let sym = parts.next().filter(|s| !s.is_empty())
+        let sym = parts
+            .next()
+            .filter(|s| !s.is_empty())
             .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier: {:?}", identifier)))?
             .to_string();
-        let rest = parts.next()
-            .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier (missing suffix): {:?}", identifier)))?
+        let rest = parts
+            .next()
+            .ok_or_else(|| {
+                TigerError::Config(format!(
+                    "invalid OCC identifier (missing suffix): {:?}",
+                    identifier
+                ))
+            })?
             .trim_start(); // strip OCC padding spaces between symbol and date
         (sym, rest.to_string())
     } else {
         // No space: find where the suffix starts — suffix is always 15 ASCII chars: YYMMDD + C/P + 8 digits
         // Require ASCII so byte-offset slicing is safe (non-ASCII symbols are not valid OCC identifiers)
         if !trimmed.is_ascii() {
-            return Err(TigerError::Config(format!("invalid OCC identifier (non-ASCII characters not supported): {:?}", identifier)));
+            return Err(TigerError::Config(format!(
+                "invalid OCC identifier (non-ASCII characters not supported): {:?}",
+                identifier
+            )));
         }
         if trimmed.len() < 15 {
-            return Err(TigerError::Config(format!("invalid OCC identifier (too short): {:?}", identifier)));
+            return Err(TigerError::Config(format!(
+                "invalid OCC identifier (too short): {:?}",
+                identifier
+            )));
         }
         let suffix_start = trimmed.len() - 15;
         let sym = trimmed[..suffix_start].to_string();
@@ -546,27 +646,52 @@ fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
     };
 
     if symbol.is_empty() {
-        return Err(TigerError::Config(format!("invalid OCC identifier (empty symbol): {:?}", identifier)));
+        return Err(TigerError::Config(format!(
+            "invalid OCC identifier (empty symbol): {:?}",
+            identifier
+        )));
     }
     if rest.len() < 15 {
-        return Err(TigerError::Config(format!("invalid OCC identifier (suffix too short): {:?}", identifier)));
+        return Err(TigerError::Config(format!(
+            "invalid OCC identifier (suffix too short): {:?}",
+            identifier
+        )));
     }
     // YYMMDD + C/P + 8-digit strike (5 integer + 3 decimal, no dot)
     let date_part = &rest[..6];
     let right_char = &rest[6..7];
     let strike_raw = &rest[7..];
-    let year = 2000 + date_part[..2].parse::<i32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
-    let month = date_part[2..4].parse::<u32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
-    let day = date_part[4..6].parse::<u32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
+    let year = 2000
+        + date_part[..2]
+            .parse::<i32>()
+            .map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
+    let month = date_part[2..4]
+        .parse::<u32>()
+        .map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
+    let day = date_part[4..6]
+        .parse::<u32>()
+        .map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
     let expiry_date = format!("{:04}-{:02}-{:02}", year, month, day);
     let right = match right_char {
         "C" => "CALL".to_string(),
         "P" => "PUT".to_string(),
-        _ => return Err(TigerError::Config(format!("invalid OCC right {:?}: {:?}", right_char, identifier))),
+        _ => {
+            return Err(TigerError::Config(format!(
+                "invalid OCC right {:?}: {:?}",
+                right_char, identifier
+            )))
+        }
     };
-    let strike_int: u64 = strike_raw.parse().map_err(|_| TigerError::Config(format!("invalid OCC strike: {:?}", identifier)))?;
+    let strike_int: u64 = strike_raw
+        .parse()
+        .map_err(|_| TigerError::Config(format!("invalid OCC strike: {:?}", identifier)))?;
     let strike = occ_strike_to_string(strike_int);
-    Ok(OccContract { symbol, expiry_date, right, strike })
+    Ok(OccContract {
+        symbol,
+        expiry_date,
+        right,
+        strike,
+    })
 }
 
 // OCC 8位整数 strike（5整数位 + 3小数位，无小数点）→ 最短精确字符串。
@@ -648,10 +773,18 @@ pub struct OptionAnalysisSymbol {
 
 impl OptionAnalysisSymbol {
     pub fn new(symbol: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), period: None, require_volatility_list: None }
+        Self {
+            symbol: symbol.into(),
+            period: None,
+            require_volatility_list: None,
+        }
     }
     pub fn with_period(symbol: impl Into<String>, period: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), period: Some(period.into()), require_volatility_list: None }
+        Self {
+            symbol: symbol.into(),
+            period: Some(period.into()),
+            require_volatility_list: None,
+        }
     }
 }
 
@@ -679,10 +812,18 @@ impl serde::Serialize for OptionAnalysisRequest {
         } else if let Some(ref syms) = self.symbols {
             map.serialize_entry("symbols", syms)?;
         }
-        if let Some(ref v) = self.market { map.serialize_entry("market", v)?; }
-        if let Some(ref v) = self.period { map.serialize_entry("period", v)?; }
-        if let Some(v) = self.require_volatility_list { map.serialize_entry("require_volatility_list", &v)?; }
-        if let Some(ref v) = self.lang { map.serialize_entry("lang", v)?; }
+        if let Some(ref v) = self.market {
+            map.serialize_entry("market", v)?;
+        }
+        if let Some(ref v) = self.period {
+            map.serialize_entry("period", v)?;
+        }
+        if let Some(v) = self.require_volatility_list {
+            map.serialize_entry("require_volatility_list", &v)?;
+        }
+        if let Some(ref v) = self.lang {
+            map.serialize_entry("lang", v)?;
+        }
         map.end()
     }
 }
@@ -962,7 +1103,10 @@ pub struct TradingCalendarRequest {
 pub struct MarketScannerTagsRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub market: Option<String>,
-    #[serde(rename = "multi_tag_field_list", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "multi_tag_field_list",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub multi_tags_fields: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,

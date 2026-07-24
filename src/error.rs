@@ -18,4 +18,8 @@ pub enum TigerError {
     /// 配置错误（缺少必填字段、文件不存在、格式错误）
     #[error("Config error: {0}")]
     Config(String),
+
+    /// 解析错误（响应体反序列化失败、协议解析失败）
+    #[error("Parse error: {0}")]
+    Parse(String),
 }

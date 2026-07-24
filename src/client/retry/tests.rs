@@ -77,7 +77,6 @@ fn test_backoff_large_retry_count_no_panic() {
     assert_eq!(backoff_max, Duration::from_secs(16));
 }
 
-
 // **Validates: Requirements 11.3**
 //
 // Feature: multi-language-sdks, Property 9: 指数退避时间计算

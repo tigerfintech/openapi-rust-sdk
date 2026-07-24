@@ -1,8 +1,8 @@
 //! Integration tests for varint32 and proto_message modules
 
-use tigeropen::push::varint::{decode_varint32, encode_varint32};
-use tigeropen::push::proto_message::*;
 use tigeropen::push::pb::socket_common::{Command, DataType};
+use tigeropen::push::proto_message::*;
+use tigeropen::push::varint::{decode_varint32, encode_varint32};
 use tigeropen::push::SubjectType;
 
 // ===== varint32 tests =====
@@ -84,7 +84,13 @@ fn test_varint_roundtrip_large() {
 #[test]
 fn test_build_connect_message() {
     let msg = build_connect_message(
-        "test_tiger_id", "test_sign", "rust-sdk-1.0", "1.0", 10000, 30000, false,
+        "test_tiger_id",
+        "test_sign",
+        "rust-sdk-1.0",
+        "1.0",
+        10000,
+        30000,
+        false,
     );
     assert_eq!(msg.command, Command::Connect as i32);
     assert!(msg.id > 0);
@@ -133,7 +139,10 @@ fn test_build_subscribe_with_account() {
 #[test]
 fn test_build_subscribe_with_market() {
     let msg = build_subscribe_message(
-        DataType::StockTop as i32, Some("changeRate"), None, Some("US"),
+        DataType::StockTop as i32,
+        Some("changeRate"),
+        None,
+        Some("US"),
     );
     assert_eq!(msg.command, Command::Subscribe as i32);
     let sub = msg.subscribe.unwrap();
@@ -171,17 +180,56 @@ fn test_request_id_increments() {
 
 #[test]
 fn test_subject_to_data_type_mapping() {
-    assert_eq!(subject_to_data_type(&SubjectType::Quote), DataType::Quote as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Option), DataType::Option as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Future), DataType::Future as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Depth), DataType::QuoteDepth as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Tick), DataType::TradeTick as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::FullTick), DataType::TradeTick as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Asset), DataType::Asset as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Position), DataType::Position as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Order), DataType::OrderStatus as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Transaction), DataType::OrderTransaction as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::StockTop), DataType::StockTop as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::OptionTop), DataType::OptionTop as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Kline), DataType::Kline as i32);
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Quote),
+        DataType::Quote as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Option),
+        DataType::Option as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Future),
+        DataType::Future as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Depth),
+        DataType::QuoteDepth as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Tick),
+        DataType::TradeTick as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::FullTick),
+        DataType::TradeTick as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Asset),
+        DataType::Asset as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Position),
+        DataType::Position as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Order),
+        DataType::OrderStatus as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Transaction),
+        DataType::OrderTransaction as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::StockTop),
+        DataType::StockTop as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::OptionTop),
+        DataType::OptionTop as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Kline),
+        DataType::Kline as i32
+    );
 }

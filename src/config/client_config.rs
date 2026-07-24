@@ -3,11 +3,11 @@
 //! Priority: environment variables > builder setters (incl. properties file) > auto-discovered config file > defaults.
 //! Required fields (tiger_id, private_key) return TigerError::Config when empty.
 
-use std::time::Duration;
-use crate::error::TigerError;
-use crate::model::enums::Language;
 use crate::config::config_parser;
 use crate::config::domain;
+use crate::error::TigerError;
+use crate::model::enums::Language;
+use std::time::Duration;
 
 /// Default timeout in seconds
 const DEFAULT_TIMEOUT_SECS: u64 = 15;
@@ -16,6 +16,23 @@ const DEFAULT_SERVER_URL: &str = "https://openapi.tigerfintech.com/gateway";
 
 /// Tiger public key for response signature verification
 const TIGER_PUBLIC_KEY: &str = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDNF3G8SoEcCZh2rshUbayDgLLrj6rKgzNMxDL2HSnKcB0+GPOsndqSv+a4IBu9+I3fyBp5hkyMMG2+AXugd9pMpy6VxJxlNjhX1MYbNTZJUT4nudki4uh+LMOkIBHOceGNXjgB+cXqmlUnjlqha/HgboeHSnSgpM3dKSJQlIOsDwIDAQAB";
+
+/// Sandbox / non-production Tiger public key for response signature verification.
+/// Use this constant (or set `tiger_public_key` in the properties file) when connecting
+/// to QA or sandbox environments.
+///
+/// # Example
+/// ```rust
+/// use tigeropen::config::{ClientConfig, SANDBOX_TIGER_PUBLIC_KEY};
+///
+/// let config = ClientConfig::builder()
+///     .tiger_id("your_tiger_id")
+///     .private_key("your_private_key")
+///     .tiger_public_key(SANDBOX_TIGER_PUBLIC_KEY)
+///     .build()
+///     .unwrap();
+/// ```
+pub const SANDBOX_TIGER_PUBLIC_KEY: &str = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCbm21i11hgAENGd3/f280PSe4g9YGkS3TEXBYMidihTvHHf+tJ0PYD0o3PruI0hl3qhEjHTAxb75T5YD3SGK4IBhHn/Rk6mhqlGgI+bBrBVYaXixmHfRo75RpUUuWACyeqQkZckgR0McxuW9xRMIa2cXZOoL1E4SL4lXKGhKoWbwIDAQAB";
 
 /// Config file name for auto-discovery
 const CONFIG_FILE_NAME: &str = "tiger_openapi_config.properties";
@@ -49,7 +66,8 @@ pub struct ClientConfig {
     pub token_writer: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
     /// 自定义 token 加载函数，替代默认文件加载
     #[allow(clippy::type_complexity)]
-    pub token_loader: Option<std::sync::Arc<dyn Fn() -> Result<String, crate::error::TigerError> + Send + Sync>>,
+    pub token_loader:
+        Option<std::sync::Arc<dyn Fn() -> Result<String, crate::error::TigerError> + Send + Sync>>,
     pub server_url: String,
     pub quote_server_url: String,
     pub tiger_public_key: String,
@@ -96,7 +114,8 @@ pub struct ClientConfigBuilder {
     #[allow(clippy::type_complexity)]
     token_writer: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
     #[allow(clippy::type_complexity)]
-    token_loader: Option<std::sync::Arc<dyn Fn() -> Result<String, crate::error::TigerError> + Send + Sync>>,
+    token_loader:
+        Option<std::sync::Arc<dyn Fn() -> Result<String, crate::error::TigerError> + Send + Sync>>,
     server_url: Option<String>,
     quote_server_url: Option<String>,
     enable_dynamic_domain: bool,
@@ -104,6 +123,8 @@ pub struct ClientConfigBuilder {
     device_id: Option<String>,
     /// When true, skip auto-discovery of config files (set when properties_file() is called)
     skip_auto_discover: bool,
+    /// Directory of the explicitly-provided config file, used to locate tiger_openapi_token.properties
+    config_dir: Option<String>,
 }
 
 impl ClientConfig {
@@ -136,6 +157,7 @@ impl ClientConfigBuilder {
             tiger_public_key: None,
             device_id: None,
             skip_auto_discover: false,
+            config_dir: None,
         }
     }
 
@@ -255,8 +277,32 @@ impl ClientConfigBuilder {
 
     /// Load config from a properties file.
     /// Silently skips if the file cannot be read; validation will catch missing required fields.
+    /// The directory containing the file is remembered so that `tiger_openapi_token.properties`
+    /// can be co-located with the config file (Java SDK behaviour).
+    ///
+    /// Note: if `path` is an *existing directory*, it is recorded as `config_dir` but no
+    /// config file is automatically read from it — use `path/tiger_openapi_config.properties`
+    /// explicitly if you want to load from a directory.
     pub fn properties_file(mut self, path: &str) -> Self {
         self.skip_auto_discover = true; // explicit file provided, skip auto-discovery
+                                        // Resolve the directory: if path is a file, take its parent; if it's a directory, use it.
+        let resolved_dir = {
+            let p = std::path::Path::new(path);
+            if p.is_dir() {
+                Some(path.to_string())
+            } else {
+                p.parent()
+                    .and_then(|d| {
+                        if d.as_os_str().is_empty() {
+                            None
+                        } else {
+                            Some(d)
+                        }
+                    })
+                    .map(|d| d.to_string_lossy().into_owned())
+            }
+        };
+        self.config_dir = resolved_dir;
         if let Ok(props) = config_parser::parse_properties_file(path) {
             self.apply_properties(&props);
         }
@@ -310,6 +356,21 @@ impl ClientConfigBuilder {
                 self.timezone = Some(v.clone());
             }
         }
+        if self.server_url.is_none() {
+            if let Some(v) = props.get("server_url") {
+                self.server_url = Some(v.clone());
+            }
+        }
+        if self.quote_server_url.is_none() {
+            if let Some(v) = props.get("quote_server_url") {
+                self.quote_server_url = Some(v.clone());
+            }
+        }
+        if self.tiger_public_key.is_none() {
+            if let Some(v) = props.get("tiger_public_key") {
+                self.tiger_public_key = Some(v.clone());
+            }
+        }
     }
 
     /// Return candidate paths for auto-discovery of the config properties file.
@@ -341,6 +402,19 @@ impl ClientConfigBuilder {
             for path in &candidates {
                 if let Ok(props) = config_parser::parse_properties_file(path) {
                     self.apply_properties(&props);
+                    // Record the directory so the token file can be co-located
+                    if self.config_dir.is_none() {
+                        self.config_dir = std::path::Path::new(path)
+                            .parent()
+                            .and_then(|d| {
+                                if d.as_os_str().is_empty() {
+                                    None
+                                } else {
+                                    Some(d)
+                                }
+                            })
+                            .map(|d| d.to_string_lossy().into_owned());
+                    }
                     break; // use the first file found
                 }
             }
@@ -380,14 +454,25 @@ impl ClientConfigBuilder {
             }
         }
         if self.token.is_none() {
-            let token_file_path = std::env::var(ENV_TOKEN_FILE)
-                .ok()
-                .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| "tiger_openapi_token.properties".to_string());
-            let tm = super::token_manager::TokenManager::with_file_path(&token_file_path);
-            if let Ok(t) = tm.load_token() {
-                if !t.is_empty() {
-                    self.token = Some(t);
+            // Token file priority: TIGEROPEN_TOKEN_FILE env var > config_dir/tiger_openapi_token.properties > default
+            let token_file_path = if let Ok(v) = std::env::var(ENV_TOKEN_FILE) {
+                let trimmed = v.trim().to_string();
+                if !trimmed.is_empty() {
+                    trimmed
+                } else {
+                    String::new()
+                }
+            } else if let Some(ref dir) = self.config_dir {
+                format!("{}/tiger_openapi_token.properties", dir)
+            } else {
+                "tiger_openapi_token.properties".to_string()
+            };
+            if !token_file_path.is_empty() {
+                let tm = super::token_manager::TokenManager::with_file_path(&token_file_path);
+                if let Ok(t) = tm.load_token() {
+                    if !t.is_empty() {
+                        self.token = Some(t);
+                    }
                 }
             }
         }
@@ -402,10 +487,14 @@ impl ClientConfigBuilder {
             let mut resolved_quote = String::new();
             if self.enable_dynamic_domain {
                 let domain_conf = domain::query_domains(self.license.as_deref());
-                if let Some(url) = domain::resolve_dynamic_server_url(&domain_conf, self.license.as_deref()) {
+                if let Some(url) =
+                    domain::resolve_dynamic_server_url(&domain_conf, self.license.as_deref())
+                {
                     resolved_server = url;
                 }
-                if let Some(url) = domain::resolve_dynamic_quote_server_url(&domain_conf, self.license.as_deref()) {
+                if let Some(url) =
+                    domain::resolve_dynamic_quote_server_url(&domain_conf, self.license.as_deref())
+                {
                     resolved_quote = url;
                 }
             }
@@ -450,7 +539,9 @@ impl ClientConfigBuilder {
             license: self.license,
             language: self.language.unwrap_or(Language::ZhCn),
             timezone: self.timezone,
-            timeout: self.timeout.unwrap_or(Duration::from_secs(DEFAULT_TIMEOUT_SECS)),
+            timeout: self
+                .timeout
+                .unwrap_or(Duration::from_secs(DEFAULT_TIMEOUT_SECS)),
             token: self.token,
             token_refresh_duration: self.token_refresh_duration,
             token_check_interval: self.token_check_interval,
@@ -458,7 +549,9 @@ impl ClientConfigBuilder {
             token_loader: self.token_loader,
             server_url,
             quote_server_url,
-            tiger_public_key: self.tiger_public_key.unwrap_or_else(|| TIGER_PUBLIC_KEY.to_string()),
+            tiger_public_key: self
+                .tiger_public_key
+                .unwrap_or_else(|| TIGER_PUBLIC_KEY.to_string()),
             device_id,
         })
     }
@@ -592,7 +685,10 @@ mod tests {
         assert_eq!(config.timezone, Some("America/New_York".to_string()));
         assert_eq!(config.timeout, Duration::from_secs(30));
         assert_eq!(config.token, Some("my_token".to_string()));
-        assert_eq!(config.token_refresh_duration, Some(Duration::from_secs(3600)));
+        assert_eq!(
+            config.token_refresh_duration,
+            Some(Duration::from_secs(3600))
+        );
     }
 
     #[test]
