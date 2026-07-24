@@ -197,24 +197,30 @@ mod tests {
         prop_oneof![
             // CONNECT
             (
-                ".*", ".*", ".*", ".*",
-                any::<u32>(), any::<u32>(), any::<bool>()
-            ).prop_map(|(tid, sign, sdk, ver, si, ri, ft)| {
-                pb::Request {
-                    command: Command::Connect as i32,
-                    id: 1,
-                    connect: Some(pb::request::Connect {
-                        tiger_id: tid,
-                        sign,
-                        sdk_version: sdk,
-                        accept_version: Some(ver),
-                        send_interval: Some(si),
-                        receive_interval: Some(ri),
-                        use_full_tick: Some(ft),
-                    }),
-                    subscribe: None,
-                }
-            }),
+                ".*",
+                ".*",
+                ".*",
+                ".*",
+                any::<u32>(),
+                any::<u32>(),
+                any::<bool>()
+            )
+                .prop_map(|(tid, sign, sdk, ver, si, ri, ft)| {
+                    pb::Request {
+                        command: Command::Connect as i32,
+                        id: 1,
+                        connect: Some(pb::request::Connect {
+                            tiger_id: tid,
+                            sign,
+                            sdk_version: sdk,
+                            accept_version: Some(ver),
+                            send_interval: Some(si),
+                            receive_interval: Some(ri),
+                            use_full_tick: Some(ft),
+                        }),
+                        subscribe: None,
+                    }
+                }),
             // HEARTBEAT
             Just(pb::Request {
                 command: Command::Heartbeat as i32,

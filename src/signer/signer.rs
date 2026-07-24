@@ -5,11 +5,11 @@
 use crate::error::TigerError;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use rsa::pkcs1v15::{SigningKey, VerifyingKey, Signature};
-use rsa::{RsaPrivateKey, RsaPublicKey};
+use rsa::pkcs1v15::{Signature, SigningKey, VerifyingKey};
 use rsa::pkcs8::DecodePublicKey;
+use rsa::{RsaPrivateKey, RsaPublicKey};
 use sha1::Sha1;
-use signature::{Signer, SignatureEncoding, Verifier};
+use signature::{SignatureEncoding, Signer, Verifier};
 
 /// 加载 RSA 私钥，支持以下格式：
 /// - PKCS#1 PEM（BEGIN RSA PRIVATE KEY）
@@ -39,8 +39,7 @@ pub fn load_private_key(key_str: &str) -> Result<RsaPrivateKey, TigerError> {
             return Ok(key);
         }
         // 再尝试 PKCS#8 DER
-        if let Ok(key) =
-            <RsaPrivateKey as rsa::pkcs8::DecodePrivateKey>::from_pkcs8_der(&der_bytes)
+        if let Ok(key) = <RsaPrivateKey as rsa::pkcs8::DecodePrivateKey>::from_pkcs8_der(&der_bytes)
         {
             return Ok(key);
         }
@@ -55,8 +54,7 @@ pub fn load_private_key(key_str: &str) -> Result<RsaPrivateKey, TigerError> {
 pub fn sign_with_rsa(private_key_str: &str, content: &str) -> Result<String, TigerError> {
     let private_key = load_private_key(private_key_str)?;
     let signing_key = SigningKey::<Sha1>::new(private_key);
-    let signature = signing_key
-        .sign(content.as_bytes());
+    let signature = signing_key.sign(content.as_bytes());
     Ok(BASE64.encode(signature.to_bytes()))
 }
 
@@ -65,7 +63,11 @@ pub fn sign_with_rsa(private_key_str: &str, content: &str) -> Result<String, Tig
 /// `content`: the original content that was signed
 /// `signature_b64`: Base64-encoded signature to verify
 /// Returns Ok(true) if verification succeeds, or an error if it fails.
-pub fn verify_with_rsa(public_key_str: &str, content: &str, signature_b64: &str) -> Result<bool, TigerError> {
+pub fn verify_with_rsa(
+    public_key_str: &str,
+    content: &str,
+    signature_b64: &str,
+) -> Result<bool, TigerError> {
     if public_key_str.is_empty() {
         return Err(TigerError::Auth("public key must not be empty".to_string()));
     }
@@ -74,7 +76,8 @@ pub fn verify_with_rsa(public_key_str: &str, content: &str, signature_b64: &str)
     }
 
     // Decode the Base64 public key to DER bytes
-    let der_bytes = BASE64.decode(public_key_str.trim())
+    let der_bytes = BASE64
+        .decode(public_key_str.trim())
         .map_err(|e| TigerError::Auth(format!("failed to decode public key base64: {}", e)))?;
 
     // Parse as PKCS#8 SubjectPublicKeyInfo DER
@@ -82,14 +85,16 @@ pub fn verify_with_rsa(public_key_str: &str, content: &str, signature_b64: &str)
         .map_err(|e| TigerError::Auth(format!("failed to parse public key: {}", e)))?;
 
     // Decode the Base64 signature
-    let sig_bytes = BASE64.decode(signature_b64.trim())
+    let sig_bytes = BASE64
+        .decode(signature_b64.trim())
         .map_err(|e| TigerError::Auth(format!("failed to decode signature base64: {}", e)))?;
 
     let verifying_key = VerifyingKey::<Sha1>::new(public_key);
     let signature = Signature::try_from(sig_bytes.as_slice())
         .map_err(|e| TigerError::Auth(format!("invalid signature format: {}", e)))?;
 
-    verifying_key.verify(content.as_bytes(), &signature)
+    verifying_key
+        .verify(content.as_bytes(), &signature)
         .map_err(|e| TigerError::Auth(format!("response signature verification failed: {}", e)))?;
 
     Ok(true)

@@ -12,31 +12,32 @@ use crate::client::http_client::HttpClient;
 use crate::config::client_config::ClientConfig;
 use crate::error::TigerError;
 use crate::model::quote::{
-    Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest, Depth,
-    ExchangeRate, FinancialCurrency, FinancialDailyItem, FinancialDailyRequest,
-    FinancialReportItem, FinancialReportRequest, FundContractInfo, FundHistoryQuote, FundQuote,
-    FutureContractInfo, FutureDepth, FutureExchange, FutureKline,
-    FutureMainContractHistory, FutureQuote, FutureTradingTime, FutureTradeTickItem,
-    IndustryItem, IndustryStock, Kline, KlineItem, KlineQuota, MarketScannerRequest,
-    MarketScannerTagGroup, MarketState, OptionAnalysis, OptionBrief, OptionChain, OptionExpiration,
-    OptionKline, OptionSymbol, QuoteOvernight, QuotePermission, ScannerResult, ShortInterest,
-    StockBroker, StockDetail, StockIndustry, SymbolName, Timeline, TradeTick, TradeRankItem,
-    TradingCalendarItem, WarrantBrief, WarrantFilterResult, FutureKlineItem,
+    Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest,
+    CorporateDelisting, CorporateIPO, CorporateSymbolChange, Depth, ExchangeRate,
+    FinancialCurrency, FinancialDailyItem, FinancialDailyRequest, FinancialReportItem,
+    FinancialReportRequest, FundContractInfo, FundHistoryQuote, FundQuote, FutureContractInfo,
+    FutureDepth, FutureExchange, FutureKline, FutureKlineItem, FutureMainContractHistory,
+    FutureQuote, FutureTradeTickItem, FutureTradingTime, IndustryItem, IndustryStock, Kline,
+    KlineItem, KlineQuota, MarketScannerRequest, MarketScannerTagGroup, MarketState,
+    OptionAnalysis, OptionBrief, OptionChain, OptionExpiration, OptionKline, OptionSymbol,
+    QuoteOvernight, QuotePermission, ScannerResult, ShortInterest, StockBroker, StockDetail,
+    StockIndustry, SymbolName, Timeline, TradeRankItem, TradeTick, TradingCalendarItem,
+    WarrantBrief, WarrantFilterResult,
 };
 use crate::model::quote_requests::{
-    AllFutureContractsRequest, KlineRequest, KlineByPageRequest, BriefRequest, QuoteDepthRequest,
-    FinancialCurrencyRequest, FinancialExchangeRateRequest, FutureKlineRequest,
-    FutureKlineByPageRequest, FutureRealTimeQuoteRequest, FutureContinuousContractsRequest,
-    FutureContractSingleRequest, FutureDepthRequest, FutureHistoryMainContractRequest,
-    FutureTradingTimesRequest, FutureTradeTicksRequest, FundContractsRequest, FundHistoryQuoteRequest,
-    FundQuoteRequest, FundSymbolsRequest, IndustryListRequest, IndustryStocksRequest,
-    KlineQuotaRequest, MarketScannerTagsRequest, OptionAnalysisRequest,
-    OptionDepthRequest, OptionSymbolsRequest, OptionTimelineRequest, OptionTradeTicksRequest,
-    OptionChainRequest, OptionContractItem, OptionKlineRequest, OptionQuoteRequest,
-    QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest, StockBrokerRequest,
-    DelayedQuoteRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
+    AllFutureContractsRequest, BriefRequest, DelayedQuoteRequest, FinancialCurrencyRequest,
+    FinancialExchangeRateRequest, FundContractsRequest, FundHistoryQuoteRequest, FundQuoteRequest,
+    FundSymbolsRequest, FutureContinuousContractsRequest, FutureContractSingleRequest,
+    FutureDepthRequest, FutureHistoryMainContractRequest, FutureKlineByPageRequest,
+    FutureKlineRequest, FutureRealTimeQuoteRequest, FutureTradeTicksRequest,
+    FutureTradingTimesRequest, IndustryListRequest, IndustryStocksRequest, KlineByPageRequest,
+    KlineQuotaRequest, KlineRequest, MarketScannerTagsRequest, OptionAnalysisRequest,
+    OptionChainRequest, OptionContractItem, OptionDepthRequest, OptionKlineRequest,
+    OptionQuoteRequest, OptionSymbolsRequest, OptionTimelineRequest, OptionTradeTicksRequest,
+    QuoteDepthRequest, QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest,
+    StockBrokerRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
     SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
-    TradingCalendarRequest, WarrantQuoteRequest, WarrantFilterRequest,
+    TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
 };
 
 /// API 版本常量
@@ -52,13 +53,50 @@ pub struct QuoteClient {
 impl QuoteClient {
     /// 从 ClientConfig 自动构造（推荐）。内部使用 quote server URL。
     pub fn from_config(config: ClientConfig) -> Self {
-        Self { http_client: HttpClient::with_quote_server(config) }
+        Self {
+            http_client: HttpClient::with_quote_server(config),
+        }
     }
 
     /// 使用已有的 HttpClient 创建行情客户端。调用方通常使用 [`HttpClient::with_quote_server`]
     /// 以便请求发往 `config.quote_server_url`。
     pub fn new(http_client: HttpClient) -> Self {
         Self { http_client }
+    }
+
+    // ── Token management ──────────────────────────────────────────────────────
+
+    /// Call `user_token_refresh` and return the new token string. Read-only.
+    pub async fn query_token(&self) -> Result<String, crate::error::TigerError> {
+        self.http_client.query_token().await
+    }
+
+    /// Refresh the token and update the in-memory config token.
+    pub async fn refresh_token(
+        &self,
+        token_manager: Option<&crate::config::TokenManager>,
+    ) -> Result<(), crate::error::TigerError> {
+        self.http_client.refresh_token(token_manager).await
+    }
+
+    /// Start background token auto-refresh. Returns `Arc<TokenManager>` to stop with `tm.stop_auto_refresh()`.
+    ///
+    /// - `refresh_duration_secs` — refresh threshold in seconds (minimum 30; negative values are clamped to 30)
+    /// - `check_interval_secs` — how often to poll (default 300 s / 5 min)
+    /// - `token_writer` — optional callback invoked after each successful refresh
+    #[must_use = "retain the TokenManager handle to call stop_auto_refresh() when done; the background task runs until explicitly stopped"]
+    pub fn start_token_auto_refresh(
+        &self,
+        refresh_duration_secs: i64,
+        check_interval_secs: u64,
+        token_writer: Option<Box<dyn Fn(String) + Send + Sync + 'static>>,
+    ) -> std::sync::Arc<crate::config::TokenManager> {
+        self.http_client.start_token_auto_refresh(
+            None,
+            refresh_duration_secs,
+            check_interval_secs,
+            token_writer,
+        )
     }
 
     /// 内部通用：构造请求、发送、把 data 解析为 T。
@@ -148,7 +186,8 @@ impl QuoteClient {
 
     /// 获取市场状态
     pub async fn get_market_state(&self, market: &str) -> Result<Vec<MarketState>, TigerError> {
-        self.call_into("market_state", serde_json::json!({ "market": market })).await
+        self.call_into("market_state", serde_json::json!({ "market": market }))
+            .await
     }
 
     /// 获取实时行情。wire: quote_real_time
@@ -177,7 +216,10 @@ impl QuoteClient {
     }
 
     /// 获取逐笔成交（v0.4.0 新签名：接受 TradeTickRequest）。wire: trade_tick
-    pub async fn get_trade_tick(&self, req: TradeTickRequest) -> Result<Vec<TradeTick>, TigerError> {
+    pub async fn get_trade_tick(
+        &self,
+        req: TradeTickRequest,
+    ) -> Result<Vec<TradeTick>, TigerError> {
         self.call_into("trade_tick", req).await
     }
 
@@ -194,32 +236,50 @@ impl QuoteClient {
     }
 
     /// 全量合约代码 + 名称。wire: all_symbol_names
-    pub async fn get_symbol_names(&self, req: SymbolsRequest) -> Result<Vec<SymbolName>, TigerError> {
+    pub async fn get_symbol_names(
+        &self,
+        req: SymbolsRequest,
+    ) -> Result<Vec<SymbolName>, TigerError> {
         self.call_into("all_symbol_names", req).await
     }
 
     /// 交易元数据。wire: quote_stock_trade
-    pub async fn get_trade_metas(&self, req: TradeMetasRequest) -> Result<Vec<crate::model::quote::TradeMeta>, TigerError> {
+    pub async fn get_trade_metas(
+        &self,
+        req: TradeMetasRequest,
+    ) -> Result<Vec<crate::model::quote::TradeMeta>, TigerError> {
         self.call_into("quote_stock_trade", req).await
     }
 
     /// 股票详情。wire: stock_detail（服务端返回 {items:[...]}）
-    pub async fn get_stock_details(&self, req: StockDetailsRequest) -> Result<Vec<StockDetail>, TigerError> {
+    pub async fn get_stock_details(
+        &self,
+        req: StockDetailsRequest,
+    ) -> Result<Vec<StockDetail>, TigerError> {
         self.call_into_items("stock_detail", req).await
     }
 
     /// 延时行情。wire: quote_delay
-    pub async fn get_delayed_quote(&self, req: DelayedQuoteRequest) -> Result<Vec<Brief>, TigerError> {
+    pub async fn get_delayed_quote(
+        &self,
+        req: DelayedQuoteRequest,
+    ) -> Result<Vec<Brief>, TigerError> {
         self.call_into("quote_delay", req).await
     }
 
     #[deprecated(since = "0.5.1", note = "Use get_delayed_quote instead")]
-    pub async fn get_stock_delay_briefs(&self, req: DelayedQuoteRequest) -> Result<Vec<Brief>, TigerError> {
+    pub async fn get_stock_delay_briefs(
+        &self,
+        req: DelayedQuoteRequest,
+    ) -> Result<Vec<Brief>, TigerError> {
         self.get_delayed_quote(req).await
     }
 
     /// 客户端分页 K 线。循环调用直到获得 total_size 条。
-    pub async fn get_kline_by_page(&self, req: KlineByPageRequest) -> Result<Vec<KlineItem>, TigerError> {
+    pub async fn get_kline_by_page(
+        &self,
+        req: KlineByPageRequest,
+    ) -> Result<Vec<KlineItem>, TigerError> {
         let page_size = req.page_size.unwrap_or(200);
         let total_size = req.total_size.unwrap_or(1000);
         let mut acc: Vec<KlineItem> = Vec::new();
@@ -268,22 +328,34 @@ impl QuoteClient {
     }
 
     /// 历史分时。wire: history_timeline
-    pub async fn get_timeline_history(&self, req: TimelineHistoryRequest) -> Result<Vec<Timeline>, TigerError> {
+    pub async fn get_timeline_history(
+        &self,
+        req: TimelineHistoryRequest,
+    ) -> Result<Vec<Timeline>, TigerError> {
         self.call_into("history_timeline", req).await
     }
 
     /// 成交榜单。wire: trade_rank
-    pub async fn get_trade_rank(&self, req: TradeRankRequest) -> Result<Vec<TradeRankItem>, TigerError> {
+    pub async fn get_trade_rank(
+        &self,
+        req: TradeRankRequest,
+    ) -> Result<Vec<TradeRankItem>, TigerError> {
         self.call_into("trade_rank", req).await
     }
 
     /// 做空数据。wire: quote_shortable_stocks
-    pub async fn get_short_interest(&self, req: ShortInterestRequest) -> Result<Vec<ShortInterest>, TigerError> {
+    pub async fn get_short_interest(
+        &self,
+        req: ShortInterestRequest,
+    ) -> Result<Vec<ShortInterest>, TigerError> {
         self.call_into("quote_shortable_stocks", req).await
     }
 
     /// 经纪商持仓。wire: stock_broker
-    pub async fn get_stock_broker(&self, req: StockBrokerRequest) -> Result<Option<StockBroker>, TigerError> {
+    pub async fn get_stock_broker(
+        &self,
+        req: StockBrokerRequest,
+    ) -> Result<Option<StockBroker>, TigerError> {
         self.call_optional("stock_broker", req).await
     }
 
@@ -296,24 +368,37 @@ impl QuoteClient {
     }
 
     /// 股票行业归属。wire: stock_industry（返回数组）
-    pub async fn get_stock_industry(&self, req: StockIndustryRequest) -> Result<Vec<StockIndustry>, TigerError> {
+    pub async fn get_stock_industry(
+        &self,
+        req: StockIndustryRequest,
+    ) -> Result<Vec<StockIndustry>, TigerError> {
         self.call_into("stock_industry", req).await
     }
 
     /// 行情权限详情。wire: get_quote_permission
-    pub async fn get_quote_permission(&self, req: QuotePermissionRequest) -> Result<Vec<QuotePermission>, TigerError> {
+    pub async fn get_quote_permission(
+        &self,
+        req: QuotePermissionRequest,
+    ) -> Result<Vec<QuotePermission>, TigerError> {
         self.call_into("get_quote_permission", req).await
     }
 
     /// K 线配额。wire: kline_quota
-    pub async fn get_kline_quota(&self, req: KlineQuotaRequest) -> Result<Vec<KlineQuota>, TigerError> {
+    pub async fn get_kline_quota(
+        &self,
+        req: KlineQuotaRequest,
+    ) -> Result<Vec<KlineQuota>, TigerError> {
         self.call_into("kline_quota", req).await
     }
 
     // ========== 期权行情 ==========
 
     /// 获取期权到期日。HK 市场需传 `market = Some("HK")` 及 HK 标的代码（如 `"00700"`）。
-    pub async fn get_option_expiration(&self, symbols: &[&str], market: Option<&str>) -> Result<Vec<OptionExpiration>, TigerError> {
+    pub async fn get_option_expiration(
+        &self,
+        symbols: &[&str],
+        market: Option<&str>,
+    ) -> Result<Vec<OptionExpiration>, TigerError> {
         let mut payload = serde_json::json!({ "symbols": symbols });
         if let Some(m) = market {
             payload["market"] = serde_json::Value::String(m.to_string());
@@ -338,7 +423,8 @@ impl QuoteClient {
         &self,
         req: OptionChainRequest,
     ) -> Result<Vec<OptionChain>, TigerError> {
-        self.call_into_versioned("option_chain", req, Some(VERSION_V3)).await
+        self.call_into_versioned("option_chain", req, Some(VERSION_V3))
+            .await
     }
 
     /// 获取期权实时行情（v2.0）。
@@ -358,7 +444,8 @@ impl QuoteClient {
         &self,
         req: OptionQuoteRequest,
     ) -> Result<Vec<OptionBrief>, TigerError> {
-        self.call_into_versioned("option_brief", req, Some(VERSION_V2)).await
+        self.call_into_versioned("option_brief", req, Some(VERSION_V2))
+            .await
     }
 
     #[deprecated(since = "0.5.1", note = "Use get_option_quote instead")]
@@ -366,7 +453,8 @@ impl QuoteClient {
         &self,
         identifiers: &[&str],
     ) -> Result<Vec<OptionBrief>, TigerError> {
-        let items: Result<Vec<_>, _> = identifiers.iter()
+        let items: Result<Vec<_>, _> = identifiers
+            .iter()
             .map(|id| OptionContractItem::from_occ(id))
             .collect();
         self.get_option_quote(OptionQuoteRequest::new(items?)).await
@@ -387,31 +475,47 @@ impl QuoteClient {
         &self,
         req: OptionKlineRequest,
     ) -> Result<Vec<OptionKline>, TigerError> {
-        self.call_into_versioned("option_kline", req, Some(VERSION_V2)).await
+        self.call_into_versioned("option_kline", req, Some(VERSION_V2))
+            .await
     }
 
     /// 期权逐笔。wire: option_trade_tick
-    pub async fn get_option_trade_ticks(&self, req: OptionTradeTicksRequest) -> Result<Vec<TradeTick>, TigerError> {
+    pub async fn get_option_trade_ticks(
+        &self,
+        req: OptionTradeTicksRequest,
+    ) -> Result<Vec<TradeTick>, TigerError> {
         self.call_into("option_trade_tick", req).await
     }
 
     /// 期权分时。wire: option_timeline
-    pub async fn get_option_timeline(&self, req: OptionTimelineRequest) -> Result<Vec<Timeline>, TigerError> {
+    pub async fn get_option_timeline(
+        &self,
+        req: OptionTimelineRequest,
+    ) -> Result<Vec<Timeline>, TigerError> {
         self.call_into("option_timeline", req).await
     }
 
     /// 期权盘口。wire: option_depth
-    pub async fn get_option_depth(&self, req: OptionDepthRequest) -> Result<Vec<Depth>, TigerError> {
+    pub async fn get_option_depth(
+        &self,
+        req: OptionDepthRequest,
+    ) -> Result<Vec<Depth>, TigerError> {
         self.call_into("option_depth", req).await
     }
 
     /// 期权代码列表（港股）。wire: all_hk_option_symbols
-    pub async fn get_option_symbols(&self, req: OptionSymbolsRequest) -> Result<Vec<OptionSymbol>, TigerError> {
+    pub async fn get_option_symbols(
+        &self,
+        req: OptionSymbolsRequest,
+    ) -> Result<Vec<OptionSymbol>, TigerError> {
         self.call_into("all_hk_option_symbols", req).await
     }
 
     /// 期权分析（隐含/历史波动率）。wire: option_analysis
-    pub async fn get_option_analysis(&self, req: OptionAnalysisRequest) -> Result<Vec<OptionAnalysis>, TigerError> {
+    pub async fn get_option_analysis(
+        &self,
+        req: OptionAnalysisRequest,
+    ) -> Result<Vec<OptionAnalysis>, TigerError> {
         self.call_into("option_analysis", req).await
     }
 
@@ -419,7 +523,8 @@ impl QuoteClient {
 
     /// 获取期货交易所列表
     pub async fn get_future_exchange(&self) -> Result<Vec<FutureExchange>, TigerError> {
-        self.call_into("future_exchange", serde_json::json!({ "sec_type": "FUT" })).await
+        self.call_into("future_exchange", serde_json::json!({ "sec_type": "FUT" }))
+            .await
     }
 
     /// 获取期货合约列表（by exchange code）
@@ -435,13 +540,19 @@ impl QuoteClient {
     }
 
     /// 获取期货实时报价（v0.4.0 新签名：接受 FutureRealTimeQuoteRequest）。wire: future_real_time_quote
-    pub async fn get_future_real_time_quote(&self, req: FutureRealTimeQuoteRequest) -> Result<Vec<FutureQuote>, TigerError> {
+    pub async fn get_future_real_time_quote(
+        &self,
+        req: FutureRealTimeQuoteRequest,
+    ) -> Result<Vec<FutureQuote>, TigerError> {
         self.call_into("future_real_time_quote", req).await
     }
 
     /// 获取期货 K 线。wire: future_kline
     /// begin_time / end_time 为 0 时自动改为 -1（服务端要求字段必须存在）。
-    pub async fn get_future_kline(&self, mut req: FutureKlineRequest) -> Result<Vec<FutureKline>, TigerError> {
+    pub async fn get_future_kline(
+        &self,
+        mut req: FutureKlineRequest,
+    ) -> Result<Vec<FutureKline>, TigerError> {
         if req.begin_time == Some(0) {
             req.begin_time = Some(-1);
         }
@@ -453,33 +564,53 @@ impl QuoteClient {
 
     /// 按 contract_code 查询单个期货合约。wire: future_contract_by_contract_code
     /// 服务端可能返回单对象或列表，统一展开为 Vec。
-    pub async fn get_future_contract(&self, req: FutureContractSingleRequest) -> Result<Vec<FutureContractInfo>, TigerError> {
-        self.call_into_list_or_object("future_contract_by_contract_code", req).await
+    pub async fn get_future_contract(
+        &self,
+        req: FutureContractSingleRequest,
+    ) -> Result<Vec<FutureContractInfo>, TigerError> {
+        self.call_into_list_or_object("future_contract_by_contract_code", req)
+            .await
     }
 
     /// 查询所有期货合约。wire: future_contracts
-    pub async fn get_all_future_contracts(&self, req: AllFutureContractsRequest) -> Result<Vec<FutureContractInfo>, TigerError> {
+    pub async fn get_all_future_contracts(
+        &self,
+        req: AllFutureContractsRequest,
+    ) -> Result<Vec<FutureContractInfo>, TigerError> {
         self.call_into("future_contracts", req).await
     }
 
     /// 当前主力合约。wire: future_current_contract
-    pub async fn get_current_future_contract(&self, req: FutureContractSingleRequest) -> Result<Option<FutureContractInfo>, TigerError> {
+    pub async fn get_current_future_contract(
+        &self,
+        req: FutureContractSingleRequest,
+    ) -> Result<Option<FutureContractInfo>, TigerError> {
         self.call_optional("future_current_contract", req).await
     }
 
     /// 连续主力合约。wire: future_continuous_contracts
     /// 服务端可能返回单对象或列表，统一展开为 Vec。
-    pub async fn get_future_continuous_contracts(&self, req: FutureContinuousContractsRequest) -> Result<Vec<FutureContractInfo>, TigerError> {
-        self.call_into_list_or_object("future_continuous_contracts", req).await
+    pub async fn get_future_continuous_contracts(
+        &self,
+        req: FutureContinuousContractsRequest,
+    ) -> Result<Vec<FutureContractInfo>, TigerError> {
+        self.call_into_list_or_object("future_continuous_contracts", req)
+            .await
     }
 
     /// 主力合约历史。wire: future_main_contract
-    pub async fn get_future_history_main_contract(&self, req: FutureHistoryMainContractRequest) -> Result<Vec<FutureMainContractHistory>, TigerError> {
+    pub async fn get_future_history_main_contract(
+        &self,
+        req: FutureHistoryMainContractRequest,
+    ) -> Result<Vec<FutureMainContractHistory>, TigerError> {
         self.call_into("future_main_contract", req).await
     }
 
     /// 期货 K 线分页包装。
-    pub async fn get_future_kline_by_page(&self, req: FutureKlineByPageRequest) -> Result<Vec<FutureKlineItem>, TigerError> {
+    pub async fn get_future_kline_by_page(
+        &self,
+        req: FutureKlineByPageRequest,
+    ) -> Result<Vec<FutureKlineItem>, TigerError> {
         let page_size = req.page_size.unwrap_or(200);
         let total_size = req.total_size.unwrap_or(1000);
         let mut acc: Vec<FutureKlineItem> = Vec::new();
@@ -522,7 +653,10 @@ impl QuoteClient {
 
     /// 期货逐笔。wire: future_tick (API version 3.0)
     /// 服务端返回 {contractCode, items:[...]} 对象，需解包 items 并回填 contractCode。
-    pub async fn get_future_trade_ticks(&self, req: FutureTradeTicksRequest) -> Result<Vec<FutureTradeTickItem>, TigerError> {
+    pub async fn get_future_trade_ticks(
+        &self,
+        req: FutureTradeTicksRequest,
+    ) -> Result<Vec<FutureTradeTickItem>, TigerError> {
         let mut req = req;
         // end_index 服务端要求 >= 0；未设置时默认 30（与 Python/Go SDK 一致）
         if req.end_index.is_none() {
@@ -536,7 +670,9 @@ impl QuoteClient {
             #[serde(default)]
             items: Vec<FutureTradeTickItem>,
         }
-        let wrap: FutureTickWrap = self.call_into_versioned("future_tick", req, Some(VERSION_V3)).await?;
+        let wrap: FutureTickWrap = self
+            .call_into_versioned("future_tick", req, Some(VERSION_V3))
+            .await?;
         let mut items = wrap.items;
         for item in &mut items {
             if item.contract_code.is_empty() {
@@ -547,63 +683,96 @@ impl QuoteClient {
     }
 
     /// 期货盘口。wire: future_depth
-    pub async fn get_future_depth(&self, req: FutureDepthRequest) -> Result<Vec<FutureDepth>, TigerError> {
+    pub async fn get_future_depth(
+        &self,
+        req: FutureDepthRequest,
+    ) -> Result<Vec<FutureDepth>, TigerError> {
         self.call_into("future_depth", req).await
     }
 
     /// 期货交易时段。wire: future_trading_date（返回单个对象）
-    pub async fn get_future_trading_times(&self, req: FutureTradingTimesRequest) -> Result<Option<FutureTradingTime>, TigerError> {
+    pub async fn get_future_trading_times(
+        &self,
+        req: FutureTradingTimesRequest,
+    ) -> Result<Option<FutureTradingTime>, TigerError> {
         self.call_optional("future_trading_date", req).await
     }
 
     // ========== 基金 ==========
 
     /// 基金代码列表。wire: fund_all_symbols（返回字符串列表）
-    pub async fn get_fund_symbols(&self, req: FundSymbolsRequest) -> Result<Vec<String>, TigerError> {
+    pub async fn get_fund_symbols(
+        &self,
+        req: FundSymbolsRequest,
+    ) -> Result<Vec<String>, TigerError> {
         self.call_into("fund_all_symbols", req).await
     }
 
     /// 基金合约信息。wire: fund_contracts
-    pub async fn get_fund_contracts(&self, req: FundContractsRequest) -> Result<Vec<FundContractInfo>, TigerError> {
+    pub async fn get_fund_contracts(
+        &self,
+        req: FundContractsRequest,
+    ) -> Result<Vec<FundContractInfo>, TigerError> {
         self.call_into("fund_contracts", req).await
     }
 
     /// 基金实时净值。wire: fund_quote
-    pub async fn get_fund_quote(&self, req: FundQuoteRequest) -> Result<Vec<FundQuote>, TigerError> {
+    pub async fn get_fund_quote(
+        &self,
+        req: FundQuoteRequest,
+    ) -> Result<Vec<FundQuote>, TigerError> {
         self.call_into("fund_quote", req).await
     }
 
     /// 基金历史净值。wire: fund_history_quote
-    pub async fn get_fund_history_quote(&self, req: FundHistoryQuoteRequest) -> Result<Vec<FundHistoryQuote>, TigerError> {
+    pub async fn get_fund_history_quote(
+        &self,
+        req: FundHistoryQuoteRequest,
+    ) -> Result<Vec<FundHistoryQuote>, TigerError> {
         self.call_into("fund_history_quote", req).await
     }
 
     // ========== 窝轮 ==========
 
     /// 窝轮实时行情。wire: warrant_briefs
-    pub async fn get_warrant_quote(&self, req: WarrantQuoteRequest) -> Result<Vec<WarrantBrief>, TigerError> {
+    pub async fn get_warrant_quote(
+        &self,
+        req: WarrantQuoteRequest,
+    ) -> Result<Vec<WarrantBrief>, TigerError> {
         self.call_into("warrant_briefs", req).await
     }
 
     #[deprecated(since = "0.5.1", note = "Use get_warrant_quote instead")]
-    pub async fn get_warrant_briefs(&self, req: WarrantQuoteRequest) -> Result<Vec<WarrantBrief>, TigerError> {
+    pub async fn get_warrant_briefs(
+        &self,
+        req: WarrantQuoteRequest,
+    ) -> Result<Vec<WarrantBrief>, TigerError> {
         self.get_warrant_quote(req).await
     }
 
     /// 窝轮筛选。wire: warrant_filter
-    pub async fn get_warrant_filter(&self, req: WarrantFilterRequest) -> Result<Option<WarrantFilterResult>, TigerError> {
+    pub async fn get_warrant_filter(
+        &self,
+        req: WarrantFilterRequest,
+    ) -> Result<Option<WarrantFilterResult>, TigerError> {
         self.call_optional("warrant_filter", req).await
     }
 
     // ========== 行业 ==========
 
     /// 行业列表。wire: industry_list
-    pub async fn get_industry_list(&self, req: IndustryListRequest) -> Result<Vec<IndustryItem>, TigerError> {
+    pub async fn get_industry_list(
+        &self,
+        req: IndustryListRequest,
+    ) -> Result<Vec<IndustryItem>, TigerError> {
         self.call_into("industry_list", req).await
     }
 
     /// 行业下股票列表。wire: industry_stock_list
-    pub async fn get_industry_stocks(&self, req: IndustryStocksRequest) -> Result<Vec<IndustryStock>, TigerError> {
+    pub async fn get_industry_stocks(
+        &self,
+        req: IndustryStocksRequest,
+    ) -> Result<Vec<IndustryStock>, TigerError> {
         self.call_into("industry_stock_list", req).await
     }
 
@@ -650,6 +819,51 @@ impl QuoteClient {
         self.get_corporate_action(req).await
     }
 
+    /// 公司行动 - 股票代码变更。wire: corporate_action (action_type=symbol_change)
+    pub async fn get_corporate_symbol_change(
+        &self,
+        mut req: CorporateActionRequest,
+    ) -> Result<Vec<CorporateSymbolChange>, TigerError> {
+        req.action_type = "symbol_change".into();
+        let grouped: std::collections::BTreeMap<String, Vec<CorporateSymbolChange>> =
+            self.call_into("corporate_action", req).await?;
+        let mut out = Vec::new();
+        for (_, mut list) in grouped {
+            out.append(&mut list);
+        }
+        Ok(out)
+    }
+
+    /// 公司行动 - 退市。wire: corporate_action (action_type=delisting)
+    pub async fn get_corporate_delisting(
+        &self,
+        mut req: CorporateActionRequest,
+    ) -> Result<Vec<CorporateDelisting>, TigerError> {
+        req.action_type = "delisting".into();
+        let grouped: std::collections::BTreeMap<String, Vec<CorporateDelisting>> =
+            self.call_into("corporate_action", req).await?;
+        let mut out = Vec::new();
+        for (_, mut list) in grouped {
+            out.append(&mut list);
+        }
+        Ok(out)
+    }
+
+    /// 公司行动 - 新股上市。wire: corporate_action (action_type=ipo)
+    pub async fn get_corporate_ipo(
+        &self,
+        mut req: CorporateActionRequest,
+    ) -> Result<Vec<CorporateIPO>, TigerError> {
+        req.action_type = "ipo".into();
+        let grouped: std::collections::BTreeMap<String, Vec<CorporateIPO>> =
+            self.call_into("corporate_action", req).await?;
+        let mut out = Vec::new();
+        for (_, mut list) in grouped {
+            out.append(&mut list);
+        }
+        Ok(out)
+    }
+
     // ========== 财务 / 日历 ==========
 
     /// 获取日级财务数据
@@ -669,17 +883,26 @@ impl QuoteClient {
     }
 
     /// 财报币种。wire: financial_currency
-    pub async fn get_financial_currency(&self, req: FinancialCurrencyRequest) -> Result<Vec<FinancialCurrency>, TigerError> {
+    pub async fn get_financial_currency(
+        &self,
+        req: FinancialCurrencyRequest,
+    ) -> Result<Vec<FinancialCurrency>, TigerError> {
         self.call_into("financial_currency", req).await
     }
 
     /// 汇率数据。wire: financial_exchange_rate
-    pub async fn get_financial_exchange_rate(&self, req: FinancialExchangeRateRequest) -> Result<Vec<ExchangeRate>, TigerError> {
+    pub async fn get_financial_exchange_rate(
+        &self,
+        req: FinancialExchangeRateRequest,
+    ) -> Result<Vec<ExchangeRate>, TigerError> {
         self.call_into("financial_exchange_rate", req).await
     }
 
     /// 交易日历。wire: trading_calendar
-    pub async fn get_trading_calendar(&self, req: TradingCalendarRequest) -> Result<Vec<TradingCalendarItem>, TigerError> {
+    pub async fn get_trading_calendar(
+        &self,
+        req: TradingCalendarRequest,
+    ) -> Result<Vec<TradingCalendarItem>, TigerError> {
         self.call_into("trading_calendar", req).await
     }
 
@@ -719,27 +942,39 @@ impl QuoteClient {
         &self,
         req: MarketScannerRequest,
     ) -> Result<Option<ScannerResult>, TigerError> {
-        self.call_optional_versioned("market_scanner", req, Some(VERSION_V1)).await
+        self.call_optional_versioned("market_scanner", req, Some(VERSION_V1))
+            .await
     }
 
     /// 获取行情权限（老接口）
     pub async fn grab_quote_permission(&self) -> Result<Vec<QuotePermission>, TigerError> {
-        self.call_into("grab_quote_permission", serde_json::json!({})).await
+        self.call_into("grab_quote_permission", serde_json::json!({}))
+            .await
     }
 
     /// 扫描器可用标签。wire: market_scanner_tags
-    pub async fn get_market_scanner_tags(&self, req: MarketScannerTagsRequest) -> Result<Vec<MarketScannerTagGroup>, TigerError> {
+    pub async fn get_market_scanner_tags(
+        &self,
+        req: MarketScannerTagsRequest,
+    ) -> Result<Vec<MarketScannerTagGroup>, TigerError> {
         self.call_into("market_scanner_tags", req).await
     }
 
     /// 隔夜行情。wire: quote_overnight
-    pub async fn get_quote_overnight(&self, req: QuoteOvernightRequest) -> Result<Vec<QuoteOvernight>, TigerError> {
+    pub async fn get_quote_overnight(
+        &self,
+        req: QuoteOvernightRequest,
+    ) -> Result<Vec<QuoteOvernight>, TigerError> {
         self.call_into("quote_overnight", req).await
     }
 
     // ========== 内部辅助 ==========
 
-    pub async fn call_optional<T, P>(&self, method: &str, params: P) -> Result<Option<T>, TigerError>
+    pub async fn call_optional<T, P>(
+        &self,
+        method: &str,
+        params: P,
+    ) -> Result<Option<T>, TigerError>
     where
         T: serde::de::DeserializeOwned,
         P: Serialize,
@@ -787,7 +1022,6 @@ where
         Some(v) => decode_value(v),
     }
 }
-
 
 #[cfg(test)]
 mod tests;
