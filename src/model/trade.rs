@@ -1,10 +1,10 @@
 //! 交易响应模型：Asset、PrimeAsset、PreviewResult、PlaceOrderResult、OrderIdResult、Transaction。
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// 资产分段（securities / commodities 等）
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetSegment {
     #[serde(default)]
@@ -38,7 +38,7 @@ pub struct AssetSegment {
 }
 
 /// 账户资产条目（来自 /assets）
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Asset {
     #[serde(default)]
@@ -62,7 +62,7 @@ pub struct Asset {
 }
 
 /// 分币种资产明细
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrencyAsset {
     #[serde(default)]
@@ -76,7 +76,7 @@ pub struct CurrencyAsset {
 }
 
 /// 综合账户分段
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PrimeAssetSegment {
     #[serde(default)]
@@ -128,7 +128,7 @@ pub struct PrimeAssetSegment {
 }
 
 /// 综合账户资产
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PrimeAsset {
     #[serde(default)]
@@ -140,7 +140,7 @@ pub struct PrimeAsset {
 }
 
 /// 订单预览结果
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewResult {
     #[serde(default)]
@@ -178,7 +178,7 @@ pub struct PreviewResult {
 }
 
 /// 下单返回结果。`id` 是全局订单 ID，`order_id` 是账户自增号。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlaceOrderResult {
     #[serde(default)]
     pub id: i64,
@@ -192,14 +192,14 @@ pub struct PlaceOrderResult {
 }
 
 /// 仅含订单 ID 的响应（ModifyOrder/CancelOrder）
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OrderIdResult {
     #[serde(default)]
     pub id: i64,
 }
 
 /// 成交记录
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     #[serde(default)]
@@ -255,7 +255,7 @@ pub struct Transaction {
 }
 
 /// 机构子账户信息（来自 /accounts）。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ManagedAccount {
     #[serde(default)]
@@ -269,7 +269,7 @@ pub struct ManagedAccount {
 }
 
 /// 资产分析（按日）条目。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyticsAsset {
     #[serde(default)]
@@ -291,7 +291,7 @@ pub struct AnalyticsAsset {
 }
 
 /// 综合账户总览。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AggregateAssets {
     #[serde(default)]
@@ -309,7 +309,7 @@ pub struct AggregateAssets {
 }
 
 /// 可交易数量估算结果。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateTradableQuantity {
     #[serde(default)]
@@ -329,7 +329,7 @@ pub struct EstimateTradableQuantity {
 }
 
 /// 外汇下单返回结果。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ForexOrderResult {
     #[serde(default)]
@@ -353,7 +353,7 @@ pub struct ForexOrderResult {
 /// 子账户资金调拨响应（transfer_segment_fund / cancel_segment_fund 共用）。
 ///
 /// `id` 使用 [`serde_json::Value`] 因为服务端可能返回数字或字符串（与 Go SDK 保持一致）。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SegmentFund {
     /// 调拨单 ID（服务端可能返回数字或字符串）
@@ -382,7 +382,7 @@ pub struct SegmentFund {
 }
 
 /// 可调拨资金条目（segment_fund_available 响应）。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SegmentFundAvailableItem {
     #[serde(default)]
@@ -394,7 +394,7 @@ pub struct SegmentFundAvailableItem {
 }
 
 /// 资金调拨历史条目。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SegmentFundHistoryItem {
     #[serde(default)]
@@ -420,7 +420,7 @@ pub struct SegmentFundHistoryItem {
 }
 
 /// 资金明细条目（/fund_details）。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FundDetails {
     #[serde(default)]
@@ -446,7 +446,7 @@ pub struct FundDetails {
 }
 
 /// 调拨记录（/transfer_fund）。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FundingHistoryItem {
     #[serde(default)]
@@ -477,7 +477,7 @@ pub struct FundingHistoryItem {
 }
 
 /// 内部转股单项（响应结构，含 camelCase 反序列化）。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TransferItemResponse {
     #[serde(default)]
     pub symbol: String,
@@ -494,7 +494,7 @@ pub struct TransferItemResponse {
 }
 
 /// 内部转股记录。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PositionTransferRecord {
     #[serde(default)]
@@ -514,7 +514,7 @@ pub struct PositionTransferRecord {
 }
 
 /// 内部转股详情。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PositionTransferDetail {
     #[serde(default)]
@@ -538,7 +538,7 @@ pub struct PositionTransferDetail {
 }
 
 /// 外部转股记录。
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PositionTransferExternalRecord {
     #[serde(default)]
@@ -560,7 +560,7 @@ pub struct PositionTransferExternalRecord {
 }
 
 /// 行权检验结果
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionExerciseCheckResult {
     #[serde(default)]
@@ -580,7 +580,7 @@ pub struct OptionExerciseCheckResult {
 }
 
 /// 可行权期权持仓条目
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionExercisePosition {
     #[serde(default)]
@@ -606,7 +606,7 @@ pub struct OptionExercisePosition {
 }
 
 /// 可行权持仓分页结果
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionExercisePositionPageResult {
     #[serde(default)]
@@ -622,7 +622,7 @@ pub struct OptionExercisePositionPageResult {
 }
 
 /// 行权申请记录条目
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionExerciseRecord {
     #[serde(default)]
@@ -662,7 +662,7 @@ pub struct OptionExerciseRecord {
 }
 
 /// 行权记录分页结果
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionExerciseRecordPageResult {
     #[serde(default)]
