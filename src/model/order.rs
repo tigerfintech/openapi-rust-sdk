@@ -9,7 +9,7 @@ use serde_json::Value;
 // ========== 响应模型（查询类接口返回） ==========
 
 /// 附加订单（止盈/止损）- 响应模型
-#[derive(Debug, Clone, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct OrderLeg {
     #[serde(default)]
@@ -23,7 +23,7 @@ pub struct OrderLeg {
 }
 
 /// 算法订单参数 - 响应模型
-#[derive(Debug, Clone, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AlgoParams {
     #[serde(default)]
@@ -39,7 +39,7 @@ pub struct AlgoParams {
 /// 订单响应模型。
 ///
 /// 服务端响应字段为 camelCase。下单/改单请使用 [`OrderRequest`]。
-#[derive(Debug, Clone, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
     #[serde(default)]
