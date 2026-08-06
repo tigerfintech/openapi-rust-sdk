@@ -1,24 +1,45 @@
 # Three-stage pipeline: unit / coverage / integration
 # Mirrors Python, Java and Go SDK pipelines.
+#
+# Note: the default runner is a shell executor that ignores the `image:`
+# directive and has no Rust toolchain preinstalled, so we download a
+# self-contained rustup + toolchain in before_script. Mirrors the Go SDK
+# pipeline's .go_setup pattern.
+#
+# Integration credentials: TIGEROPEN_TIGER_ID, TIGEROPEN_PRIVATE_KEY,
+# TIGEROPEN_ACCOUNT env vars set in GitLab CI Variables (Protected + Masked).
+
 stages:
   - unit
   - coverage
   - integration
 
 variables:
+  # Keep the cargo home inside the project so the runner cache (below)
+  # persists both the registry index and the compiled artifacts.
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
+  # Public Aliyun mirror for rustup dist archives; speeds up the initial
+  # toolchain download from domestic runners. Falls back to the upstream
+  # (static.rust-lang.org) automatically if the mirror is unreachable.
+  RUSTUP_DIST_SERVER: "https://mirrors.aliyun.com/rust-static/rustup"
+  RUSTUP_UPDATE_ROOT: "https://mirrors.aliyun.com/rust-static/rustup/rustup"
 
 .rust_setup: &rust_setup
   - |
-    if command -v rustup >/dev/null 2>&1; then
-      echo "rustup: $(rustup --version)"
-    elif command -v rustc >/dev/null 2>&1; then
-      echo "rustc: $(rustc --version)"
+    RUST_VERSION=1.79.0
+    if command -v cargo >/dev/null 2>&1; then
+      echo "Using preinstalled rust: $(rustc --version)"
     else
-      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-      source "$HOME/.cargo/env"
+      echo "Installing rustup + rust ${RUST_VERSION}"
+      # rustup-init honors CARGO_HOME/RUSTUP_HOME, so the env script lands
+      # at $CARGO_HOME/env rather than $HOME/.cargo/env.
+      curl --proto '=https' --tlsv1.2 -sSf --retry 3 https://sh.rustup.rs \
+        | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile minimal
+      source "${CARGO_HOME}/env"
+      export PATH="${CARGO_HOME}/bin:${PATH}"
     fi
+  - export CARGO_NET_GIT_FETCH_WITH_CLI=true
   - rustc --version && cargo --version
 
 unit:rust:
