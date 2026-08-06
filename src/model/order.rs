@@ -1004,4 +1004,146 @@ mod tests {
         assert!(!obj.contains_key("limit_price"));
         assert!(!obj.contains_key("aux_price"));
     }
+
+    // ========== 未覆盖的构造函数测试 ==========
+
+    #[test]
+    fn test_stop_limit_order_helper() {
+        let o = stop_limit_order("ACC", "AAPL", "STK", "SELL", 100, 145.0, 140.0);
+        assert_eq!(o.order_type, Some("STP_LMT".to_string()));
+        assert_eq!(o.limit_price, Some(145.0));
+        assert_eq!(o.aux_price, Some(140.0));
+        assert_eq!(o.total_quantity, Some(100));
+        assert_eq!(o.time_in_force, Some("DAY".to_string()));
+    }
+
+    #[test]
+    fn test_trail_order_helper() {
+        let o = trail_order("ACC", "AAPL", "STK", "SELL", 100, 5.0);
+        assert_eq!(o.order_type, Some("TRAIL".to_string()));
+        assert_eq!(o.trailing_percent, Some(5.0));
+        assert_eq!(o.total_quantity, Some(100));
+    }
+
+    #[test]
+    fn test_auction_limit_order_helper() {
+        let o = auction_limit_order("ACC", "AAPL", "STK", "BUY", 100, 150.0);
+        assert_eq!(o.order_type, Some("AL".to_string()));
+        assert_eq!(o.limit_price, Some(150.0));
+    }
+
+    #[test]
+    fn test_auction_market_order_helper() {
+        let o = auction_market_order("ACC", "AAPL", "STK", "SELL", 50);
+        assert_eq!(o.order_type, Some("AM".to_string()));
+        assert_eq!(o.total_quantity, Some(50));
+    }
+
+    #[test]
+    fn test_algo_order_helper() {
+        let params = AlgoParamsRequest {
+            algo_strategy: Some("TWAP".to_string()),
+            start_time: Some("2024-01-01 09:30:00".to_string()),
+            end_time: Some("2024-01-01 16:00:00".to_string()),
+            participation_rate: Some(10.0),
+        };
+        let o = algo_order("ACC", "AAPL", "STK", "BUY", 100, 150.0, "TWAP", params);
+        assert_eq!(o.order_type, Some("TWAP".to_string()));
+        assert_eq!(o.limit_price, Some(150.0));
+        assert!(o.algo_params.is_some());
+        assert_eq!(o.algo_params.as_ref().unwrap().algo_strategy, Some("TWAP".to_string()));
+    }
+
+    #[test]
+    fn test_market_order_by_amount_helper() {
+        let o = market_order_by_amount("ACC", "AAPL", "STK", "BUY", 10000.0);
+        assert_eq!(o.order_type, Some("MKT".to_string()));
+        assert_eq!(o.total_quantity, Some(0));
+        assert_eq!(o.cash_amount, Some(10000.0));
+    }
+
+    #[test]
+    fn test_limit_order_by_amount_helper() {
+        let o = limit_order_by_amount("ACC", "AAPL", "STK", "BUY", 10000.0, 150.0);
+        assert_eq!(o.order_type, Some("LMT".to_string()));
+        assert_eq!(o.cash_amount, Some(10000.0));
+        assert_eq!(o.limit_price, Some(150.0));
+    }
+
+    #[test]
+    fn test_trail_order_by_price_helper() {
+        let o = trail_order_by_price("ACC", "AAPL", "STK", "SELL", 100, 5.0);
+        assert_eq!(o.order_type, Some("TRAIL".to_string()));
+        assert_eq!(o.aux_price, Some(5.0));
+        assert_eq!(o.trailing_percent, None);
+    }
+
+    #[test]
+    fn test_limit_order_with_legs_helper() {
+        let legs = vec![
+            new_order_leg("PROFIT", 160.0, "GTC"),
+            new_order_leg("LOSS", 140.0, "GTC"),
+        ];
+        let o = limit_order_with_legs("ACC", "AAPL", "STK", "BUY", 100, 150.0, legs);
+        assert_eq!(o.order_type, Some("LMT".to_string()));
+        assert_eq!(o.limit_price, Some(150.0));
+        assert!(o.order_legs.is_some());
+        assert_eq!(o.order_legs.as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_combo_order_helper() {
+        let legs = vec![contract_leg("AAPL", "STK", "BUY", 1, None, None, None)];
+        let o = combo_order(
+            "ACC", "BUY", 100, "LMT", legs, Some("GUARDED"), Some(150.0), None, None,
+        );
+        assert_eq!(o.sec_type, Some("MLEG".to_string()));
+        assert_eq!(o.order_type, Some("LMT".to_string()));
+        assert_eq!(o.combo_type, Some("GUARDED".to_string()));
+        assert_eq!(o.limit_price, Some(150.0));
+        assert!(o.contract_legs.is_some());
+    }
+
+    #[test]
+    fn test_oca_order_helper() {
+        let inner = Box::new(market_order("ACC", "AAPL", "STK", "BUY", 100));
+        let o = oca_order("ACC", "AAPL", "STK", "BUY", 100, vec![inner]);
+        assert_eq!(o.order_type, Some("OCA".to_string()));
+        assert!(o.oca_orders.is_some());
+        assert_eq!(o.oca_orders.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_contract_leg_helper() {
+        let leg = contract_leg("AAPL", "OPT", "BUY", 1, Some("2024-01-19"), Some("150.0"), Some("CALL"));
+        assert_eq!(leg.symbol, Some("AAPL".to_string()));
+        assert_eq!(leg.sec_type, Some("OPT".to_string()));
+        assert_eq!(leg.ratio, Some(1));
+        assert_eq!(leg.expiry, Some("2024-01-19".to_string()));
+        assert_eq!(leg.strike, Some("150.0".to_string()));
+        assert_eq!(leg.right, Some("CALL".to_string()));
+    }
+
+    #[test]
+    fn test_contract_leg_helper_no_optionals() {
+        let leg = contract_leg("AAPL", "STK", "BUY", 1, None, None, None);
+        assert_eq!(leg.expiry, None);
+        assert_eq!(leg.strike, None);
+        assert_eq!(leg.right, None);
+    }
+
+    #[test]
+    fn test_iceberg_order_zero_start_end_time_filtered() {
+        // start_time=0 and end_time=0 should be filtered out (filter |&v| v > 0)
+        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, Some(0), Some(0));
+        assert_eq!(o.start_time, None);
+        assert_eq!(o.end_time, None);
+    }
+
+    #[test]
+    fn test_iceberg_order_default_price_type() {
+        // price_type=None → default "LIMIT_PRICE"
+        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, None, None);
+        assert_eq!(o.price_type, Some("LIMIT_PRICE".to_string()));
+    }
 }
