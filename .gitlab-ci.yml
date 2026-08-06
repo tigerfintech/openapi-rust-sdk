@@ -1,5 +1,5 @@
 # Three-stage pipeline: unit / coverage / integration
-# Uses a Docker runner tagged 'openapi' (image: rust:1.79 ships cargo).
+# Uses a Docker runner tagged 'openapi' (image: rust:1.85 ships cargo).
 #
 # Integration credentials: TIGEROPEN_TIGER_ID, TIGEROPEN_PRIVATE_KEY,
 # TIGEROPEN_ACCOUNT env vars set in GitLab CI Variables (Protected + Masked).
@@ -14,7 +14,7 @@ variables:
   CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
 
 .rust_base:
-  image: rust:1.79
+  image: rust:1.85
   tags:
     - openapi
   cache:
