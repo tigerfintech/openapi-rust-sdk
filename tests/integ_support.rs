@@ -13,6 +13,7 @@ pub const ENV_TIGER_ID: &str = "TIGEROPEN_TIGER_ID";
 pub const ENV_PRIVATE_KEY: &str = "TIGEROPEN_PRIVATE_KEY";
 pub const ENV_ACCOUNT: &str = "TIGEROPEN_ACCOUNT";
 pub const ENV_SERVER_URL: &str = "TIGEROPEN_SERVER_URL";
+pub const ENV_PROPS_PATH: &str = "TIGEROPEN_PROPS_PATH";
 
 pub const DEFAULT_SERVER_URL: &str = "https://openapi.tigerfintech.com/gateway";
 
@@ -21,22 +22,51 @@ pub fn is_integ_run() -> bool {
     std::env::var(ENV_RUN_INTEG).as_deref() == Ok("true")
 }
 
-/// Returns true when credentials are available (regardless of RUN_INTEG flag).
+/// Returns true when credentials are available (env vars or a properties file).
 #[allow(dead_code)]
 pub fn has_creds() -> bool {
-    std::env::var(ENV_TIGER_ID).is_ok() && std::env::var(ENV_PRIVATE_KEY).is_ok()
+    if std::env::var(ENV_TIGER_ID).is_ok() && std::env::var(ENV_PRIVATE_KEY).is_ok() {
+        return true;
+    }
+    std::env::var(ENV_PROPS_PATH).map(|p| !p.is_empty()).unwrap_or(false)
 }
 
-/// Build a ClientConfig from env vars using the builder pattern.
+/// Parse a `.properties` file at the path given by `TIGEROPEN_PROPS_PATH`,
+/// returning `tiger_id` and `private_key` fields.
+fn load_props_credentials() -> (String, String) {
+    let path = std::env::var(ENV_PROPS_PATH)
+        .expect("TIGEROPEN_PROPS_PATH env var required when env vars are absent");
+    let props = tigeropen::config::config_parser::parse_properties_file(&path)
+        .unwrap_or_else(|e| panic!("Failed to parse properties file {}: {}", path, e));
+    let tiger_id = props
+        .get("tiger_id")
+        .unwrap_or_else(|| panic!("tiger_id not found in properties file {}", path))
+        .clone();
+    let private_key = props
+        .get("private_key")
+        .unwrap_or_else(|| panic!("private_key not found in properties file {}", path))
+        .clone();
+    (tiger_id, private_key)
+}
+
+/// Build a ClientConfig from env vars or a properties file.
+///
+/// Credential resolution order (matches Java / Python / Go SDKs):
+///   1. TIGEROPEN_TIGER_ID + TIGEROPEN_PRIVATE_KEY env vars (+ optionally TIGEROPEN_ACCOUNT)
+///   2. TIGEROPEN_PROPS_PATH — path to a .properties file with tiger_id/private_key
+///
 /// Panics with a descriptive message when credentials are missing — a
 /// misconfigured env is a real error, not a skip.
 pub fn integ_config() -> tigeropen::config::ClientConfig {
     use std::time::Duration;
 
-    let tiger_id = std::env::var(ENV_TIGER_ID)
-        .expect("TIGEROPEN_TIGER_ID env var required for integration tests");
-    let private_key = std::env::var(ENV_PRIVATE_KEY)
-        .expect("TIGEROPEN_PRIVATE_KEY env var required for integration tests");
+    // Resolve tiger_id and private_key: env vars take priority, then properties file.
+    let (tiger_id, private_key) =
+        match (std::env::var(ENV_TIGER_ID), std::env::var(ENV_PRIVATE_KEY)) {
+            (Ok(tid), Ok(pk)) => (tid, pk),
+            _ => load_props_credentials(),
+        };
+
     let account = std::env::var(ENV_ACCOUNT).unwrap_or_default();
     let server_url =
         std::env::var(ENV_SERVER_URL).unwrap_or_else(|_| DEFAULT_SERVER_URL.to_string());

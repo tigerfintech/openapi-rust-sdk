@@ -630,8 +630,6 @@ mod tests {
     fn test_should_refresh_token_no_comma_in_header() {
         // Decoded header doesn't contain a comma → parts < 2 → false
         use base64::Engine;
-        let payload = "0123456789ABCDE,some_extra_payload";
-        // wait, that has a comma. Let me construct one without:
         let no_comma = "0123456789ABCDE_some_extra_payload_here";
         let token = base64::engine::general_purpose::STANDARD.encode(no_comma.as_bytes());
         assert!(!should_refresh_token(&token, 30));
