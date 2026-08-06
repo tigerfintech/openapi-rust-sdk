@@ -522,3 +522,500 @@ pub struct OptionExerciseCancelRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn to_json<T: Serialize>(v: &T) -> serde_json::Value {
+        serde_json::to_value(v).unwrap()
+    }
+
+    // ── Default serialization: all-None → "{}" ──
+
+    #[test]
+    fn test_default_requests_serialize_to_empty_object() {
+        assert_eq!(to_json(&OrdersRequest::default()), serde_json::json!({}));
+        assert_eq!(to_json(&GetOrderRequest::default()), serde_json::json!({}));
+        assert_eq!(
+            to_json(&OrderTransactionsRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(to_json(&PositionsRequest::default()), serde_json::json!({}));
+        assert_eq!(to_json(&AssetsRequest::default()), serde_json::json!({}));
+        assert_eq!(
+            to_json(&ManagedAccountsRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&DerivativeContractsRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&AnalyticsAssetRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&AggregateAssetsRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&EstimateTradableQuantityRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(to_json(&ForexOrderRequest::default()), serde_json::json!({}));
+        assert_eq!(to_json(&SegmentFundRequest::default()), serde_json::json!({}));
+        assert_eq!(to_json(&FundDetailsRequest::default()), serde_json::json!({}));
+        assert_eq!(
+            to_json(&FundingHistoryRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&PositionTransferRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionExerciseCheckRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionExerciseSubmitRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionExerciseRecordsRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionExerciseCancelRequest::default()),
+            serde_json::json!({})
+        );
+    }
+
+    // ── Field name assertions ──
+
+    #[test]
+    fn test_orders_request_field_names() {
+        let req = OrdersRequest {
+            account: Some("DU123".into()),
+            sec_type: Some("STK".into()),
+            market: Some("US".into()),
+            symbol: Some("AAPL".into()),
+            start_date: Some(1000),
+            end_date: Some(2000),
+            limit: Some(50),
+            is_brief: Some(true),
+            states: Some(vec!["Filled".into()]),
+            sort_by: Some("LATEST_CREATED".into()),
+            seg_type: Some("SEC".into()),
+            lang: Some("en_US".into()),
+            page_token: Some("tok".into()),
+            parent_id: Some(99),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["account"], "DU123");
+        assert_eq!(j["sec_type"], "STK");
+        assert_eq!(j["market"], "US");
+        assert_eq!(j["symbol"], "AAPL");
+        assert_eq!(j["start_date"], 1000);
+        assert_eq!(j["end_date"], 2000);
+        assert_eq!(j["limit"], 50);
+        assert_eq!(j["is_brief"], true);
+        assert_eq!(j["states"][0], "Filled");
+        assert_eq!(j["sort_by"], "LATEST_CREATED");
+        assert_eq!(j["seg_type"], "SEC");
+        assert_eq!(j["page_token"], "tok");
+        assert_eq!(j["parent_id"], 99);
+    }
+
+    #[test]
+    fn test_positions_request_field_names() {
+        let req = PositionsRequest {
+            account: Some("DU123".into()),
+            sec_type: Some("STK".into()),
+            currency: Some("USD".into()),
+            market: Some("US".into()),
+            symbol: Some("AAPL".into()),
+            sub_accounts: Some(vec!["sub1".into()]),
+            expiry: Some("2024-01-19".into()),
+            strike: Some("150.0".into()),
+            right: Some("CALL".into()),
+            asset_quote_type: Some("last".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["currency"], "USD");
+        assert_eq!(j["sub_accounts"][0], "sub1");
+        assert_eq!(j["asset_quote_type"], "last");
+    }
+
+    #[test]
+    fn test_assets_request_field_names() {
+        let req = AssetsRequest {
+            account: Some("DU123".into()),
+            sub_accounts: Some(vec!["sub1".into()]),
+            segment: Some(true),
+            market_value: Some(false),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["segment"], true);
+        assert_eq!(j["market_value"], false);
+    }
+
+    #[test]
+    fn test_forex_order_request_field_names() {
+        let req = ForexOrderRequest {
+            account: Some("DU123".into()),
+            seg_type: Some("SEC".into()),
+            source_currency: Some("USD".into()),
+            target_currency: Some("HKD".into()),
+            source_amount: Some(100.0),
+            target_amount: Some(780.0),
+            order_type: Some("LMT".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["source_currency"], "USD");
+        assert_eq!(j["target_currency"], "HKD");
+        assert_eq!(j["source_amount"], 100.0);
+        assert_eq!(j["target_amount"], 780.0);
+    }
+
+    #[test]
+    fn test_segment_fund_request_field_names() {
+        let req = SegmentFundRequest {
+            account: Some("DU123".into()),
+            id: Some("abc".into()),
+            from_segment: Some("SEC".into()),
+            to_segment: Some("FUT".into()),
+            currency: Some("USD".into()),
+            amount: Some(500.0),
+            limit: Some(10),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["from_segment"], "SEC");
+        assert_eq!(j["to_segment"], "FUT");
+        assert_eq!(j["amount"], 500.0);
+    }
+
+    #[test]
+    fn test_position_transfer_request_field_names() {
+        let req = PositionTransferRequest {
+            from_account: Some("DU1".into()),
+            to_account: Some("DU2".into()),
+            market: Some("US".into()),
+            transfers: Some(vec![TransferItem {
+                symbol: Some("AAPL".into()),
+                quantity: Some(100),
+                sec_type: Some("STK".into()),
+                ..Default::default()
+            }]),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["from_account"], "DU1");
+        assert_eq!(j["to_account"], "DU2");
+        assert_eq!(j["transfers"][0]["symbol"], "AAPL");
+        assert_eq!(j["transfers"][0]["quantity"], 100);
+    }
+
+    #[test]
+    fn test_transfer_item_field_names() {
+        let item = TransferItem {
+            symbol: Some("AAPL".into()),
+            quantity: Some(10),
+            expiry: Some("2024-01-19".into()),
+            strike: Some("150.0".into()),
+            right: Some("CALL".into()),
+            sec_type: Some("OPT".into()),
+        };
+        let j = to_json(&item);
+        assert_eq!(j["symbol"], "AAPL");
+        assert_eq!(j["quantity"], 10);
+        assert_eq!(j["expiry"], "2024-01-19");
+        assert_eq!(j["strike"], "150.0");
+        assert_eq!(j["right"], "CALL");
+        assert_eq!(j["sec_type"], "OPT");
+    }
+
+    #[test]
+    fn test_option_exercise_check_request_type_rename() {
+        // exercise_type field serializes as "type" on the wire
+        let req = OptionExerciseCheckRequest {
+            account: Some("DU1".into()),
+            secret_key: Some("secret".into()),
+            contract_id: Some(12345),
+            exercise_type: Some("Exercise".into()),
+            quantity: Some(1.0),
+            executing_date: Some("2024-01-19".into()),
+            is_force: Some(true),
+            itm_rate: Some(5),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        // rename = "type" → wire key is "type", not "exercise_type"
+        assert_eq!(j["type"], "Exercise");
+        assert_eq!(j["secret_key"], "secret");
+        assert_eq!(j["contract_id"], 12345);
+        assert_eq!(j["quantity"], 1.0);
+        assert_eq!(j["is_force"], true);
+        assert_eq!(j["itm_rate"], 5);
+    }
+
+    #[test]
+    fn test_option_exercise_submit_request_type_rename() {
+        let req = OptionExerciseSubmitRequest {
+            account: Some("DU1".into()),
+            secret_key: Some("secret".into()),
+            contract_id: Some(999),
+            exercise_type: Some("Expire".into()),
+            quantity: Some(2.0),
+            itm_rate: Some(3),
+            lang: Some("en_US".into()),
+            ..Default::default()
+        };
+        let j = to_json(&req);
+        assert_eq!(j["type"], "Expire");
+        assert_eq!(j["contract_id"], 999);
+        assert_eq!(j["itm_rate"], 3);
+        // exercising_date and is_force are None → skipped
+        assert!(j.get("executing_date").is_none());
+        assert!(j.get("is_force").is_none());
+    }
+
+    #[test]
+    fn test_option_exercise_records_request_type_rename() {
+        let req = OptionExerciseRecordsRequest {
+            account: Some("DU1".into()),
+            secret_key: Some("secret".into()),
+            page: Some(1),
+            size: Some(20),
+            status: Some("Success".into()),
+            exercise_type: Some("Exercise".into()),
+            symbol: Some("AAPL".into()),
+            order_by: Some("symbol".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["type"], "Exercise");
+        assert_eq!(j["page"], 1);
+        assert_eq!(j["size"], 20);
+        assert_eq!(j["status"], "Success");
+        assert_eq!(j["order_by"], "symbol");
+    }
+
+    #[test]
+    fn test_option_exercise_cancel_request_field_names() {
+        let req = OptionExerciseCancelRequest {
+            account: Some("DU1".into()),
+            secret_key: Some("secret".into()),
+            id: Some(42),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["id"], 42);
+        assert_eq!(j["secret_key"], "secret");
+    }
+
+    #[test]
+    fn test_position_transfer_records_request_field_names() {
+        let req = PositionTransferRecordsRequest {
+            account_id: Some("DU1".into()),
+            since_date: Some("2024-01-01".into()),
+            to_date: Some("2024-01-31".into()),
+            market: Some("US".into()),
+            limit: Some(50),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["account_id"], "DU1");
+        assert_eq!(j["since_date"], "2024-01-01");
+        assert_eq!(j["to_date"], "2024-01-31");
+    }
+
+    #[test]
+    fn test_estimate_tradable_quantity_request_field_names() {
+        let req = EstimateTradableQuantityRequest {
+            account: Some("DU1".into()),
+            symbol: Some("AAPL".into()),
+            sec_type: Some("STK".into()),
+            action: Some("BUY".into()),
+            order_type: Some("MKT".into()),
+            limit_price: Some(150.5),
+            market: Some("US".into()),
+            currency: Some("USD".into()),
+            expiry: Some("2024-01-19".into()),
+            strike: Some("150.0".into()),
+            right: Some("CALL".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["action"], "BUY");
+        assert_eq!(j["order_type"], "MKT");
+        assert_eq!(j["limit_price"], 150.5);
+    }
+
+    #[test]
+    fn test_analytics_asset_request_field_names() {
+        let req = AnalyticsAssetRequest {
+            account: Some("DU1".into()),
+            seg_type: Some("SEC".into()),
+            start_date: Some("2024-01-01".into()),
+            end_date: Some("2024-01-31".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["seg_type"], "SEC");
+        assert_eq!(j["start_date"], "2024-01-01");
+        assert_eq!(j["end_date"], "2024-01-31");
+    }
+
+    #[test]
+    fn test_aggregate_assets_request_field_names() {
+        let req = AggregateAssetsRequest {
+            account: Some("DU1".into()),
+            base_currency: Some("USD".into()),
+            seg_type: Some("SEC".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["base_currency"], "USD");
+    }
+
+    #[test]
+    fn test_derivative_contracts_request_field_names() {
+        let req = DerivativeContractsRequest {
+            account: Some("DU1".into()),
+            symbols: Some(vec!["AAPL".into()]),
+            sec_type: Some("OPT".into()),
+            expiry: Some("2024-01-19".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["symbols"][0], "AAPL");
+        assert_eq!(j["expiry"], "2024-01-19");
+    }
+
+    #[test]
+    fn test_fund_details_request_field_names() {
+        let req = FundDetailsRequest {
+            account: Some("DU1".into()),
+            seg_types: Some(vec!["SEC".into()]),
+            fund_type: Some("deposit".into()),
+            currency: Some("USD".into()),
+            start_date: Some(1000),
+            end_date: Some(2000),
+            limit: Some(50),
+            page_token: Some("tok".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["seg_types"][0], "SEC");
+        assert_eq!(j["fund_type"], "deposit");
+        assert_eq!(j["page_token"], "tok");
+    }
+
+    #[test]
+    fn test_get_order_request_field_names() {
+        let req = GetOrderRequest {
+            account: Some("DU1".into()),
+            id: Some(12345),
+            order_id: Some(67890),
+            is_brief: Some(true),
+            show_charges: Some(true),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["id"], 12345);
+        assert_eq!(j["order_id"], 67890);
+        assert_eq!(j["show_charges"], true);
+    }
+
+    #[test]
+    fn test_order_transactions_request_field_names() {
+        let req = OrderTransactionsRequest {
+            account: Some("DU1".into()),
+            order_id: Some(123),
+            symbol: Some("AAPL".into()),
+            sec_type: Some("STK".into()),
+            start_date: Some(1000),
+            end_date: Some(2000),
+            limit: Some(10),
+            expiry: Some("2024-01-19".into()),
+            strike: Some(150.0),
+            put_call: Some("CALL".into()),
+            lang: Some("en_US".into()),
+            page_token: Some("tok".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["order_id"], 123);
+        assert_eq!(j["put_call"], "CALL");
+        assert_eq!(j["strike"], 150.0);
+    }
+
+    #[test]
+    fn test_funding_history_request_field_names() {
+        let req = FundingHistoryRequest {
+            account: Some("DU1".into()),
+            seg_type: Some("SEC".into()),
+            currency: Some("USD".into()),
+            start_date: Some(1000),
+            end_date: Some(2000),
+            limit: Some(50),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["seg_type"], "SEC");
+    }
+
+    #[test]
+    fn test_managed_accounts_request_field_names() {
+        let req = ManagedAccountsRequest {
+            account: Some("DU1".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["account"], "DU1");
+    }
+
+    #[test]
+    fn test_option_exercise_position_request_type_rename() {
+        let req = OptionExercisePositionRequest {
+            account: Some("DU1".into()),
+            secret_key: Some("secret".into()),
+            exercise_type: Some("Exercise".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["type"], "Exercise");
+    }
+
+    #[test]
+    fn test_position_transfer_detail_request_field_names() {
+        let req = PositionTransferDetailRequest {
+            account_id: Some("DU1".into()),
+            id: Some("abc".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["account_id"], "DU1");
+        assert_eq!(j["id"], "abc");
+    }
+
+    #[test]
+    fn test_position_transfer_external_records_request_field_names() {
+        let req = PositionTransferExternalRecordsRequest {
+            account_id: Some("DU1".into()),
+            since_date: Some("2024-01-01".into()),
+            to_date: Some("2024-01-31".into()),
+            market: Some("US".into()),
+            limit: Some(50),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["account_id"], "DU1");
+        assert_eq!(j["since_date"], "2024-01-01");
+    }
+}

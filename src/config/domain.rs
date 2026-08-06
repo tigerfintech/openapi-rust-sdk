@@ -94,3 +94,123 @@ pub fn resolve_dynamic_server_url(
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_conf(pairs: &[(&str, &str)]) -> HashMap<String, serde_json::Value> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), serde_json::Value::String(v.to_string())))
+            .collect()
+    }
+
+    // ── resolve_dynamic_server_url ──
+
+    #[test]
+    fn test_resolve_server_url_empty_map_returns_none() {
+        let conf = HashMap::new();
+        assert_eq!(resolve_dynamic_server_url(&conf, None), None);
+    }
+
+    #[test]
+    fn test_resolve_server_url_license_key() {
+        let conf = make_conf(&[("TBNZ", "https://tbnz.example.com")]);
+        let url = resolve_dynamic_server_url(&conf, Some("TBNZ")).unwrap();
+        assert_eq!(url, "https://tbnz.example.com/gateway");
+    }
+
+    #[test]
+    fn test_resolve_server_url_falls_back_to_common() {
+        let conf = make_conf(&[("COMMON", "https://common.example.com")]);
+        // license not present in map → fall back to COMMON
+        let url = resolve_dynamic_server_url(&conf, Some("TBNZ")).unwrap();
+        assert_eq!(url, "https://common.example.com/gateway");
+    }
+
+    #[test]
+    fn test_resolve_server_url_no_license_uses_common_key() {
+        let conf = make_conf(&[("COMMON", "https://common.example.com")]);
+        let url = resolve_dynamic_server_url(&conf, None).unwrap();
+        assert_eq!(url, "https://common.example.com/gateway");
+    }
+
+    #[test]
+    fn test_resolve_server_url_license_present_takes_priority_over_common() {
+        let conf = make_conf(&[
+            ("TBNZ", "https://tbnz.example.com"),
+            ("COMMON", "https://common.example.com"),
+        ]);
+        let url = resolve_dynamic_server_url(&conf, Some("TBNZ")).unwrap();
+        assert_eq!(url, "https://tbnz.example.com/gateway");
+    }
+
+    #[test]
+    fn test_resolve_server_url_non_string_value_ignored() {
+        let mut conf = HashMap::new();
+        conf.insert("TBNZ".to_string(), serde_json::json!(42));
+        // license key present but not a string → fall back to COMMON (also missing) → None
+        assert_eq!(resolve_dynamic_server_url(&conf, Some("TBNZ")), None);
+    }
+
+    #[test]
+    fn test_resolve_server_url_missing_key_and_missing_common_returns_none() {
+        let conf = make_conf(&[("OTHER", "https://other.example.com")]);
+        assert_eq!(resolve_dynamic_server_url(&conf, Some("TBNZ")), None);
+    }
+
+    // ── resolve_dynamic_quote_server_url ──
+
+    #[test]
+    fn test_resolve_quote_url_empty_map_returns_none() {
+        let conf = HashMap::new();
+        assert_eq!(resolve_dynamic_quote_server_url(&conf, None), None);
+    }
+
+    #[test]
+    fn test_resolve_quote_url_license_quote_key() {
+        let conf = make_conf(&[("TBNZ-QUOTE", "https://quote.tbnz.example.com")]);
+        let url = resolve_dynamic_quote_server_url(&conf, Some("TBNZ")).unwrap();
+        assert_eq!(url, "https://quote.tbnz.example.com/gateway");
+    }
+
+    #[test]
+    fn test_resolve_quote_url_falls_back_to_common() {
+        let conf = make_conf(&[("COMMON", "https://common.example.com")]);
+        let url = resolve_dynamic_quote_server_url(&conf, Some("TBNZ")).unwrap();
+        assert_eq!(url, "https://common.example.com/gateway");
+    }
+
+    #[test]
+    fn test_resolve_quote_url_no_license_falls_back_to_common() {
+        let conf = make_conf(&[("COMMON", "https://common.example.com")]);
+        let url = resolve_dynamic_quote_server_url(&conf, None).unwrap();
+        assert_eq!(url, "https://common.example.com/gateway");
+    }
+
+    #[test]
+    fn test_resolve_quote_url_license_quote_takes_priority_over_common() {
+        let conf = make_conf(&[
+            ("TBNZ-QUOTE", "https://quote.tbnz.example.com"),
+            ("COMMON", "https://common.example.com"),
+        ]);
+        let url = resolve_dynamic_quote_server_url(&conf, Some("TBNZ")).unwrap();
+        assert_eq!(url, "https://quote.tbnz.example.com/gateway");
+    }
+
+    #[test]
+    fn test_resolve_quote_url_missing_all_returns_none() {
+        let conf = make_conf(&[("OTHER", "https://other.example.com")]);
+        assert_eq!(resolve_dynamic_quote_server_url(&conf, Some("TBNZ")), None);
+    }
+
+    #[test]
+    fn test_resolve_quote_url_non_string_value_ignored() {
+        let mut conf = HashMap::new();
+        conf.insert("TBNZ-QUOTE".to_string(), serde_json::json!(null));
+        conf.insert("COMMON".to_string(), serde_json::Value::String("https://c.example.com".into()));
+        let url = resolve_dynamic_quote_server_url(&conf, Some("TBNZ")).unwrap();
+        assert_eq!(url, "https://c.example.com/gateway");
+    }
+}
