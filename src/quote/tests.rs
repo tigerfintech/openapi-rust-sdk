@@ -712,3 +712,907 @@ async fn test_call_optional_versioned_passes_version() {
     let body: serde_json::Value = serde_json::from_slice(&reqs[0].body).unwrap();
     assert_eq!(body["version"].as_str().unwrap(), "3.0");
 }
+
+// ========== 缺失方法的 wire method 测试 ==========
+
+use crate::model::quote_requests::{
+    AllFutureContractsRequest, DelayedQuoteRequest, FinancialCurrencyRequest,
+    FinancialExchangeRateRequest, FutureContinuousContractsRequest, FutureContractSingleRequest,
+    FutureDepthRequest, FutureHistoryMainContractRequest, FutureKlineByPageRequest,
+    FutureTradeTicksRequest, FutureTradingTimesRequest, FundContractsRequest,
+    FundHistoryQuoteRequest, FundQuoteRequest, FundSymbolsRequest, IndustryListRequest,
+    IndustryStocksRequest, KlineByPageRequest, KlineQuotaRequest, MarketScannerTagsRequest,
+    OptionAnalysisRequest, OptionDepthRequest, OptionSymbolsRequest, OptionTimelineRequest,
+    OptionTradeTicksRequest, QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest,
+    StockBrokerRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
+    SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
+    TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
+};
+
+// --- 1. get_brief (deprecated, calls get_real_time_quote) ---
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn test_get_brief_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_brief(BriefRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "quote_real_time");
+}
+
+// --- 2. get_timeline ---
+
+#[tokio::test]
+async fn test_get_timeline_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc.get_timeline(&["AAPL"]).await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "timeline");
+    assert_eq!(req["version"].as_str().unwrap(), "3.0");
+}
+
+// --- 3. get_trade_tick ---
+
+#[tokio::test]
+async fn test_get_trade_tick_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_trade_tick(TradeTickRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "trade_tick");
+}
+
+// --- 4. get_symbols ---
+
+#[tokio::test]
+async fn test_get_symbols_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_symbols(SymbolsRequest {
+            market: Some("US".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "all_symbols");
+}
+
+#[tokio::test]
+async fn test_get_symbols_returns_vec_string() {
+    let server = mock_success_server(r#"["AAPL","GOOG","TSLA"]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let result = qc
+        .get_symbols(SymbolsRequest::default())
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[0], "AAPL");
+}
+
+// --- 5. get_symbol_names ---
+
+#[tokio::test]
+async fn test_get_symbol_names_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc.get_symbol_names(SymbolsRequest::default()).await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "all_symbol_names");
+}
+
+// --- 6. get_trade_metas ---
+
+#[tokio::test]
+async fn test_get_trade_metas_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_trade_metas(TradeMetasRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "quote_stock_trade");
+}
+
+// --- 7. get_stock_details ---
+
+#[tokio::test]
+async fn test_get_stock_details_wire_method() {
+    let server = mock_success_server(r#"{"items":[]}"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_stock_details(StockDetailsRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "stock_detail");
+}
+
+// --- 8. get_delayed_quote ---
+
+#[tokio::test]
+async fn test_get_delayed_quote_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_delayed_quote(DelayedQuoteRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "quote_delay");
+}
+
+// --- 9. get_stock_delay_briefs (deprecated) ---
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn test_get_stock_delay_briefs_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_stock_delay_briefs(DelayedQuoteRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "quote_delay");
+}
+
+// --- 10. get_kline_by_page ---
+
+#[tokio::test]
+async fn test_get_kline_by_page_wire_method() {
+    let server = mock_success_server(
+        r#"[{"symbol":"AAPL","period":"day","items":[{"time":1700000000,"open":150.0,"close":151.0,"high":152.0,"low":149.0,"volume":1000}]}]"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_kline_by_page(KlineByPageRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            period: Some("day".into()),
+            page_size: Some(10),
+            total_size: Some(10),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "kline");
+}
+
+// --- 11. get_timeline_history ---
+
+#[tokio::test]
+async fn test_get_timeline_history_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_timeline_history(TimelineHistoryRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            date: Some("2025-01-01".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "history_timeline");
+}
+
+// --- 12. get_trade_rank ---
+
+#[tokio::test]
+async fn test_get_trade_rank_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_trade_rank(TradeRankRequest {
+            market: Some("US".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "trade_rank");
+}
+
+// --- 13. get_short_interest ---
+
+#[tokio::test]
+async fn test_get_short_interest_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_short_interest(ShortInterestRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "quote_shortable_stocks");
+}
+
+// --- 14. get_stock_broker ---
+
+#[tokio::test]
+async fn test_get_stock_broker_wire_method() {
+    let server = mock_success_server(r#"null"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_stock_broker(StockBrokerRequest {
+            symbol: Some("00700".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "stock_broker");
+}
+
+// --- 15. get_stock_fundamental ---
+
+#[tokio::test]
+async fn test_get_stock_fundamental_wire_method() {
+    let server = mock_success_server(r#"{}"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_stock_fundamental(StockFundamentalRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "stock_fundamental");
+}
+
+// --- 16. get_stock_industry ---
+
+#[tokio::test]
+async fn test_get_stock_industry_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_stock_industry(StockIndustryRequest {
+            symbol: Some("AAPL".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "stock_industry");
+}
+
+// --- 17. get_quote_permission ---
+
+#[tokio::test]
+async fn test_get_quote_permission_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_quote_permission(QuotePermissionRequest::default())
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "get_quote_permission");
+}
+
+// --- 18. get_kline_quota ---
+
+#[tokio::test]
+async fn test_get_kline_quota_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc.get_kline_quota(KlineQuotaRequest::default()).await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "kline_quota");
+}
+
+// --- 19. get_option_expiration ---
+
+#[tokio::test]
+async fn test_get_option_expiration_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc.get_option_expiration(&["AAPL"], None).await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "option_expiration");
+}
+
+#[tokio::test]
+async fn test_get_option_expiration_with_market() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc.get_option_expiration(&["00700"], Some("HK")).await;
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["market"].as_str().unwrap(), "HK");
+    assert_eq!(biz["symbols"][0].as_str().unwrap(), "00700");
+}
+
+// --- 20. get_option_quote (option_brief) ---
+
+#[tokio::test]
+async fn test_get_option_quote_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_option_quote(OptionQuoteRequest::new(vec![OptionContractItem::new(
+            "AAPL",
+            1705640400000,
+            "CALL",
+            "150.0",
+        )]))
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "option_brief");
+    assert_eq!(req["version"].as_str().unwrap(), "2.0");
+}
+
+// --- 21. get_option_trade_ticks ---
+
+#[tokio::test]
+async fn test_get_option_trade_ticks_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_option_trade_ticks(OptionTradeTicksRequest::default())
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "option_trade_tick");
+}
+
+// --- 22. get_option_timeline ---
+
+#[tokio::test]
+async fn test_get_option_timeline_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_option_timeline(OptionTimelineRequest::default())
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "option_timeline");
+}
+
+// --- 23. get_option_depth ---
+
+#[tokio::test]
+async fn test_get_option_depth_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_option_depth(OptionDepthRequest::default())
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "option_depth");
+}
+
+// --- 24. get_option_symbols ---
+
+#[tokio::test]
+async fn test_get_option_symbols_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_option_symbols(OptionSymbolsRequest::default())
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "all_hk_option_symbols");
+}
+
+// --- 25. get_option_analysis ---
+
+#[tokio::test]
+async fn test_get_option_analysis_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_option_analysis(OptionAnalysisRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "option_analysis");
+}
+
+// --- 26. get_future_contract (single) ---
+
+#[tokio::test]
+async fn test_get_future_contract_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_future_contract(FutureContractSingleRequest {
+            contract_code: Some("CL2609".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(
+        req["method"].as_str().unwrap(),
+        "future_contract_by_contract_code"
+    );
+}
+
+// --- 27. get_all_future_contracts ---
+
+#[tokio::test]
+async fn test_get_all_future_contracts_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_all_future_contracts(AllFutureContractsRequest::default())
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "future_contracts");
+}
+
+// --- 28. get_current_future_contract ---
+
+#[tokio::test]
+async fn test_get_current_future_contract_wire_method() {
+    let server = mock_success_server(r#"null"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_current_future_contract(FutureContractSingleRequest {
+            contract_code: Some("CL".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "future_current_contract");
+}
+
+// --- 29. get_future_continuous_contracts ---
+
+#[tokio::test]
+async fn test_get_future_continuous_contracts_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_future_continuous_contracts(FutureContinuousContractsRequest::default())
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "future_continuous_contracts");
+}
+
+// --- 30. get_future_history_main_contract ---
+
+#[tokio::test]
+async fn test_get_future_history_main_contract_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_future_history_main_contract(FutureHistoryMainContractRequest {
+            contract_codes: Some(vec!["CL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "future_main_contract");
+}
+
+// --- 31. get_future_kline_by_page ---
+
+#[tokio::test]
+async fn test_get_future_kline_by_page_wire_method() {
+    let server = mock_success_server(
+        r#"[{"contractCode":"CL2609","items":[{"time":1700000000,"open":70.0,"close":71.0,"high":72.0,"low":69.0,"volume":500}]}]"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_future_kline_by_page(FutureKlineByPageRequest {
+            contract_code: Some("CL2609".into()),
+            period: Some("day".into()),
+            page_size: Some(10),
+            total_size: Some(10),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "future_kline");
+    let biz = biz_of(&received[0]);
+    assert!(biz.get("contract_code").is_some());
+}
+
+// --- 32. get_future_trade_ticks ---
+
+#[tokio::test]
+async fn test_get_future_trade_ticks_wire_method() {
+    let server = mock_success_server(r#"{"contractCode":"CL2609","items":[]}"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_future_trade_ticks(FutureTradeTicksRequest {
+            contract_code: Some("CL2609".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "future_tick");
+    assert_eq!(req["version"].as_str().unwrap(), "3.0");
+}
+
+// --- 33. get_future_depth ---
+
+#[tokio::test]
+async fn test_get_future_depth_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_future_depth(FutureDepthRequest {
+            contract_codes: Some(vec!["CL2609".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "future_depth");
+}
+
+// --- 34. get_future_trading_times ---
+
+#[tokio::test]
+async fn test_get_future_trading_times_wire_method() {
+    let server = mock_success_server(r#"null"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_future_trading_times(FutureTradingTimesRequest {
+            contract_code: Some("CL2609".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "future_trading_date");
+}
+
+// --- 35. get_fund_symbols ---
+
+#[tokio::test]
+async fn test_get_fund_symbols_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc.get_fund_symbols(FundSymbolsRequest::default()).await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "fund_all_symbols");
+}
+
+// --- 36. get_fund_contracts ---
+
+#[tokio::test]
+async fn test_get_fund_contracts_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_fund_contracts(FundContractsRequest {
+            symbols: Some(vec!["SPY".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "fund_contracts");
+}
+
+// --- 37. get_fund_quote ---
+
+#[tokio::test]
+async fn test_get_fund_quote_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_fund_quote(FundQuoteRequest {
+            symbols: Some(vec!["SPY".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "fund_quote");
+}
+
+// --- 38. get_fund_history_quote ---
+
+#[tokio::test]
+async fn test_get_fund_history_quote_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_fund_history_quote(FundHistoryQuoteRequest {
+            symbols: Some(vec!["SPY".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "fund_history_quote");
+}
+
+// --- 39. get_warrant_quote ---
+
+#[tokio::test]
+async fn test_get_warrant_quote_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_warrant_quote(WarrantQuoteRequest {
+            symbols: Some(vec!["12345".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "warrant_briefs");
+}
+
+// --- 40. get_warrant_briefs (deprecated) ---
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn test_get_warrant_briefs_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_warrant_briefs(WarrantQuoteRequest {
+            symbols: Some(vec!["12345".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "warrant_briefs");
+}
+
+// --- 41. get_warrant_filter ---
+
+#[tokio::test]
+async fn test_get_warrant_filter_wire_method() {
+    let server = mock_success_server(r#"null"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_warrant_filter(WarrantFilterRequest {
+            symbol: Some("00700".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "warrant_filter");
+}
+
+// --- 42. get_industry_list ---
+
+#[tokio::test]
+async fn test_get_industry_list_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_industry_list(IndustryListRequest::default())
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "industry_list");
+}
+
+// --- 43. get_industry_stocks ---
+
+#[tokio::test]
+async fn test_get_industry_stocks_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_industry_stocks(IndustryStocksRequest {
+            industry_id: Some("IND001".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "industry_stock_list");
+}
+
+// --- 44. get_corporate_split ---
+
+#[tokio::test]
+async fn test_get_corporate_split_wire_method() {
+    let server = mock_success_server(r#"{"AAPL":[]}"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_corporate_split(CorporateActionRequest {
+            symbols: vec!["AAPL".into()],
+            market: "US".into(),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "corporate_action");
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["action_type"].as_str().unwrap(), "split");
+}
+
+// --- 45. get_corporate_dividend ---
+
+#[tokio::test]
+async fn test_get_corporate_dividend_wire_method() {
+    let server = mock_success_server(r#"{"AAPL":[]}"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_corporate_dividend(CorporateActionRequest {
+            symbols: vec!["AAPL".into()],
+            market: "US".into(),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["action_type"].as_str().unwrap(), "dividend");
+}
+
+// --- 46. get_corporate_earnings_calendar ---
+
+#[tokio::test]
+async fn test_get_corporate_earnings_calendar_wire_method() {
+    let server = mock_success_server(r#"{"AAPL":[]}"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_corporate_earnings_calendar(CorporateActionRequest {
+            symbols: vec!["AAPL".into()],
+            market: "US".into(),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["action_type"].as_str().unwrap(), "earning");
+}
+
+// --- 47. get_financial_currency ---
+
+#[tokio::test]
+async fn test_get_financial_currency_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_financial_currency(FinancialCurrencyRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "financial_currency");
+}
+
+// --- 48. get_financial_exchange_rate ---
+
+#[tokio::test]
+async fn test_get_financial_exchange_rate_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_financial_exchange_rate(FinancialExchangeRateRequest {
+            currency_list: Some(vec!["USD".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "financial_exchange_rate");
+}
+
+// --- 49. get_trading_calendar ---
+
+#[tokio::test]
+async fn test_get_trading_calendar_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_trading_calendar(TradingCalendarRequest {
+            market: Some("US".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "trading_calendar");
+}
+
+// --- 50. get_capital_flow ---
+
+#[tokio::test]
+async fn test_get_capital_flow_wire_method() {
+    let server = mock_success_server(r#"null"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc.get_capital_flow("AAPL", "US", "day").await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "capital_flow");
+    let biz = biz_of(&received[0]);
+    assert_eq!(biz["symbol"].as_str().unwrap(), "AAPL");
+    assert_eq!(biz["market"].as_str().unwrap(), "US");
+    assert_eq!(biz["period"].as_str().unwrap(), "day");
+}
+
+// --- 51. get_market_scanner_tags ---
+
+#[tokio::test]
+async fn test_get_market_scanner_tags_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_market_scanner_tags(MarketScannerTagsRequest {
+            market: Some("US".into()),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "market_scanner_tags");
+}
+
+// --- 52. get_quote_overnight ---
+
+#[tokio::test]
+async fn test_get_quote_overnight_wire_method() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let _ = qc
+        .get_quote_overnight(QuoteOvernightRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await;
+    let received = server.received_requests().await.unwrap();
+    let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert_eq!(req["method"].as_str().unwrap(), "quote_overnight");
+}

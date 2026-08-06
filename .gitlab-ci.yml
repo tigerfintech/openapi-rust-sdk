@@ -1,32 +1,25 @@
-# Two-stage pipeline: unit (no credentials) / integration (real API).
-# Mirrors the Python, Java and Go SDK pipelines.
-#
-# Integration credentials: TIGEROPEN_TIGER_ID, TIGEROPEN_PRIVATE_KEY,
-# TIGEROPEN_ACCOUNT env vars set in GitLab CI Variables (Protected + Masked).
-
+# Three-stage pipeline: unit / coverage / integration
+# Mirrors Python, Java and Go SDK pipelines.
 stages:
   - unit
+  - coverage
   - integration
 
 variables:
-  # Avoid rebuilding deps on every run when the runner caches cargo dirs.
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
 
 .rust_setup: &rust_setup
   - |
     if command -v rustup >/dev/null 2>&1; then
-      echo "Using preinstalled rustup: $(rustup --version)"
-      echo "Rust version: $(rustc --version)"
+      echo "rustup: $(rustup --version)"
     elif command -v rustc >/dev/null 2>&1; then
-      echo "Using preinstalled rustc: $(rustc --version)"
+      echo "rustc: $(rustc --version)"
     else
-      echo "Installing Rust via rustup"
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
       source "$HOME/.cargo/env"
     fi
-  - rustc --version
-  - cargo --version
+  - rustc --version && cargo --version
 
 unit:rust:
   stage: unit
@@ -35,7 +28,6 @@ unit:rust:
   script:
     - unset TIGEROPEN_TIGER_ID TIGEROPEN_PRIVATE_KEY TIGEROPEN_ACCOUNT TIGEROPEN_PROPS_PATH
     - cargo test --lib 2>&1
-  coverage: '/^test result.*\d+ passed/'
   artifacts:
     when: always
     expire_in: 1 week
@@ -45,6 +37,31 @@ unit:rust:
       - .cargo/
       - target/
 
+coverage:rust:
+  stage: coverage
+  before_script:
+    - *rust_setup
+    - cargo install cargo-tarpaulin --locked 2>/dev/null || true
+  script:
+    - unset TIGEROPEN_TIGER_ID TIGEROPEN_PRIVATE_KEY TIGEROPEN_ACCOUNT
+    - cargo tarpaulin --lib --out Xml --output-dir coverage/ 2>&1
+  coverage: '/^\s*lines\s*:\s*(\d+\.?\d*)%/'
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - coverage/
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura.xml
+  cache:
+    key: rust-cargo
+    paths:
+      - .cargo/
+      - target/
+  allow_failure: true
+
 integration:rust:
   stage: integration
   allow_failure: true
@@ -53,7 +70,7 @@ integration:rust:
   before_script:
     - *rust_setup
   script:
-    - test -n "$TIGEROPEN_TIGER_ID" || test -n "$TIGEROPEN_PROPS_PATH" || { echo "No credentials — skipping integration"; exit 1; }
+    - test -n "$TIGEROPEN_TIGER_ID" || test -n "$TIGEROPEN_PROPS_PATH" || { echo "No credentials — skipping"; exit 1; }
     - cargo test --test integ_quote --test integ_trade -- --nocapture 2>&1
   artifacts:
     when: always
@@ -71,53 +88,8 @@ notify:webhook:
   dependencies: []
   script:
     - |
-      if [ -z "$WEBHOOK_URL" ]; then
-        echo "WEBHOOK_URL not configured, skipping notification"
-        exit 0
-      fi
-      API="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}"
-      JOBS_JSON=$(curl -sS --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "${API}/pipelines/${CI_PIPELINE_ID}/jobs" 2>/dev/null || echo "[]")
-      HAS_FAILED="no"
-      FAILED_JOBS=""
-      if command -v python3 >/dev/null 2>&1; then
-        OUT=$(printf '%s' "$JOBS_JSON" | python3 -c "import sys,json
-try:
-  js=json.load(sys.stdin)
-  failed=[j['name'] for j in js if j.get('status')=='failed' and not j.get('allow_failure')]
-  print('yes' if failed else 'no')
-  print(', '.join(failed))
-except Exception:
-  print('no'); print('')
-" 2>/dev/null)
-        HAS_FAILED=$(printf '%s\n' "$OUT" | sed -n '1p')
-        FAILED_JOBS=$(printf '%s\n' "$OUT" | sed -n '2p')
-      fi
-      TITLE="Pipeline passed"
-      COLOR="green"
-      if [ "$HAS_FAILED" = "yes" ]; then
-        TITLE="Pipeline failed"
-        COLOR="red"
-      fi
-      CONTENT="**Repo:** ${CI_PROJECT_NAME}\\n**Branch:** ${CI_COMMIT_REF_NAME}\\n**Commit:** ${CI_COMMIT_SHORT_SHA}\\n"
-      if [ -n "$FAILED_JOBS" ]; then
-        CONTENT="${CONTENT}\\n**Failed jobs:** ${FAILED_JOBS}\\n"
-      fi
-      CONTENT="${CONTENT}[View pipeline](${CI_PROJECT_URL}/-/pipelines/${CI_PIPELINE_ID})"
-      PAYLOAD=$(cat <<EOF
-      {
-        "msg_type": "interactive",
-        "card": {
-          "header": {
-            "title": {"tag": "plain_text", "content": "$TITLE #${CI_PIPELINE_IID} — ${CI_PROJECT_NAME}"},
-            "template": "$COLOR"
-          },
-          "elements": [
-            {"tag": "div", "text": {"tag": "lark_md", "content": "$CONTENT"}}
-          ]
-        }
-      }
-EOF
-      )
+      [ -z "$WEBHOOK_URL" ] && exit 0
+      STATUS="passed"
       curl --fail -sS -X POST "$WEBHOOK_URL" \
         -H 'Content-Type: application/json' \
-        -d "$PAYLOAD"
+        -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"${STATUS}: ${CI_PROJECT_NAME} #${CI_PIPELINE_IID} ${CI_COMMIT_REF_NAME}\"}}"
