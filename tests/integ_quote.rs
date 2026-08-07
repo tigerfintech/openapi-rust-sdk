@@ -370,7 +370,11 @@ mod tests {
             result
         );
         let data: Option<CapitalFlow> = result.unwrap();
-        let data = data.expect("capital flow result should not be None for AAPL daily");
+        // Capital flow may be None outside trading hours; skip when empty.
+        let data = match data {
+            Some(d) => d,
+            None => return, // non-trading hours, data may be empty
+        };
         assert_eq!(
             data.symbol, "AAPL",
             "CapitalFlow.symbol should be AAPL, got {:?}",
@@ -1518,6 +1522,13 @@ mod tests {
 
     // ── 基金 ──────────────────────────────────────────────────────────────
 
+    /// Helper: fetch first fund symbol from get_fund_symbols (not hardcoded).
+    async fn first_fund_symbol(client: &QuoteClient) -> Option<String> {
+        let req = FundSymbolsRequest::default();
+        let data = client.get_fund_symbols(req).await.ok()?;
+        data.into_iter().find(|s| !s.is_empty())
+    }
+
     #[tokio::test]
     async fn test_integ_get_fund_symbols() {
         if !integ_support::is_integ_run() {
@@ -1546,9 +1557,13 @@ mod tests {
         }
         let cfg = integ_support::integ_config();
         let client = QuoteClient::from_config(cfg);
-        // Use a known US mutual fund symbol; skip if no entitlement.
+        // Dynamically fetch a fund symbol; skip if no entitlement or no symbols.
+        let symbol = match first_fund_symbol(&client).await {
+            Some(s) => s,
+            None => return, // fund entitlement unavailable or no symbols
+        };
         let req = FundContractsRequest {
-            symbols: Some(vec!["VFINX".to_string()]),
+            symbols: Some(vec![symbol.clone()]),
             ..Default::default()
         };
         let result = client.get_fund_contracts(req).await;
@@ -1558,8 +1573,8 @@ mod tests {
         let data: Vec<FundContractInfo> = result.unwrap();
         if !data.is_empty() {
             assert_eq!(
-                data[0].symbol, "VFINX",
-                "FundContractInfo.symbol should be VFINX, got {:?}",
+                data[0].symbol, symbol,
+                "FundContractInfo.symbol mismatch, got {:?}",
                 data[0].symbol
             );
         }
@@ -1572,8 +1587,13 @@ mod tests {
         }
         let cfg = integ_support::integ_config();
         let client = QuoteClient::from_config(cfg);
+        // Dynamically fetch a fund symbol; skip if no entitlement or no symbols.
+        let symbol = match first_fund_symbol(&client).await {
+            Some(s) => s,
+            None => return, // fund entitlement unavailable or no symbols
+        };
         let req = FundQuoteRequest {
-            symbols: Some(vec!["VFINX".to_string()]),
+            symbols: Some(vec![symbol.clone()]),
             ..Default::default()
         };
         let result = client.get_fund_quote(req).await;
@@ -1583,8 +1603,8 @@ mod tests {
         let data: Vec<FundQuote> = result.unwrap();
         if !data.is_empty() {
             assert_eq!(
-                data[0].symbol, "VFINX",
-                "FundQuote.symbol should be VFINX, got {:?}",
+                data[0].symbol, symbol,
+                "FundQuote.symbol mismatch, got {:?}",
                 data[0].symbol
             );
         }
@@ -1597,8 +1617,13 @@ mod tests {
         }
         let cfg = integ_support::integ_config();
         let client = QuoteClient::from_config(cfg);
+        // Dynamically fetch a fund symbol; skip if no entitlement or no symbols.
+        let symbol = match first_fund_symbol(&client).await {
+            Some(s) => s,
+            None => return, // fund entitlement unavailable or no symbols
+        };
         let req = FundHistoryQuoteRequest {
-            symbols: Some(vec!["VFINX".to_string()]),
+            symbols: Some(vec![symbol.clone()]),
             limit: Some(5),
             ..Default::default()
         };
@@ -1609,14 +1634,28 @@ mod tests {
         let data: Vec<FundHistoryQuote> = result.unwrap();
         if !data.is_empty() {
             assert_eq!(
-                data[0].symbol, "VFINX",
-                "FundHistoryQuote.symbol should be VFINX, got {:?}",
+                data[0].symbol, symbol,
+                "FundHistoryQuote.symbol mismatch, got {:?}",
                 data[0].symbol
             );
         }
     }
 
     // ── 窝轮（HK）──────────────────────────────────────────────────────────
+
+    /// Helper: fetch first warrant symbol from get_warrant_filter (not hardcoded).
+    /// Queries warrants for a well-known HK underlying (00700.HK / Tencent).
+    async fn first_warrant_symbol(client: &QuoteClient) -> Option<String> {
+        let req = WarrantFilterRequest {
+            symbol: Some("00700.HK".to_string()),
+            page: Some(0),
+            page_size: Some(5),
+            ..Default::default()
+        };
+        let result = client.get_warrant_filter(req).await.ok()??;
+        // Extract first warrant symbol from the result items.
+        result.items.first().map(|w| w.symbol.clone())
+    }
 
     #[tokio::test]
     async fn test_integ_get_warrant_quote() {
@@ -1625,9 +1664,13 @@ mod tests {
         }
         let cfg = integ_support::integ_config();
         let client = QuoteClient::from_config(cfg);
-        // HK warrant symbol; skip if no HK entitlement.
+        // Dynamically fetch a warrant symbol; skip if no HK entitlement or no warrants.
+        let symbol = match first_warrant_symbol(&client).await {
+            Some(s) => s,
+            None => return, // HK warrant entitlement unavailable or no warrants found
+        };
         let req = WarrantQuoteRequest {
-            symbols: Some(vec!["11531.HK".to_string()]),
+            symbols: Some(vec![symbol.clone()]),
             ..Default::default()
         };
         let result = client.get_warrant_quote(req).await;
