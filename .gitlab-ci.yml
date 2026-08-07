@@ -17,6 +17,8 @@ variables:
   image: rust:latest
   tags:
     - openapi
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends protobuf-compiler
   cache:
     key: rust-cargo-latest
     paths:
