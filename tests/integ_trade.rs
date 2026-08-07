@@ -142,13 +142,13 @@ mod tests {
             a.currency
         );
         assert!(
-            a.net_liquidation >= 0.0,
-            "Asset.net_liquidation should be >= 0, got {}",
+            a.net_liquidation > 0.0,
+            "Asset.net_liquidation should be > 0 for a valid account, got {}",
             a.net_liquidation
         );
         assert!(
-            a.buying_power >= 0.0,
-            "Asset.buying_power should be >= 0, got {}",
+            a.buying_power > 0.0,
+            "Asset.buying_power should be > 0 for a valid account, got {}",
             a.buying_power
         );
     }
