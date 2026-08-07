@@ -251,9 +251,13 @@ mod tests {
 
         // First fetch expirations; skip if none available.
         let exps = client.get_option_expiration(&["AAPL"], None).await;
+        // If no expiry dates are returned (e.g. market closed, symbol has no
+        // options, or entitlements missing), the test cannot exercise the chain
+        // endpoint. Return early as a skip — not a pass or fail — since there
+        // is no data to assert against.
         let exps = match exps {
             Ok(e) if !e.is_empty() && !e[0].dates.is_empty() => e,
-            _ => return, // no expiry available — skip
+            _ => return,
         };
         let mid = exps[0].dates.len() / 2;
         let expiry_str = exps[0].dates[mid].clone();
