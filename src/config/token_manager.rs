@@ -685,7 +685,7 @@ mod tests {
 
     #[test]
     fn test_write_token_to_file_invalid_path() {
-        let result = write_token_to_file("/nonexistent/root/dir/tok.properties", "val");
+        let result = write_token_to_file("/dev/null/tok.properties", "val");
         assert!(result.is_err());
     }
 
