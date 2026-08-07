@@ -325,7 +325,7 @@ mod tests {
         let req = CorporateActionRequest {
             symbols: vec!["AAPL".to_string()],
             market: "US".to_string(),
-            action_type: "DIVIDEND".to_string(),
+            action_type: "dividend".to_string(),
             begin_date: "2024-01-01".to_string(),
             end_date: "2025-12-31".to_string(),
         };
@@ -774,8 +774,9 @@ mod tests {
         }
         let cfg = integ_support::integ_config();
         let client = QuoteClient::from_config(cfg);
+        // stock_broker is a HK market feature; use 00700 (Tencent) like the Python SDK.
         let req = StockBrokerRequest {
-            symbol: Some("AAPL".to_string()),
+            symbol: Some("00700".to_string()),
             ..Default::default()
         };
         let result = client.get_stock_broker(req).await;
@@ -787,8 +788,8 @@ mod tests {
         let data: Option<StockBroker> = result.unwrap();
         if let Some(b) = data {
             assert_eq!(
-                b.symbol, "AAPL",
-                "StockBroker.symbol should be AAPL, got {:?}",
+                b.symbol, "00700",
+                "StockBroker.symbol should be 00700, got {:?}",
                 b.symbol
             );
         }
@@ -1644,10 +1645,10 @@ mod tests {
     // ── 窝轮（HK）──────────────────────────────────────────────────────────
 
     /// Helper: fetch first warrant symbol from get_warrant_filter (not hardcoded).
-    /// Queries warrants for a well-known HK underlying (00700.HK / Tencent).
+    /// Queries warrants for a well-known HK underlying (00700 / Tencent).
     async fn first_warrant_symbol(client: &QuoteClient) -> Option<String> {
         let req = WarrantFilterRequest {
-            symbol: Some("00700.HK".to_string()),
+            symbol: Some("00700".to_string()),
             page: Some(0),
             page_size: Some(5),
             ..Default::default()
@@ -1694,7 +1695,7 @@ mod tests {
         let cfg = integ_support::integ_config();
         let client = QuoteClient::from_config(cfg);
         let req = WarrantFilterRequest {
-            symbol: Some("00700.HK".to_string()),
+            symbol: Some("00700".to_string()),
             page: Some(0),
             page_size: Some(5),
             ..Default::default()
@@ -2019,7 +2020,7 @@ mod tests {
         let cfg = integ_support::integ_config();
         let client = QuoteClient::from_config(cfg);
         let req = FinancialExchangeRateRequest {
-            currency_list: Some(vec!["USD/CNY".to_string()]),
+            currency_list: Some(vec!["HKD".to_string(), "USD".to_string()]),
             begin_date: Some("2024-01-01".to_string()),
             end_date: Some("2024-01-31".to_string()),
             ..Default::default()
