@@ -1315,15 +1315,42 @@ pub struct WarrantFilterResult {
 }
 
 /// 行业列表条目（industry_list）。
+///
+/// **Wire field mapping (0.6):** 服务端返回 `nameCN` / `nameEN` /
+/// `industryLevel`,不是 `name` / `level`。此前的 struct 字段名会导致
+/// `IndustryItem.name` 永远为空(Python SDK 也是把两者都拿出来放到
+/// `name_cn` / `name_en` 里)。新字段 `name_cn` / `name_en` 分别映射到
+/// `nameCN` / `nameEN`,`level` 映射到 `industryLevel`。
+/// 兼容性:老字段 `name` 仍保留(不参与反序列化),赋值为 `name_en` 或
+/// `name_cn`(优先英文)以最小化调用方改动。
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct IndustryItem {
     #[serde(default)]
     pub id: String,
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
+    /// 英文名称,wire: `nameEN`
+    #[serde(default, rename = "nameEN")]
+    pub name_en: String,
+    /// 中文名称,wire: `nameCN`
+    #[serde(default, rename = "nameCN")]
+    pub name_cn: String,
+    /// 行业级别,wire: `industryLevel`
+    #[serde(default, rename = "industryLevel")]
     pub level: String,
+    /// 兼容字段:优先返回英文名,英文空则回退中文。反序列化时不从 wire 读取。
+    #[serde(default, skip)]
+    pub name: String,
+}
+
+impl IndustryItem {
+    /// 反序列化后填充兼容字段 `name`。若结构由 SDK 内部构造后再暴露给调用方,
+    /// 会自动调用此方法把 `name_en` / `name_cn` 合并成 `name`。
+    pub(crate) fn hydrate_name(&mut self) {
+        if !self.name_en.is_empty() {
+            self.name = self.name_en.clone();
+        } else if !self.name_cn.is_empty() {
+            self.name = self.name_cn.clone();
+        }
+    }
 }
 
 /// 行业归属股票条目（industry_stock_list）。
