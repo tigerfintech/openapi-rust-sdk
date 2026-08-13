@@ -765,6 +765,9 @@ impl QuoteClient {
     /// `industry_level` 服务端必填 —— 缺省时会返回
     /// `biz param error(industry level error, all supported is: [GSECTOR, GGROUP, GIND, GSUBIND])`。
     /// 未指定时默认 `GGROUP`,与 Python SDK (`IndustryLevel.GGROUP`) 一致。
+    ///
+    /// 返回的每个 `IndustryItem` 会自动填充兼容字段 `name`(优先 `name_en`,
+    /// 空则回退 `name_cn`),保留 `name_cn` / `name_en` / `level` 完整数据。
     pub async fn get_industry_list(
         &self,
         req: IndustryListRequest,
@@ -773,7 +776,11 @@ impl QuoteClient {
         if req.industry_level.is_none() {
             req.industry_level = Some("GGROUP".to_string());
         }
-        self.call_into("industry_list", req).await
+        let mut items: Vec<IndustryItem> = self.call_into("industry_list", req).await?;
+        for it in &mut items {
+            it.hydrate_name();
+        }
+        Ok(items)
     }
 
     /// 行业下股票列表。wire: industry_stock_list
@@ -882,12 +889,16 @@ impl QuoteClient {
         self.call_into("financial_daily", req).await
     }
 
-    /// 获取财报数据
+    /// 获取财报数据。wire: financial_report (V2)
+    ///
+    /// **API version:** Java SDK 用 `V2_0`;走 V1 会被网关拒 `biz param
+    /// error(failed to parse parameters in 'biz_content')`。这里显式指定 V2。
     pub async fn get_financial_report(
         &self,
         req: FinancialReportRequest,
     ) -> Result<Vec<FinancialReportItem>, TigerError> {
-        self.call_into("financial_report", req).await
+        self.call_into_versioned("financial_report", req, Some(VERSION_V2))
+            .await
     }
 
     /// 财报币种。wire: financial_currency
@@ -906,12 +917,16 @@ impl QuoteClient {
         self.call_into("financial_exchange_rate", req).await
     }
 
-    /// 交易日历。wire: trading_calendar
+    /// 交易日历。wire: trading_calendar (V2)
+    ///
+    /// **API version:** Java SDK `QuoteTradeCalendarRequest` 用 `V2_0`。V1
+    /// 会返回错误的 `market` 字段(空字符串)导致断言失败。
     pub async fn get_trading_calendar(
         &self,
         req: TradingCalendarRequest,
     ) -> Result<Vec<TradingCalendarItem>, TigerError> {
-        self.call_into("trading_calendar", req).await
+        self.call_into_versioned("trading_calendar", req, Some(VERSION_V2))
+            .await
     }
 
     // ========== 资金流向 ==========
