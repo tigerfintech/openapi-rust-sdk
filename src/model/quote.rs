@@ -704,7 +704,12 @@ pub struct FinancialDailyRequest {
     pub end_date: String,
 }
 
-/// 财报数据请求
+/// 财报数据请求。
+///
+/// **breaking change (0.6):** `begin_date` / `end_date` 由 `String`
+/// 改为 `Option<i64>` epoch-ms。Python SDK 一直用 `date_str_to_timestamp`
+/// 把日期转成毫秒时间戳发到网关,Rust 侧原来直接发字符串,服务端始终
+/// 拒收 (`biz param error(failed to parse parameters in 'biz_content')`)。
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct FinancialReportRequest {
@@ -712,23 +717,31 @@ pub struct FinancialReportRequest {
     pub market: String,
     pub fields: Vec<String>,
     pub period_type: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub begin_date: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub end_date: String,
+    /// epoch-ms 起始时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub begin_date: Option<i64>,
+    /// epoch-ms 结束时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_date: Option<i64>,
 }
 
-/// 公司行动请求
+/// 公司行动请求。
+///
+/// **breaking change (0.6):** `begin_date` / `end_date` 由 `String`
+/// 改为 `Option<i64>` epoch-ms,与 [`FinancialReportRequest`] 保持一致。
+/// 服务端要求日期字段为毫秒时间戳。
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct CorporateActionRequest {
     pub symbols: Vec<String>,
     pub market: String,
     pub action_type: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub begin_date: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub end_date: String,
+    /// epoch-ms 起始时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub begin_date: Option<i64>,
+    /// epoch-ms 结束时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_date: Option<i64>,
 }
 
 /// 选股扫描请求
