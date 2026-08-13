@@ -725,8 +725,12 @@ async fn test_place_forex_order_wire_method() {
 
 #[tokio::test]
 async fn test_place_forex_order_typed() {
+    // Server returns `id` as a JSON number (matches PlaceOrderResult.id and
+    // the actual wire contract observed on the Go SDK integ). Earlier the
+    // mock returned a string, hiding a type mismatch that broke real
+    // forex responses.
     let server = mock_success_server(
-        r#"{"id":"FX001","status":"Submitted","sourceCurrency":"USD","targetCurrency":"HKD","sourceAmount":1000.0,"rate":7.8}"#,
+        r#"{"id":12345,"status":"Submitted","sourceCurrency":"USD","targetCurrency":"HKD","sourceAmount":1000.0,"rate":7.8}"#,
     )
     .await;
     let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
@@ -740,7 +744,7 @@ async fn test_place_forex_order_typed() {
         .await
         .unwrap();
     let fx = result.expect("should be Some");
-    assert_eq!(fx.id, "FX001");
+    assert_eq!(fx.id, 12345);
     assert_eq!(fx.source_currency, "USD");
 }
 

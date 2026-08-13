@@ -232,18 +232,70 @@ pub struct ContractLegRequest {
     pub ratio: Option<i32>,
 }
 
-/// 算法订单参数 - 请求模型
-#[derive(Debug, Clone, Serialize, Default, PartialEq)]
-#[serde(rename_all = "snake_case")]
+/// 算法订单参数 - 请求模型 (TWAP / VWAP).
+///
+/// 字段与 Python SDK 的 `AlgoParams` 对齐。SDK 内部通过自定义 `Serialize`
+/// 实现把这个结构体序列化成网关期望的 `[{tag, value}, ...]` 数组形式
+/// (与 Python SDK 的 `AlgoParams.to_dict` 保持一致),调用方直接传自然的
+/// 结构体即可。
+///
+/// 注意: `algo_strategy` 不属于 `algo_params` —— 它是 [`OrderRequest`]
+/// 顶层字段。老代码里如果误设 `AlgoParams.algo_strategy` 会被静默丢弃,
+/// 请改用 `OrderRequest.algo_strategy`。
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct AlgoParamsRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub algo_strategy: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_time: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_time: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// 开始时间 (epoch-ms, TWAP / VWAP 专用)
+    pub start_time: Option<i64>,
+    /// 结束时间 (epoch-ms, TWAP / VWAP 专用)
+    pub end_time: Option<i64>,
+    /// 是否尽可能减少交易次数 (VWAP 专用)
+    pub no_take_liq: Option<bool>,
+    /// 是否允许生效时间结束后继续完成成交 (TWAP / VWAP 专用)
+    pub allow_past_end_time: Option<bool>,
+    /// 参与率 (VWAP 专用, 0.01–0.5)
     pub participation_rate: Option<f64>,
+}
+
+impl Serialize for AlgoParamsRequest {
+    /// 序列化成 `[{tag, value}, ...]` 数组 —— 网关期望的形状。
+    ///
+    /// 直接发 object 会触发 `biz param error(failed to parse parameters in
+    /// biz_content)`。Python SDK 的 `AlgoParams.to_dict` 用同样的形状。
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+
+        // 未设置的字段(None)直接跳过,与 Python SDK 保持一致的语义。
+        let mut entries: Vec<(&'static str, serde_json::Value)> = Vec::with_capacity(5);
+        if let Some(v) = self.start_time {
+            entries.push(("start_time", serde_json::Value::from(v)));
+        }
+        if let Some(v) = self.end_time {
+            entries.push(("end_time", serde_json::Value::from(v)));
+        }
+        if let Some(v) = self.no_take_liq {
+            entries.push(("no_take_liq", serde_json::Value::from(v)));
+        }
+        if let Some(v) = self.allow_past_end_time {
+            entries.push(("allow_past_end_time", serde_json::Value::from(v)));
+        }
+        if let Some(v) = self.participation_rate {
+            entries.push(("participation_rate", serde_json::Value::from(v)));
+        }
+
+        let mut seq = serializer.serialize_seq(Some(entries.len()))?;
+        for (tag, value) in entries {
+            #[derive(Serialize)]
+            struct TagValue<'a> {
+                tag: &'a str,
+                value: serde_json::Value,
+            }
+            seq.serialize_element(&TagValue { tag, value })?;
+        }
+        seq.end()
+    }
 }
 
 /// 订单请求模型。
@@ -278,6 +330,9 @@ pub struct OrderRequest {
     pub outside_rth: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub order_legs: Option<Vec<OrderLegRequest>>,
+    /// 算法策略 (TWAP / VWAP) —— 顶层字段,不在 algo_params 里
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub algo_strategy: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub algo_params: Option<AlgoParamsRequest>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -555,7 +610,11 @@ pub fn auction_market_order(
     }
 }
 
-/// 构造算法订单（TWAP/VWAP）
+/// 构造算法订单 (TWAP / VWAP)。
+///
+/// `algo_type` 会同时写入 [`OrderRequest::order_type`] 和
+/// [`OrderRequest::algo_strategy`] —— 后者是网关期望的顶层策略字段,
+/// 不在 `algo_params` 里。
 pub fn algo_order(
     account: &str,
     symbol: &str,
@@ -572,6 +631,7 @@ pub fn algo_order(
         sec_type: Some(sec_type.to_string()),
         action: Some(action.to_string()),
         order_type: Some(algo_type.to_string()),
+        algo_strategy: Some(algo_type.to_string()),
         total_quantity: Some(quantity),
         limit_price: Some(limit_price),
         algo_params: Some(params),
@@ -1041,17 +1101,87 @@ mod tests {
 
     #[test]
     fn test_algo_order_helper() {
+        // algo_strategy 现在是 OrderRequest 顶层字段(不在 algo_params 里);
+        // start_time / end_time 用 epoch-ms(i64) 而不是字符串。
         let params = AlgoParamsRequest {
-            algo_strategy: Some("TWAP".to_string()),
-            start_time: Some("2024-01-01 09:30:00".to_string()),
-            end_time: Some("2024-01-01 16:00:00".to_string()),
+            start_time: Some(1_700_000_000_000),
+            end_time: Some(1_700_003_600_000),
             participation_rate: Some(10.0),
+            ..Default::default()
         };
         let o = algo_order("ACC", "AAPL", "STK", "BUY", 100, 150.0, "TWAP", params);
         assert_eq!(o.order_type, Some("TWAP".to_string()));
+        assert_eq!(o.algo_strategy, Some("TWAP".to_string()));
         assert_eq!(o.limit_price, Some(150.0));
         assert!(o.algo_params.is_some());
-        assert_eq!(o.algo_params.as_ref().unwrap().algo_strategy, Some("TWAP".to_string()));
+        assert_eq!(o.algo_params.as_ref().unwrap().participation_rate, Some(10.0));
+    }
+
+    /// AlgoParamsRequest 必须序列化成 `[{tag, value}, ...]` 数组
+    /// (网关期望的形状,与 Python SDK 的 AlgoParams.to_dict 一致)。
+    #[test]
+    fn test_algo_params_serializes_as_tag_value_array() {
+        let p = AlgoParamsRequest {
+            start_time: Some(1_700_000_000_000),
+            end_time: Some(1_700_003_600_000),
+            participation_rate: Some(0.1),
+            allow_past_end_time: Some(true),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&p).unwrap();
+        let arr = json.as_array().expect("expected array, got object");
+        // Should be 4 entries — the 4 fields set above; None fields skipped.
+        assert_eq!(arr.len(), 4, "unexpected count: {:?}", arr);
+        // Collect tag→value map for assertions.
+        let mut tags = std::collections::HashMap::new();
+        for entry in arr {
+            let tag = entry["tag"].as_str().unwrap().to_string();
+            tags.insert(tag, entry["value"].clone());
+        }
+        assert_eq!(tags["start_time"], serde_json::json!(1_700_000_000_000i64));
+        assert_eq!(tags["end_time"], serde_json::json!(1_700_003_600_000i64));
+        assert_eq!(tags["participation_rate"], serde_json::json!(0.1));
+        assert_eq!(tags["allow_past_end_time"], serde_json::json!(true));
+    }
+
+    /// 未设置的字段(None)应被跳过,不出现在数组里。
+    #[test]
+    fn test_algo_params_omits_none_fields() {
+        let p = AlgoParamsRequest {
+            start_time: Some(100),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&p).unwrap();
+        let arr = json.as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["tag"].as_str().unwrap(), "start_time");
+    }
+
+    /// 嵌套在 OrderRequest 里,algo_params 也应序列化成数组;
+    /// algo_strategy 应在顶层。
+    #[test]
+    fn test_order_request_nests_algo_params_as_array() {
+        let order = OrderRequest {
+            symbol: Some("AAPL".to_string()),
+            sec_type: Some("STK".to_string()),
+            action: Some("BUY".to_string()),
+            order_type: Some("TWAP".to_string()),
+            total_quantity: Some(100),
+            algo_strategy: Some("TWAP".to_string()),
+            algo_params: Some(AlgoParamsRequest {
+                start_time: Some(1_700_000_000_000),
+                end_time: Some(1_700_003_600_000),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&order).unwrap();
+        assert!(
+            json["algo_params"].is_array(),
+            "algo_params should be array, got {:?}",
+            json["algo_params"]
+        );
+        assert_eq!(json["algo_strategy"], serde_json::json!("TWAP"));
     }
 
     #[test]
