@@ -67,7 +67,11 @@ integration:rust:
   script:
     - test -n "$TIGEROPEN_TIGER_ID" || test -n "$TIGEROPEN_PROPS_PATH" || { echo "No credentials — skipping"; exit 1; }
     - mkdir -p test-results
-    - cargo test --test integ_quote --test integ_trade --test integ_trade_matrix -- --nocapture 2>&1 | tee test-results/integ.txt
+    # --no-fail-fast: cargo test bails after the first test binary fails,
+    # which was silently skipping integ_trade + integ_trade_matrix whenever
+    # any integ_quote assertion tripped. Run all three regardless of
+    # per-binary outcome and let the artifact log show the full picture.
+    - cargo test --no-fail-fast --test integ_quote --test integ_trade --test integ_trade_matrix -- --nocapture 2>&1 | tee test-results/integ.txt
   artifacts:
     when: always
     paths:
