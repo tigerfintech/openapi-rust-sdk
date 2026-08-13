@@ -59,6 +59,9 @@ mod tests {
         "does not support stock short",
         "only trade cash order by market order",
         "cash order by market order",
+        // Algo orders (TWAP / VWAP): start_time must be inside the market's
+        // regular trading window. CI runs outside RTH — treat as skip.
+        "time range for the order",
     ];
 
     /// Order state race markers — cancel/modify may hit a terminal state
@@ -254,15 +257,16 @@ mod tests {
     #[tokio::test]
     async fn test_matrix_us_stk_market_by_amount_preview() {
         let Some(tc) = skip_if_disabled() else { return };
-        // Gateway requires total_quantity present even for amount orders; the
-        // real sizing comes from cash_amount.
+        // Cash-amount orders: gateway rejects when both cash_amount and
+        // total_quantity are set ("field 'cashAmount' and field 'quantity'
+        // cannot exist at the same time"). Only send cash_amount — sizing
+        // is inferred by the server.
         preview_only(
             &tc,
             OrderRequest {
                 action: Some("BUY".into()),
                 order_type: Some("MKT".into()),
                 cash_amount: Some(100.0),
-                total_quantity: Some(1),
                 ..us_stk()
             },
             "US STK MKT-by-amount preview",
