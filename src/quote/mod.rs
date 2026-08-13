@@ -946,7 +946,7 @@ impl QuoteClient {
             .await
     }
 
-    /// 获取行情权限（老接口）
+    /// 抢占行情设备访问权
     pub async fn grab_quote_permission(&self) -> Result<Vec<QuotePermission>, TigerError> {
         self.call_into("grab_quote_permission", serde_json::json!({}))
             .await
