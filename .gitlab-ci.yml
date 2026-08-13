@@ -67,7 +67,7 @@ integration:rust:
   script:
     - test -n "$TIGEROPEN_TIGER_ID" || test -n "$TIGEROPEN_PROPS_PATH" || { echo "No credentials — skipping"; exit 1; }
     - mkdir -p test-results
-    - cargo test --test integ_quote --test integ_trade -- --nocapture 2>&1 | tee test-results/integ.txt
+    - cargo test --test integ_quote --test integ_trade --test integ_trade_matrix -- --nocapture 2>&1 | tee test-results/integ.txt
   artifacts:
     when: always
     paths:
