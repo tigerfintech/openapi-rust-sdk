@@ -1181,8 +1181,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "split".into(),
-            begin_date: "2020-01-01".into(),
-            end_date: "2026-05-07".into(),
+            // 2020-01-01 → 2026-05-07 (epoch-ms UTC)
+            begin_date: Some(1_577_836_800_000),
+            end_date: Some(1_778_457_600_000),
         })
         .await
     {
@@ -1209,8 +1210,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "dividend".into(),
-            begin_date: "2024-01-01".into(),
-            end_date: "2024-12-31".into(),
+            // 2024-01-01 → 2024-12-31 (epoch-ms UTC)
+            begin_date: Some(1_704_067_200_000),
+            end_date: Some(1_735_603_200_000),
         })
         .await
     {
@@ -1237,8 +1239,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "DIVIDEND".into(),
-            begin_date: "2024-01-01".into(),
-            end_date: "2024-12-31".into(),
+            // 2024-01-01 → 2024-12-31 (epoch-ms UTC)
+            begin_date: Some(1_704_067_200_000),
+            end_date: Some(1_735_603_200_000),
         })
         .await
     {
@@ -1265,8 +1268,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "earning".into(),
-            begin_date: "2026-07-01".into(),
-            end_date: "2026-07-31".into(),
+            // 2026-07-01 → 2026-07-31 (epoch-ms UTC); server caps range at 1 month
+            begin_date: Some(1_782_950_400_000),
+            end_date: Some(1_785_542_400_000),
         })
         .await
     {
@@ -1282,8 +1286,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get_corporate_symbol_change(CorporateActionRequest {
             symbols: vec!["META".into()],
             market: "US".into(),
-            begin_date: "2022-01-01".into(),
-            end_date: "2023-01-01".into(),
+            // 2022-01-01 → 2023-01-01 (epoch-ms UTC)
+            begin_date: Some(1_640_995_200_000),
+            end_date: Some(1_672_531_200_000),
             ..Default::default()
         })
         .await
@@ -1300,8 +1305,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get_corporate_delisting(CorporateActionRequest {
             symbols: vec!["TWTR".into()],
             market: "US".into(),
-            begin_date: "2022-01-01".into(),
-            end_date: "2023-01-01".into(),
+            // 2022-01-01 → 2023-01-01 (epoch-ms UTC)
+            begin_date: Some(1_640_995_200_000),
+            end_date: Some(1_672_531_200_000),
             ..Default::default()
         })
         .await
@@ -1318,8 +1324,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get_corporate_ipo(CorporateActionRequest {
             symbols: vec!["RIVN".into()],
             market: "US".into(),
-            begin_date: "2021-01-01".into(),
-            end_date: "2022-01-01".into(),
+            // 2021-01-01 → 2022-01-01 (epoch-ms UTC)
+            begin_date: Some(1_609_459_200_000),
+            end_date: Some(1_640_995_200_000),
             ..Default::default()
         })
         .await

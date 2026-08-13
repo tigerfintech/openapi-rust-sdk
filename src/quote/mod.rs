@@ -761,10 +761,18 @@ impl QuoteClient {
     // ========== 行业 ==========
 
     /// 行业列表。wire: industry_list
+    ///
+    /// `industry_level` 服务端必填 —— 缺省时会返回
+    /// `biz param error(industry level error, all supported is: [GSECTOR, GGROUP, GIND, GSUBIND])`。
+    /// 未指定时默认 `GGROUP`,与 Python SDK (`IndustryLevel.GGROUP`) 一致。
     pub async fn get_industry_list(
         &self,
         req: IndustryListRequest,
     ) -> Result<Vec<IndustryItem>, TigerError> {
+        let mut req = req;
+        if req.industry_level.is_none() {
+            req.industry_level = Some("GGROUP".to_string());
+        }
         self.call_into("industry_list", req).await
     }
 

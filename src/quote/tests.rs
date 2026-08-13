@@ -1096,6 +1096,37 @@ async fn test_get_option_trade_ticks_wire_method() {
     assert_eq!(req["method"].as_str().unwrap(), "option_trade_tick");
 }
 
+/// Regression: `biz_content` for `option_trade_tick` must be a top-level
+/// JSON array, not an object with a `contracts` field. Server rejects
+/// object form with `biz param error(failed to parse parameters in
+/// 'biz_content')`. See `OptionTradeTicksRequest` custom `Serialize`.
+#[tokio::test]
+async fn test_option_trade_ticks_biz_content_is_top_level_array() {
+    let server = mock_success_server(r#"[]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let req = OptionTradeTicksRequest {
+        contracts: Some(vec![crate::model::quote_requests::OptionQueryItem {
+            symbol: Some("AAPL".to_string()),
+            expiry: Some(1_755_230_400_000),
+            strike: Some("200".to_string()),
+            right: Some("CALL".to_string()),
+            ..Default::default()
+        }]),
+        lang: None,
+    };
+    let _ = qc.get_option_trade_ticks(req).await;
+    let received = server.received_requests().await.unwrap();
+    let outer: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    // Gateway wraps biz_content as a stringified JSON payload; parse again.
+    let biz_str = outer["biz_content"].as_str().expect("biz_content is string");
+    let biz: serde_json::Value = serde_json::from_str(biz_str).unwrap();
+    // Must be an array, not an object with `contracts` key.
+    assert!(biz.is_array(), "biz_content must be a top-level array, got {biz}");
+    assert_eq!(biz.as_array().unwrap().len(), 1);
+    assert_eq!(biz[0]["symbol"].as_str().unwrap(), "AAPL");
+    assert_eq!(biz[0]["right"].as_str().unwrap(), "CALL");
+}
+
 // --- 22. get_option_timeline ---
 
 #[tokio::test]

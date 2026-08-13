@@ -722,12 +722,33 @@ pub struct OptionKlineRequest {
 }
 
 /// 期权逐笔请求。wire: option_trade_tick
-#[derive(Debug, Clone, Serialize, Default)]
+///
+/// **Wire contract**: 服务端要求的 `biz_content` 是**顶层数组**
+/// (`[{symbol, expiry, ...}, ...]`),而不是 `{"contracts": [...]}` object 形式。
+/// 这与 Java `BatchApiModel` (`items` 直接 JSON 序列化为顶层数组) 及 Python
+/// `MultipleContractParams.to_openapi_dict` 一致。
+///
+/// 早期版本按 object 形式发送导致
+/// `biz param error(failed to parse parameters in 'biz_content')`,
+/// 现通过自定义 `Serialize` 让 `biz_content` 直接是 `contracts` 数组的 JSON。
+/// `lang` 字段在此路径下被 SDK 忽略 —— 网关本方法无 lang 入参。
+#[derive(Debug, Clone, Default)]
 pub struct OptionTradeTicksRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub contracts: Option<Vec<OptionQueryItem>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// 保留字段:此接口 biz_content 是顶层数组,lang 无处安放,序列化时会被忽略。
+    /// 保留字段让 API 与其他 request 结构体一致,方便调用方使用。
     pub lang: Option<String>,
+}
+
+impl Serialize for OptionTradeTicksRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Emit the contracts vector as the top-level JSON value.
+        // Empty / missing contracts serializes as `[]` so the server sees a
+        // well-formed request even if the caller left it out.
+        let empty: Vec<OptionQueryItem> = Vec::new();
+        let contracts = self.contracts.as_ref().unwrap_or(&empty);
+        contracts.serialize(serializer)
+    }
 }
 
 /// 期权分时请求。wire: option_timeline
