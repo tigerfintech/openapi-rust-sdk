@@ -292,6 +292,12 @@ pub struct SegmentFundRequest {
 
 /// FundDetailsRequest — 资金明细。
 /// wire method: fund_details
+///
+/// **Wire types (0.6 breaking):** `start_date` / `end_date` are yyyy-MM-dd
+/// strings, not epoch-ms integers. Java's FundDetailsModel exposes them
+/// as `String startDate` / `String endDate`. Previously typed as
+/// `Option<i64>` here, which caused the gateway to reject with
+/// "parse 'start_date' error, supported format: 'yyyy-MM-dd'".
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct FundDetailsRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -302,12 +308,12 @@ pub struct FundDetailsRequest {
     pub fund_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub currency: Option<String>,
-    /// ms 时间戳
+    /// 起始日期(yyyy-MM-dd)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_date: Option<i64>,
-    /// ms 时间戳
+    pub start_date: Option<String>,
+    /// 结束日期(yyyy-MM-dd)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_date: Option<i64>,
+    pub end_date: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -905,8 +911,8 @@ mod tests {
             seg_types: Some(vec!["SEC".into()]),
             fund_type: Some("deposit".into()),
             currency: Some("USD".into()),
-            start_date: Some(1000),
-            end_date: Some(2000),
+            start_date: Some("2024-01-01".into()),
+            end_date: Some("2024-01-31".into()),
             limit: Some(50),
             page_token: Some("tok".into()),
             lang: Some("en_US".into()),
