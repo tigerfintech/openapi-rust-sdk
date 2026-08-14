@@ -810,14 +810,12 @@ mod tests {
         let client = TradeClient::from_config(cfg);
         // Server rejects empty seg_types with "seg_types invalid".
         // Legal values match Python's SegmentType enum: ALL / SEC / FUT / FUND.
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        // start_date / end_date are yyyy-MM-dd strings (0.6 wire fix).
+        let now = now_ms();
         let req = FundDetailsRequest {
             seg_types: Some(vec!["SEC".to_string()]),
-            start_date: Some(now_ms - 30 * 86_400_000),
-            end_date: Some(now_ms),
+            start_date: Some(ymd_utc(now - 30 * 86_400_000)),
+            end_date: Some(ymd_utc(now)),
             limit: Some(5),
             ..Default::default()
         };
@@ -865,14 +863,13 @@ mod tests {
         }
         let cfg = integ_support::integ_config();
         let client = TradeClient::from_config(cfg);
-        // Server requires since_date (yyyy-mm-dd).
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        // Server requires since_date (yyyy-mm-dd) and enforces a
+        // max-date range (bad_request:transfer.query.max_date.limit).
+        // 30-day window is safely inside the cap.
+        let now = now_ms();
         let req = PositionTransferRecordsRequest {
-            since_date: Some(ymd_utc(now_ms - 90 * 86_400_000)),
-            to_date: Some(ymd_utc(now_ms)),
+            since_date: Some(ymd_utc(now - 30 * 86_400_000)),
+            to_date: Some(ymd_utc(now)),
             limit: Some(5),
             ..Default::default()
         };
@@ -893,14 +890,11 @@ mod tests {
         }
         let cfg = integ_support::integ_config();
         let client = TradeClient::from_config(cfg);
-        // Server requires since_date (yyyy-mm-dd).
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        // Server requires since_date (yyyy-mm-dd) and caps the range.
+        let now = now_ms();
         let req = PositionTransferExternalRecordsRequest {
-            since_date: Some(ymd_utc(now_ms - 90 * 86_400_000)),
-            to_date: Some(ymd_utc(now_ms)),
+            since_date: Some(ymd_utc(now - 30 * 86_400_000)),
+            to_date: Some(ymd_utc(now)),
             limit: Some(5),
             ..Default::default()
         };
