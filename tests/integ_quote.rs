@@ -1716,15 +1716,47 @@ mod tests {
             ..Default::default()
         };
         let result = client.get_warrant_filter(req).await;
-        if result.is_err() {
-            return;
-        }
+        assert!(
+            result.is_ok(),
+            "get_warrant_filter should succeed: {:?}",
+            result
+        );
         let data = result.unwrap();
-        if let Some(r) = data {
+        // Wire shape: server returns a bare array of items with no
+        // {total, page, pageSize} wrapper — SDK model keeps those fields at
+        // their zero defaults. `total` is not authoritative; only `items`
+        // carries the answer, so the previous `r.total >= 0` was a no-op
+        // (i32 is always >= 0 for a serde default) and asserted nothing.
+        let r = match data {
+            Some(r) => r,
+            None => return,
+        };
+        // During HK trading 00700 must yield at least one warrant. Otherwise
+        // (market closed, or transient), empty is legitimate — early return.
+        let hk_trading = match client.get_market_state("HK").await {
+            Ok(states) => states
+                .first()
+                .map(|s| {
+                    let raw = if !s.status.is_empty() {
+                        s.status.as_str()
+                    } else {
+                        s.market_status.as_str()
+                    };
+                    raw == "TRADING"
+                })
+                .unwrap_or(false),
+            Err(_) => false,
+        };
+        if hk_trading {
             assert!(
-                r.total >= 0,
-                "WarrantFilterResult.total should be >= 0, got {}",
-                r.total
+                !r.items.is_empty(),
+                "warrant_filter(00700) returned no items during HK trading session"
+            );
+        }
+        if let Some(w) = r.items.first() {
+            assert!(
+                !w.symbol.is_empty(),
+                "WarrantBrief.symbol should be non-empty"
             );
         }
     }
