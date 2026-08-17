@@ -1181,7 +1181,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "split".into(),
-            // 2020-01-01 → 2026-05-07 (epoch-ms UTC)
+            // 2020-01-01 → 2026-05-11 (epoch-ms UTC)
             begin_date: Some(1_577_836_800_000),
             end_date: Some(1_778_457_600_000),
         })
@@ -1268,7 +1268,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "earning".into(),
-            // 2026-07-01 → 2026-07-31 (epoch-ms UTC); server caps range at 1 month
+            // 2026-07-02 → 2026-08-01 (epoch-ms UTC); server caps range at 1 month
             begin_date: Some(1_782_950_400_000),
             end_date: Some(1_785_542_400_000),
         })

@@ -253,18 +253,23 @@ mod tests {
         let exps = client.get_option_expiration(&["AAPL"], None).await;
         // If no expiry dates are returned (e.g. market closed, symbol has no
         // options, or entitlements missing), the test cannot exercise the chain
-        // endpoint. Return early as a skip — not a pass or fail — since there
-        // is no data to assert against.
+        // endpoint. When TIGER_RUN_INTEG=true, treat missing expirations as a
+        // hard fail so CI catches entitlement regressions.
         let exps = match exps {
             Ok(e) if !e.is_empty() && !e[0].dates.is_empty() => e,
-            _ => return,
+            Ok(_) => {
+                panic!("test_integ_get_option_chain: get_option_expiration returned no dates for AAPL — check account entitlements");
+            }
+            Err(e) => {
+                panic!("test_integ_get_option_chain: get_option_expiration failed: {e}");
+            }
         };
         let mid = exps[0].dates.len() / 2;
         let expiry_str = exps[0].dates[mid].clone();
 
         let item = match OptionChainItem::from_date("AAPL", &expiry_str) {
             Ok(it) => it,
-            Err(_) => return, // date parse failed — skip
+            Err(e) => panic!("test_integ_get_option_chain: failed to parse expiry date '{expiry_str}': {e}"),
         };
         let req = OptionChainRequest::new(vec![item]);
         let result = client.get_option_chain(req).await;
@@ -1531,7 +1536,9 @@ mod tests {
         if let Some(t) = data {
             if !t.contract_code.is_empty() {
                 // Sanity: if present it should match what we requested.
-                assert!(!t.contract_code.is_empty());
+                // (The inner assert is intentionally omitted — the guard
+                // above already guarantees the condition is true.)
+                let _ = &t.contract_code; // acknowledge the field
             }
         }
     }
@@ -2023,6 +2030,10 @@ mod tests {
             result
         );
         let data = result.unwrap();
+        assert!(
+            !data.is_empty(),
+            "get_financial_daily returned empty data for AAPL shares_outstanding (2024-01-01..2024-06-30) — check account entitlements"
+        );
         if !data.is_empty() {
             assert_eq!(data[0].symbol, "AAPL");
         }
@@ -2045,10 +2056,11 @@ mod tests {
             end_date: None,
         };
         let result = client.get_financial_report(req).await;
-        // Known issue: the gateway rejects our V2 payload with 'biz param
-        // error(failed to parse parameters in biz_content)' even though
-        // the fields match Java/Python SDKs. Investigation ongoing;
-        // accept as boundary until server-side reason is confirmed.
+        // TODO: Known issue — the gateway rejects our V2 payload with
+        // 'biz param error(failed to parse parameters in biz_content)'
+        // even though the fields match Java/Python SDKs. Investigation
+        // ongoing; accept as boundary until server-side reason is confirmed.
+        // Track at: https://git.tigerbrokers.net/server/openapi/openapi-rust-sdk/-/issues
         let data = match result {
             Ok(d) => d,
             Err(e) => {
