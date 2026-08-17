@@ -921,6 +921,10 @@ mod tests {
         assert_eq!(j["seg_types"][0], "SEC");
         assert_eq!(j["fund_type"], "deposit");
         assert_eq!(j["page_token"], "tok");
+        // 0.6 breaking-change fix: start_date/end_date must serialize as
+        // yyyy-MM-dd strings, not epoch-ms integers.
+        assert_eq!(j["start_date"], "2024-01-01", "start_date must be a date string (0.6 wire fix)");
+        assert_eq!(j["end_date"], "2024-01-31", "end_date must be a date string (0.6 wire fix)");
     }
 
     #[test]

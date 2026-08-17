@@ -1,5 +1,5 @@
 # Three-stage pipeline: unit / coverage / integration
-# Uses a Docker runner tagged 'openapi' (image: rust:latest ships cargo).
+# Uses a Docker runner tagged 'openapi' (image: rust:1.85 ships cargo).
 #
 # Integration credentials: TIGEROPEN_TIGER_ID, TIGEROPEN_PRIVATE_KEY,
 # TIGEROPEN_ACCOUNT env vars set in GitLab CI Variables (Protected + Masked).
@@ -12,15 +12,16 @@ stages:
 variables:
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
+  RUST_VERSION: "1.85"
 
 .rust_base:
-  image: rust:latest
+  image: rust:1.85
   tags:
     - openapi
   before_script:
     - apt-get update -qq && apt-get install -y --no-install-recommends protobuf-compiler
   cache:
-    key: rust-cargo-latest
+    key: rust-cargo-${RUST_VERSION}
     paths:
       - .cargo/
       - target/
@@ -31,7 +32,7 @@ unit:rust:
   script:
     - unset TIGEROPEN_TIGER_ID TIGEROPEN_PRIVATE_KEY TIGEROPEN_ACCOUNT TIGEROPEN_PROPS_PATH
     - mkdir -p test-results
-    - cargo test --lib 2>&1 | tee test-results/unit.txt
+    - set -o pipefail; cargo test --lib 2>&1 | tee test-results/unit.txt
   artifacts:
     when: always
     paths:
@@ -43,12 +44,12 @@ coverage:rust:
   stage: coverage
   allow_failure: true
   before_script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends protobuf-compiler
-    - cargo install cargo-tarpaulin --locked 2>/dev/null || true
+    - !reference [.rust_base, before_script]
+    - cargo install cargo-tarpaulin --locked || true
   script:
     - unset TIGEROPEN_TIGER_ID TIGEROPEN_PRIVATE_KEY TIGEROPEN_ACCOUNT
     - cargo tarpaulin --lib --engine llvm --out Xml --output-dir coverage/ 2>&1
-  coverage: '/coverage:\s*(\d+\.?\d*)%/'
+  coverage: '/^\s*\d+\.\d+% coverage/'
   artifacts:
     when: always
     paths: [coverage/]
@@ -74,7 +75,7 @@ integration:rust:
     #
     # NOTE: integ_trade_matrix.rs was merged into integ_trade.rs — do
     # not add it back as a separate --test target.
-    - cargo test --no-fail-fast --test integ_quote --test integ_trade -- --nocapture 2>&1 | tee test-results/integ.txt
+    - set -o pipefail; cargo test --no-fail-fast --test integ_quote --test integ_trade -- --nocapture 2>&1 | tee test-results/integ.txt
   artifacts:
     when: always
     paths:
@@ -96,8 +97,12 @@ notify:webhook:
   needs:
     - job: unit:rust
       artifacts: true
+      optional: true
     - job: integration:rust
       artifacts: true
+      optional: true
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends curl
   script:
     - |
       python3 << 'PYEOF'
@@ -154,12 +159,17 @@ notify:webhook:
       pipeline_iid = os.environ.get("CI_PIPELINE_IID", "")
       pipeline_url = os.environ.get("CI_PROJECT_URL", "") + "/-/pipelines/" + os.environ.get("CI_PIPELINE_ID", "")
 
-      content = f"**Repo:** {project_name}\n**Branch:** {branch}\n**Commit:** {commit}\n"
+      content_parts = [
+          f"**Repo:** {project_name}",
+          f"**Branch:** {branch}",
+          f"**Commit:** {commit}",
+      ]
       if unit_stats:
-          content += f"\n**Unit tests:** {unit_stats}\n"
+          content_parts.append(f"**Unit tests:** {unit_stats}")
       if integ_stats:
-          content += f"**Integration tests:** {integ_stats}\n"
-      content += f"[View pipeline]({pipeline_url})"
+          content_parts.append(f"**Integration tests:** {integ_stats}")
+      content_parts.append(f"[View pipeline]({pipeline_url})")
+      content = "\n".join(content_parts)
 
       payload = {
           "msg_type": "interactive",
@@ -177,9 +187,16 @@ notify:webhook:
       data = json.dumps(payload).encode("utf-8")
       req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
       try:
-          with urllib.request.urlopen(req, timeout=10) as resp:
-              result = json.loads(resp.read())
-              print(f"Webhook response: {result}")
+          with urllib.request.urlopen(req, timeout=30) as resp:
+              raw = resp.read()
+              if not raw:
+                  print("Webhook returned empty response")
+              else:
+                  result = json.loads(raw)
+                  if result.get("code", 0) != 0 or result.get("StatusCode", 0) not in (0, 200):
+                      print(f"Webhook returned non-success: {result}")
+                  else:
+                      print(f"Webhook response: {result}")
       except Exception as e:
           print(f"Webhook request failed: {e}")
       PYEOF

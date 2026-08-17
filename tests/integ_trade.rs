@@ -427,11 +427,20 @@ mod tests {
         };
         let result = client.get_quote_contract("AAPL", "OPT", &expiry).await;
         match result {
-            Ok(_) => {}
+            Ok(contracts) => {
+                // Validate returned contracts have expected market field populated.
+                for c in &contracts {
+                    assert!(
+                        c.market.as_deref().map(|m| !m.is_empty()).unwrap_or(false),
+                        "Contract.market should be non-empty, got {:?}",
+                        c.market
+                    );
+                }
+            }
             Err(e) => {
-                let msg = format!("{:?}", e);
+                let msg = e.to_string();
                 assert!(
-                    msg.to_lowercase().contains("permission")
+                    matches_any(&msg, PERMISSION_ERROR_MARKERS)
                         || msg.to_lowercase().contains("no market data")
                         || msg.to_lowercase().contains("not support")
                         || msg.to_lowercase().contains("license"),
@@ -827,7 +836,7 @@ mod tests {
         );
         // Rows may omit `account` when the server aggregates across
         // segments; only exercise the pipeline shape.
-        let _data: Vec<FundDetails> = result.unwrap();
+        let _ = result.unwrap();
     }
 
     #[tokio::test]
@@ -1147,7 +1156,7 @@ mod tests {
             action: Some("BUY".into()),
             order_type: Some("LMT".into()),
             total_quantity: Some(1),
-            limit_price: Some(SAFE_SELL_PRICE),
+            limit_price: Some(SAFE_BUY_PRICE),
             time_in_force: Some("GTC".into()),
             ..us_stk()
         };
