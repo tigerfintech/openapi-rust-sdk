@@ -49,7 +49,7 @@ coverage:rust:
   script:
     - unset TIGEROPEN_TIGER_ID TIGEROPEN_PRIVATE_KEY TIGEROPEN_ACCOUNT
     - cargo tarpaulin --lib --engine llvm --out Xml --output-dir coverage/ 2>&1
-  coverage: '/^\s*\d+\.\d+% coverage/'
+  coverage: '/coverage:\s*(\d+\.?\d*)%/'
   artifacts:
     when: always
     paths: [coverage/]
@@ -66,7 +66,7 @@ integration:rust:
   variables:
     TIGER_RUN_INTEG: "true"
   script:
-    - test -n "$TIGEROPEN_TIGER_ID" || test -n "$TIGEROPEN_PROPS_PATH" || { echo "No credentials — skipping"; exit 1; }
+    - test -n "$TIGEROPEN_TIGER_ID" && test -n "$TIGEROPEN_PRIVATE_KEY" || { echo "No credentials (TIGEROPEN_TIGER_ID + TIGEROPEN_PRIVATE_KEY required) — skipping"; exit 1; }
     - mkdir -p test-results
     # --no-fail-fast: cargo test bails after the first test binary fails,
     # which was silently skipping integ_trade whenever any integ_quote
