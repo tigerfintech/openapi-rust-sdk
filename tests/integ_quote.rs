@@ -2060,7 +2060,7 @@ mod tests {
         // 'biz param error(failed to parse parameters in biz_content)'
         // even though the fields match Java/Python SDKs. Investigation
         // ongoing; accept as boundary until server-side reason is confirmed.
-        // Track at: https://git.tigerbrokers.net/server/openapi/openapi-rust-sdk/-/issues
+
         let data = match result {
             Ok(d) => d,
             Err(e) => {
