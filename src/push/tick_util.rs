@@ -213,6 +213,10 @@ fn convert_future_tick(src: pb::TradeTickData) -> PushTradeTick {
         let mv: &trade_tick_data::MergedVol = &src.merged_vols[i];
         for (j, &vol) in mv.vol.iter().enumerate() {
             ticks.push(PushTick {
+                // sn formula mirrors Java TradeTickUtil (startSn * 10 + j).
+                // The server guarantees MergedVol.vol.len() < 10 per time-slot
+                // (futures typically have 1–3 venues), so the multiplier of 10
+                // is sufficient and consistent with the Java/Python/Go SDKs.
                 sn: start_sn * 10 + j as i64,
                 time: current_time,
                 price: cur_price,
