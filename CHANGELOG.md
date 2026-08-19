@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `iceberg_order` 合并可选参数（原基础版与全参版统一为一个函数）
 
 ### Fixed
+
+- 推送订阅确认消息不含行情 payload 时不再误触发 `on_error`
 - token 文件与 config 文件同目录自动加载，不再依赖当前工作目录
 - `query_token` / `query_token_from_config` 正确处理服务端 `data` 双重编码的 JSON 响应
 - `inject_secret_key_json`：正确判断 `secret_key` 是否已设置（类型感知）

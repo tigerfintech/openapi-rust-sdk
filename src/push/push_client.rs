@@ -296,12 +296,9 @@ impl PushClient {
         let data_type = push_data.data_type;
         let body = match push_data.body {
             Some(b) => b,
-            None => {
-                if let Some(cb) = &cbs.on_error {
-                    cb("PushData body is empty".to_string());
-                }
-                return;
-            }
+            // Subscription acknowledgements can contain PushData metadata
+            // without a market-data payload.
+            None => return,
         };
 
         match body {
