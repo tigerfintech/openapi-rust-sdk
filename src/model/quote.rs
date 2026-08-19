@@ -173,6 +173,10 @@ pub struct TradeTickItem {
     pub price: f64,
     #[serde(default)]
     pub r#type: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub part_code: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub part_name: String,
 }
 
 /// 逐笔（一个标的一组）
@@ -273,6 +277,18 @@ pub struct OptionLeg {
     pub vega: f64,
     #[serde(default)]
     pub rho: f64,
+    #[serde(default)]
+    pub mark_price: f64,
+    #[serde(default)]
+    pub pre_mark_price: f64,
+    #[serde(default)]
+    pub mark_timestamp: i64,
+    #[serde(default)]
+    pub mid_price: f64,
+    #[serde(default)]
+    pub pre_mid_price: f64,
+    #[serde(default)]
+    pub mid_timestamp: i64,
 }
 
 /// Put/Call 配对
@@ -872,6 +888,46 @@ mod tests {
         assert_eq!(ps[0].name, "usStockQuote");
         assert_eq!(ps[0].expire_at, 1700000000);
     }
+
+    #[test]
+    fn test_quote_overnight_serde_all_fields() {
+        let quote = QuoteOvernight {
+            symbol: "AAPL".into(),
+            latest_price: 234.56,
+            ask_price: 234.60,
+            ask_size: 120,
+            bid_price: 234.50,
+            bid_size: 80,
+            pre_close: 230.00,
+            volume: 12_345,
+            amount: 2_895_643.21,
+            timestamp: 1_723_456_789_000,
+            trading_status: 1,
+            change: 4.56,
+            change_rate: 0.019826,
+            amplitude: 0.025,
+        };
+        let expected = serde_json::json!({
+            "symbol": "AAPL",
+            "latestPrice": 234.56,
+            "askPrice": 234.60,
+            "askSize": 120,
+            "bidPrice": 234.50,
+            "bidSize": 80,
+            "preClose": 230.00,
+            "volume": 12_345,
+            "amount": 2_895_643.21,
+            "timestamp": 1_723_456_789_000_i64,
+            "tradingStatus": 1,
+            "change": 4.56,
+            "changeRate": 0.019826,
+            "amplitude": 0.025
+        });
+
+        assert_eq!(serde_json::to_value(&quote).unwrap(), expected);
+        let decoded: QuoteOvernight = serde_json::from_value(expected.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), expected);
+    }
 }
 
 // ============================================================================
@@ -1445,25 +1501,29 @@ pub struct QuoteOvernight {
     #[serde(default)]
     pub symbol: String,
     #[serde(default)]
+    pub latest_price: f64,
+    #[serde(default)]
+    pub ask_price: f64,
+    #[serde(default)]
+    pub ask_size: i64,
+    #[serde(default)]
+    pub bid_price: f64,
+    #[serde(default)]
+    pub bid_size: i64,
+    #[serde(default)]
     pub pre_close: f64,
-    #[serde(default)]
-    pub open: f64,
-    #[serde(default)]
-    pub close: f64,
-    #[serde(default)]
-    pub high: f64,
-    #[serde(default)]
-    pub low: f64,
     #[serde(default)]
     pub volume: i64,
     #[serde(default)]
     pub amount: f64,
     #[serde(default)]
+    pub timestamp: i64,
+    #[serde(default)]
+    pub trading_status: i32,
+    #[serde(default)]
     pub change: f64,
     #[serde(default)]
     pub change_rate: f64,
     #[serde(default)]
-    pub begin_time: i64,
-    #[serde(default)]
-    pub end_time: i64,
+    pub amplitude: f64,
 }
