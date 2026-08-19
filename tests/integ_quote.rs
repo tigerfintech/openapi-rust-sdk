@@ -2251,6 +2251,10 @@ mod tests {
         let data: Vec<QuoteOvernight> = result.unwrap();
         if !data.is_empty() {
             assert_eq!(data[0].symbol, "AAPL");
+            assert!(
+                data[0].latest_price >= 0.0,
+                "QuoteOvernight.latest_price should be non-negative"
+            );
         }
     }
 

@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.10] - 2026-08-19
 
+### Breaking
+
+- `Callbacks::on_tick` 回调参数类型由原始 `pb::TradeTickData` 改为解码后的 `PushTradeTick`，每笔成交以 `PushTick` 结构体返回，包含 `price`、`volume`、`cond`、`part_code`、`part_name` 等字段
+
 ### Added
 
 - `OptionLeg` 新增 `mark_price`、`pre_mark_price`、`mark_timestamp`、`mid_price`、`pre_mid_price`、`mid_timestamp` 字段
+- `TradeTickItem` 新增 `cond` 字段，原始单字符代码已转换为可读字符串（如 `US_REGULAR_SALE`、`HK_AUTOMATCH_NORMAL`）
 
 ## [0.5.9] - 2026-08-04
 

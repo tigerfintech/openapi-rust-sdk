@@ -177,6 +177,8 @@ pub struct TradeTickItem {
     pub part_code: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub part_name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub cond: String,
 }
 
 /// 逐笔（一个标的一组）
