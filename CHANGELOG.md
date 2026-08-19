@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `PushClient::new_with_full_tick(config, options, use_full_tick)` 可选择在连接认证时请求完整逐笔成交推送；现有 `PushClient::new` 保持兼容并默认关闭
 - `OptionLeg` 新增 `mark_price`、`pre_mark_price`、`mark_timestamp`、`mid_price`、`pre_mid_price`、`mid_timestamp` 字段
 - `TradeTickItem` 新增 `cond` 字段，原始单字符代码已转换为可读字符串（如 `US_REGULAR_SALE`、`HK_AUTOMATCH_NORMAL`）
 - `QuoteOvernight` 响应模型与服务端字段对齐，新增最新价、买卖盘、时间戳、交易状态和振幅等字段，并移除服务端不存在的开高低收和起止时间字段

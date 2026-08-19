@@ -809,11 +809,7 @@ mod tests {
         clear_env_vars();
         let dir = std::env::temp_dir();
         let path = dir.join("test_rust_pk8_config.properties");
-        std::fs::write(
-            &path,
-            "tiger_id=pk8_id\nprivate_key_pk8=pk8_key_data\n",
-        )
-        .unwrap();
+        std::fs::write(&path, "tiger_id=pk8_id\nprivate_key_pk8=pk8_key_data\n").unwrap();
         let config = ClientConfig::builder()
             .properties_file(path.to_str().unwrap())
             .build()
@@ -829,11 +825,7 @@ mod tests {
         clear_env_vars();
         let dir = std::env::temp_dir();
         let path = dir.join("test_rust_pk1_config.properties");
-        std::fs::write(
-            &path,
-            "tiger_id=pk1_id\nprivate_key_pk1=pk1_key_data\n",
-        )
-        .unwrap();
+        std::fs::write(&path, "tiger_id=pk1_id\nprivate_key_pk1=pk1_key_data\n").unwrap();
         let config = ClientConfig::builder()
             .properties_file(path.to_str().unwrap())
             .build()
@@ -915,7 +907,11 @@ mod tests {
         clear_env_vars();
         let dir = std::env::temp_dir();
         let path = dir.join("test_rust_secret.properties");
-        std::fs::write(&path, "tiger_id=lid\nprivate_key=pk\nsecret_key=my_secret\n").unwrap();
+        std::fs::write(
+            &path,
+            "tiger_id=lid\nprivate_key=pk\nsecret_key=my_secret\n",
+        )
+        .unwrap();
         let config = ClientConfig::builder()
             .properties_file(path.to_str().unwrap())
             .build()

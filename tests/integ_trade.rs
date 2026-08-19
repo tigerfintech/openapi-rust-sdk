@@ -83,11 +83,8 @@ mod tests {
     ];
 
     /// Rate-limit markers — retry with exponential backoff.
-    const RATE_LIMIT_MARKERS: &[&str] = &[
-        "too_many_requests",
-        "rate limit",
-        "requestrateexceedlimit",
-    ];
+    const RATE_LIMIT_MARKERS: &[&str] =
+        &["too_many_requests", "rate limit", "requestrateexceedlimit"];
 
     fn matches_any(msg: &str, markers: &[&str]) -> bool {
         let lower = msg.to_lowercase();
@@ -234,11 +231,7 @@ mod tests {
         let client = TradeClient::from_config(cfg);
         let req = PositionsRequest::default();
         let result = client.get_positions(req).await;
-        assert!(
-            result.is_ok(),
-            "get_positions should succeed: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "get_positions should succeed: {:?}", result);
         let data: Vec<Position> = result.unwrap();
         // Positions may legitimately be empty (e.g. paper account with no holdings).
         // When entries exist, validate key fields.
@@ -368,7 +361,10 @@ mod tests {
         let result = client.get_contract("AAPL", "STK").await;
         assert!(result.is_ok(), "get_contract should succeed: {:?}", result);
         let data: Vec<Contract> = result.unwrap();
-        assert!(!data.is_empty(), "contract result should not be empty for AAPL");
+        assert!(
+            !data.is_empty(),
+            "contract result should not be empty for AAPL"
+        );
         let c = &data[0];
         assert_eq!(
             c.symbol, "AAPL",
@@ -389,11 +385,7 @@ mod tests {
         let cfg = integ_support::integ_config();
         let client = TradeClient::from_config(cfg);
         let result = client.get_contracts(&["AAPL", "TSLA"], "STK").await;
-        assert!(
-            result.is_ok(),
-            "get_contracts should succeed: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "get_contracts should succeed: {:?}", result);
         let data: Vec<Contract> = result.unwrap();
         assert!(!data.is_empty(), "contracts result should not be empty");
         assert!(

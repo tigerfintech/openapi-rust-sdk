@@ -751,15 +751,15 @@ async fn test_call_optional_versioned_passes_version() {
 
 use crate::model::quote_requests::{
     AllFutureContractsRequest, DelayedQuoteRequest, FinancialCurrencyRequest,
-    FinancialExchangeRateRequest, FutureContinuousContractsRequest, FutureContractSingleRequest,
+    FinancialExchangeRateRequest, FundContractsRequest, FundHistoryQuoteRequest, FundQuoteRequest,
+    FundSymbolsRequest, FutureContinuousContractsRequest, FutureContractSingleRequest,
     FutureDepthRequest, FutureHistoryMainContractRequest, FutureKlineByPageRequest,
-    FutureTradeTicksRequest, FutureTradingTimesRequest, FundContractsRequest,
-    FundHistoryQuoteRequest, FundQuoteRequest, FundSymbolsRequest, IndustryListRequest,
-    IndustryStocksRequest, KlineByPageRequest, KlineQuotaRequest, MarketScannerTagsRequest,
-    OptionAnalysisRequest, OptionDepthRequest, OptionSymbolsRequest, OptionTimelineRequest,
-    OptionTradeTicksRequest, QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest,
-    StockBrokerRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
-    SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
+    FutureTradeTicksRequest, FutureTradingTimesRequest, IndustryListRequest, IndustryStocksRequest,
+    KlineByPageRequest, KlineQuotaRequest, MarketScannerTagsRequest, OptionAnalysisRequest,
+    OptionDepthRequest, OptionSymbolsRequest, OptionTimelineRequest, OptionTradeTicksRequest,
+    QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest, StockBrokerRequest,
+    StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest, SymbolsRequest,
+    TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
     TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
 };
 
@@ -815,7 +815,8 @@ async fn test_get_trade_tick_wire_method() {
 async fn test_get_trade_tick_decodes_part_code_and_part_name() {
     // REST response carries partCode/partName as server-sent strings;
     // verify TradeTickItem deserializes them correctly.
-    let server = mock_success_server(r#"[{
+    let server = mock_success_server(
+        r#"[{
         "symbol": "AAPL",
         "beginIndex": 0,
         "endIndex": 1,
@@ -825,7 +826,9 @@ async fn test_get_trade_tick_decodes_part_code_and_part_name() {
             {"time": 1700000001000, "volume": 200, "price": 150.50, "type": "-",
              "partCode": "NSDQ", "partName": "NASDAQ Stock Market, LLC (NASDAQ)"}
         ]
-    }]"#).await;
+    }]"#,
+    )
+    .await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
     let result = qc
         .get_trade_tick(TradeTickRequest {
@@ -864,10 +867,7 @@ async fn test_get_symbols_wire_method() {
 async fn test_get_symbols_returns_vec_string() {
     let server = mock_success_server(r#"["AAPL","GOOG","TSLA"]"#).await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let result = qc
-        .get_symbols(SymbolsRequest::default())
-        .await
-        .unwrap();
+    let result = qc.get_symbols(SymbolsRequest::default()).await.unwrap();
     assert_eq!(result.len(), 3);
     assert_eq!(result[0], "AAPL");
 }
@@ -1184,10 +1184,15 @@ async fn test_option_trade_ticks_biz_content_is_top_level_array() {
     let received = server.received_requests().await.unwrap();
     let outer: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
     // Gateway wraps biz_content as a stringified JSON payload; parse again.
-    let biz_str = outer["biz_content"].as_str().expect("biz_content is string");
+    let biz_str = outer["biz_content"]
+        .as_str()
+        .expect("biz_content is string");
     let biz: serde_json::Value = serde_json::from_str(biz_str).unwrap();
     // Must be an array, not an object with `contracts` key.
-    assert!(biz.is_array(), "biz_content must be a top-level array, got {biz}");
+    assert!(
+        biz.is_array(),
+        "biz_content must be a top-level array, got {biz}"
+    );
     assert_eq!(biz.as_array().unwrap().len(), 1);
     assert_eq!(biz[0]["symbol"].as_str().unwrap(), "AAPL");
     assert_eq!(biz[0]["right"].as_str().unwrap(), "CALL");
@@ -1213,9 +1218,7 @@ async fn test_get_option_timeline_wire_method() {
 async fn test_get_option_depth_wire_method() {
     let server = mock_success_server(r#"[]"#).await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc
-        .get_option_depth(OptionDepthRequest::default())
-        .await;
+    let _ = qc.get_option_depth(OptionDepthRequest::default()).await;
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
     assert_eq!(req["method"].as_str().unwrap(), "option_depth");
@@ -1227,9 +1230,7 @@ async fn test_get_option_depth_wire_method() {
 async fn test_get_option_symbols_wire_method() {
     let server = mock_success_server(r#"[]"#).await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc
-        .get_option_symbols(OptionSymbolsRequest::default())
-        .await;
+    let _ = qc.get_option_symbols(OptionSymbolsRequest::default()).await;
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
     assert_eq!(req["method"].as_str().unwrap(), "all_hk_option_symbols");
@@ -1314,7 +1315,10 @@ async fn test_get_future_continuous_contracts_wire_method() {
         .await;
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
-    assert_eq!(req["method"].as_str().unwrap(), "future_continuous_contracts");
+    assert_eq!(
+        req["method"].as_str().unwrap(),
+        "future_continuous_contracts"
+    );
 }
 
 // --- 30. get_future_history_main_contract ---
@@ -1532,9 +1536,7 @@ async fn test_get_warrant_filter_wire_method() {
 async fn test_get_industry_list_wire_method() {
     let server = mock_success_server(r#"[]"#).await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
-    let _ = qc
-        .get_industry_list(IndustryListRequest::default())
-        .await;
+    let _ = qc.get_industry_list(IndustryListRequest::default()).await;
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
     assert_eq!(req["method"].as_str().unwrap(), "industry_list");

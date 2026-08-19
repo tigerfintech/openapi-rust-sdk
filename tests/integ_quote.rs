@@ -6,6 +6,18 @@ mod integ_support;
 #[cfg(test)]
 mod tests {
     use super::integ_support;
+    use tigeropen::model::quote as qm;
+    use tigeropen::model::quote::{
+        Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest, Depth,
+        DepthLevel, ExchangeRate, FinancialCurrency, FundContractInfo, FundHistoryQuote, FundQuote,
+        FutureContractInfo, FutureDepth, FutureExchange, FutureKline, FutureKlineItem,
+        FutureMainContractHistory, FutureQuote, FutureTradeTickItem, FutureTradingTime,
+        IndustryItem, IndustryStock, Kline, KlineItem, KlineQuota, MarketScannerTagGroup,
+        OptionAnalysis, OptionChain, OptionExpiration, OptionLeg, OptionSymbol, QuoteOvernight,
+        QuotePermission, ShortInterest, StockBroker, StockDetail, StockIndustry, SymbolName,
+        Timeline, TimelineItem, TradeMeta, TradeRankItem, TradeTick, TradeTickItem,
+        TradingCalendarItem, WarrantBrief,
+    };
     use tigeropen::model::quote_requests::{
         AllFutureContractsRequest, BriefRequest, DelayedQuoteRequest, FinancialCurrencyRequest,
         FinancialExchangeRateRequest, FundContractsRequest, FundHistoryQuoteRequest,
@@ -16,25 +28,13 @@ mod tests {
         IndustryStocksRequest, KlineByPageRequest, KlineQuotaRequest, KlineRequest,
         MarketScannerTagsRequest, OptionAnalysisRequest, OptionChainItem, OptionChainRequest,
         OptionContractItem, OptionDepthRequest, OptionKlineItem, OptionKlineRequest,
-        OptionQuoteRequest, OptionQueryItem, OptionSymbolsRequest, OptionTimelineRequest,
+        OptionQueryItem, OptionQuoteRequest, OptionSymbolsRequest, OptionTimelineRequest,
         OptionTradeTicksRequest, QuoteDepthRequest, QuoteOvernightRequest, QuotePermissionRequest,
         ShortInterestRequest, StockBrokerRequest, StockDetailsRequest, StockFundamentalRequest,
         StockIndustryRequest, SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest,
         TradeRankRequest, TradeTickRequest, TradingCalendarRequest, WarrantFilterRequest,
         WarrantQuoteRequest,
     };
-    use tigeropen::model::quote::{
-        Brief, CapitalDistribution, CapitalFlow, CorporateAction, CorporateActionRequest, Depth,
-        DepthLevel, ExchangeRate, FinancialCurrency, FundContractInfo, FundHistoryQuote,
-        FundQuote, FutureContractInfo, FutureDepth, FutureExchange, FutureKline, FutureKlineItem,
-        FutureMainContractHistory, FutureQuote, FutureTradeTickItem, FutureTradingTime,
-        IndustryItem, IndustryStock, Kline, KlineItem, KlineQuota, MarketScannerTagGroup,
-        OptionAnalysis, OptionChain, OptionExpiration, OptionLeg, OptionSymbol,
-        QuoteOvernight, QuotePermission, ShortInterest, StockBroker, StockDetail, StockIndustry,
-        SymbolName, Timeline, TimelineItem, TradeMeta, TradeRankItem, TradeTick, TradeTickItem,
-        TradingCalendarItem, WarrantBrief,
-    };
-    use tigeropen::model::quote as qm;
     use tigeropen::quote::QuoteClient;
 
     #[tokio::test]
@@ -180,10 +180,14 @@ mod tests {
         );
         // Timeline buckets may legitimately be empty outside trading hours.
         // When items exist, validate their fields.
-        for bucket in [t.intraday.as_ref(), t.pre_hours.as_ref(), t.after_hours.as_ref()]
-            .iter()
-            .copied()
-            .flatten()
+        for bucket in [
+            t.intraday.as_ref(),
+            t.pre_hours.as_ref(),
+            t.after_hours.as_ref(),
+        ]
+        .iter()
+        .copied()
+        .flatten()
         {
             if bucket.items.is_empty() {
                 continue;
@@ -269,11 +273,17 @@ mod tests {
 
         let item = match OptionChainItem::from_date("AAPL", &expiry_str) {
             Ok(it) => it,
-            Err(e) => panic!("test_integ_get_option_chain: failed to parse expiry date '{expiry_str}': {e}"),
+            Err(e) => panic!(
+                "test_integ_get_option_chain: failed to parse expiry date '{expiry_str}': {e}"
+            ),
         };
         let req = OptionChainRequest::new(vec![item]);
         let result = client.get_option_chain(req).await;
-        assert!(result.is_ok(), "get_option_chain should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "get_option_chain should succeed: {:?}",
+            result
+        );
         let data: Vec<OptionChain> = result.unwrap();
         assert!(!data.is_empty(), "option chain result should not be empty");
         let chain = &data[0];
@@ -313,10 +323,7 @@ mod tests {
                 !leg.identifier.is_empty(),
                 "Put leg identifier should be non-empty"
             );
-            assert!(
-                !leg.strike.is_empty(),
-                "Put leg strike should be non-empty"
-            );
+            assert!(!leg.strike.is_empty(), "Put leg strike should be non-empty");
         }
     }
 
@@ -436,7 +443,11 @@ mod tests {
             ..Default::default()
         };
         let result = client.get_trade_tick(req).await;
-        assert!(result.is_ok(), "get_trade_tick should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "get_trade_tick should succeed: {:?}",
+            result
+        );
         let data: Vec<TradeTick> = result.unwrap();
         assert!(
             !data.is_empty(),
@@ -476,7 +487,11 @@ mod tests {
             ..Default::default()
         };
         let result = client.get_quote_depth(req).await;
-        assert!(result.is_ok(), "get_quote_depth should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "get_quote_depth should succeed: {:?}",
+            result
+        );
         let data: Vec<Depth> = result.unwrap();
         assert!(
             !data.is_empty(),
@@ -540,7 +555,10 @@ mod tests {
             result
         );
         let data: Vec<SymbolName> = result.unwrap();
-        assert!(!data.is_empty(), "all_symbol_names list should not be empty");
+        assert!(
+            !data.is_empty(),
+            "all_symbol_names list should not be empty"
+        );
         let sn = &data[0];
         assert!(
             !sn.symbol.is_empty(),
@@ -561,7 +579,11 @@ mod tests {
             ..Default::default()
         };
         let result = client.get_trade_metas(req).await;
-        assert!(result.is_ok(), "get_trade_metas should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "get_trade_metas should succeed: {:?}",
+            result
+        );
         let data: Vec<TradeMeta> = result.unwrap();
         assert!(
             !data.is_empty(),
@@ -722,7 +744,11 @@ mod tests {
             ..Default::default()
         };
         let result = client.get_trade_rank(req).await;
-        assert!(result.is_ok(), "get_trade_rank should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "get_trade_rank should succeed: {:?}",
+            result
+        );
         let data: Vec<TradeRankItem> = result.unwrap();
         // Off-hours the rank list may be empty or have zero latest_price;
         // only assert on shape when data is present.
@@ -893,7 +919,11 @@ mod tests {
         let client = QuoteClient::from_config(cfg);
         let req = KlineQuotaRequest::default();
         let result = client.get_kline_quota(req).await;
-        assert!(result.is_ok(), "get_kline_quota should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "get_kline_quota should succeed: {:?}",
+            result
+        );
         let data: Vec<KlineQuota> = result.unwrap();
         // Quota may legitimately be empty; when entries exist, validate method field.
         if !data.is_empty() {
@@ -909,10 +939,7 @@ mod tests {
     // ── 期权扩展 ──────────────────────────────────────────────────────────
 
     /// Helper: fetch a real option leg (call preferred) + chain expiry for a symbol.
-    async fn first_option_leg(
-        client: &QuoteClient,
-        symbol: &str,
-    ) -> Option<(i64, OptionLeg)> {
+    async fn first_option_leg(client: &QuoteClient, symbol: &str) -> Option<(i64, OptionLeg)> {
         let exps = client.get_option_expiration(&[symbol], None).await.ok()?;
         let exp = exps.first()?;
         if exp.dates.is_empty() {
@@ -948,12 +975,13 @@ mod tests {
         let item = OptionContractItem::new("AAPL", expiry, &leg.right, &leg.strike);
         let req = OptionQuoteRequest::new(vec![item]);
         let result = client.get_option_quote(req).await;
-        assert!(result.is_ok(), "get_option_quote should succeed: {:?}", result);
-        let data: Vec<Brief> = result.unwrap();
         assert!(
-            !data.is_empty(),
-            "option_quote result should not be empty"
+            result.is_ok(),
+            "get_option_quote should succeed: {:?}",
+            result
         );
+        let data: Vec<Brief> = result.unwrap();
+        assert!(!data.is_empty(), "option_quote result should not be empty");
         let b = &data[0];
         assert!(
             b.latest_price >= 0.0,
@@ -979,8 +1007,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as i64;
-        let mut item =
-            OptionKlineItem::new("AAPL", expiry, &leg.right, &leg.strike, "day");
+        let mut item = OptionKlineItem::new("AAPL", expiry, &leg.right, &leg.strike, "day");
         item.begin_time = Some(now_ms - 30 * 86_400_000);
         item.end_time = Some(now_ms);
         let req = OptionKlineRequest {
@@ -989,7 +1016,11 @@ mod tests {
             ..Default::default()
         };
         let result = client.get_option_kline(req).await;
-        assert!(result.is_ok(), "get_option_kline should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "get_option_kline should succeed: {:?}",
+            result
+        );
         let data: Vec<Kline> = result.unwrap();
         assert!(!data.is_empty(), "option_kline result should not be empty");
         if !data[0].items.is_empty() {
@@ -1105,7 +1136,11 @@ mod tests {
             ..Default::default()
         };
         let result = client.get_option_depth(req).await;
-        assert!(result.is_ok(), "get_option_depth should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "get_option_depth should succeed: {:?}",
+            result
+        );
         let data: Vec<Depth> = result.unwrap();
         // Off-hours the option's book is often flat (both asks and bids
         // empty) — treat as boundary and skip the depth check.
@@ -1177,10 +1212,7 @@ mod tests {
     async fn first_future_contract(client: &QuoteClient) -> Option<(String, String)> {
         let exchanges = client.get_future_exchange().await.ok()?;
         let ex = exchanges.first()?;
-        let contracts = client
-            .get_future_contracts(&ex.code)
-            .await
-            .ok()?;
+        let contracts = client.get_future_contracts(&ex.code).await.ok()?;
         let c = contracts.first()?;
         Some((ex.code.clone(), c.contract_code.clone()))
     }
@@ -1226,7 +1258,10 @@ mod tests {
             return;
         }
         let data: Vec<FutureContractInfo> = result.unwrap();
-        assert!(!data.is_empty(), "future_contracts list should not be empty");
+        assert!(
+            !data.is_empty(),
+            "future_contracts list should not be empty"
+        );
         let c = &data[0];
         assert!(
             !c.contract_code.is_empty(),
@@ -1254,7 +1289,10 @@ mod tests {
             return;
         }
         let data: Vec<FutureQuote> = result.unwrap();
-        assert!(!data.is_empty(), "future_real_time_quote should not be empty");
+        assert!(
+            !data.is_empty(),
+            "future_real_time_quote should not be empty"
+        );
         let q = &data[0];
         assert_eq!(
             q.contract_code, contract_code,
@@ -1317,7 +1355,10 @@ mod tests {
             return;
         }
         let data: Vec<FutureContractInfo> = result.unwrap();
-        assert!(!data.is_empty(), "future_contract result should not be empty");
+        assert!(
+            !data.is_empty(),
+            "future_contract result should not be empty"
+        );
         assert_eq!(
             data[0].contract_code, contract_code,
             "FutureContractInfo.contract_code mismatch"
@@ -1784,10 +1825,7 @@ mod tests {
         let data: Vec<IndustryItem> = result.unwrap();
         assert!(!data.is_empty(), "industry_list should not be empty");
         let i = &data[0];
-        assert!(
-            !i.id.is_empty(),
-            "IndustryItem.id should be non-empty"
-        );
+        assert!(!i.id.is_empty(), "IndustryItem.id should be non-empty");
         // Wire returns nameCN / nameEN; hydrated `name` should be non-empty
         // as long as at least one language variant is populated.
         assert!(
@@ -1833,8 +1871,7 @@ mod tests {
             Err(e) => {
                 let msg = format!("{:?}", e);
                 assert!(
-                    msg.contains("does not support")
-                        || msg.to_lowercase().contains("permission"),
+                    msg.contains("does not support") || msg.to_lowercase().contains("permission"),
                     "unexpected industry_stocks error: {}",
                     msg
                 );
@@ -2187,7 +2224,11 @@ mod tests {
             ..Default::default()
         };
         let result = client.market_scanner(req).await;
-        assert!(result.is_ok(), "market_scanner should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "market_scanner should succeed: {:?}",
+            result
+        );
         let data = result.unwrap();
         if let Some(r) = data {
             assert!(r.page >= 0);

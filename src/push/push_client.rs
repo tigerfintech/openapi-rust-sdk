@@ -74,6 +74,7 @@ pub struct PushClient {
     reconnect_interval: Duration,
     connect_timeout: Duration,
     auto_reconnect: bool,
+    use_full_tick: bool,
     state: Arc<RwLock<ConnectionState>>,
     callbacks: Arc<RwLock<Callbacks>>,
     /// Market data subscriptions: subject -> symbols set
@@ -91,6 +92,15 @@ pub struct PushClient {
 impl PushClient {
     /// Create a new push client
     pub fn new(config: ClientConfig, options: Option<PushClientOptions>) -> Self {
+        Self::new_with_full_tick(config, options, false)
+    }
+
+    /// Create a new push client and select the full-tick payload for tick subscriptions.
+    pub fn new_with_full_tick(
+        config: ClientConfig,
+        options: Option<PushClientOptions>,
+        use_full_tick: bool,
+    ) -> Self {
         let opts = options.unwrap_or_default();
         Self {
             config,
@@ -108,6 +118,7 @@ impl PushClient {
                     .unwrap_or(DEFAULT_CONNECT_TIMEOUT_SECS),
             ),
             auto_reconnect: opts.auto_reconnect.unwrap_or(true),
+            use_full_tick,
             state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
             callbacks: Arc::new(RwLock::new(Callbacks::default())),
             subscriptions: Arc::new(RwLock::new(HashMap::new())),
@@ -565,7 +576,7 @@ pub async fn connect(client: &Arc<PushClient>) -> Result<(), String> {
         ACCEPT_VERSION,
         DEFAULT_SEND_INTERVAL,
         DEFAULT_RECEIVE_INTERVAL,
-        false,
+        client.use_full_tick,
     );
     if !client.send_request(&connect_req) {
         *client.state.write().unwrap() = ConnectionState::Disconnected;

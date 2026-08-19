@@ -496,7 +496,10 @@ async fn test_get_active_orders_typed() {
     )
     .await;
     let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
-    let orders = tc.get_active_orders(OrdersRequest::default()).await.unwrap();
+    let orders = tc
+        .get_active_orders(OrdersRequest::default())
+        .await
+        .unwrap();
     assert_eq!(orders.len(), 1);
     assert_eq!(orders[0].id, 10);
     assert_eq!(orders[0].status, "Submitted");
@@ -521,7 +524,10 @@ async fn test_get_inactive_orders_typed() {
     )
     .await;
     let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
-    let orders = tc.get_inactive_orders(OrdersRequest::default()).await.unwrap();
+    let orders = tc
+        .get_inactive_orders(OrdersRequest::default())
+        .await
+        .unwrap();
     assert_eq!(orders.len(), 1);
     assert_eq!(orders[0].status, "Cancelled");
 }
@@ -690,7 +696,10 @@ async fn test_get_estimate_tradable_quantity_wire_method() {
         .await;
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
-    assert_eq!(req["method"].as_str().unwrap(), "estimate_tradable_quantity");
+    assert_eq!(
+        req["method"].as_str().unwrap(),
+        "estimate_tradable_quantity"
+    );
 }
 
 #[tokio::test]
@@ -715,9 +724,7 @@ async fn test_get_estimate_tradable_quantity_typed() {
 async fn test_place_forex_order_wire_method() {
     let server = mock_success_server(r#"null"#).await;
     let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
-    let _ = tc
-        .place_forex_order(ForexOrderRequest::default())
-        .await;
+    let _ = tc.place_forex_order(ForexOrderRequest::default()).await;
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
     assert_eq!(req["method"].as_str().unwrap(), "place_forex_order");
@@ -764,10 +771,9 @@ async fn test_get_segment_fund_available_wire_method() {
 
 #[tokio::test]
 async fn test_get_segment_fund_available_typed() {
-    let server = mock_success_server(
-        r#"{"items":[{"fromSegment":"S","currency":"USD","amount":5000.0}]}"#,
-    )
-    .await;
+    let server =
+        mock_success_server(r#"{"items":[{"fromSegment":"S","currency":"USD","amount":5000.0}]}"#)
+            .await;
     let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
     let items = tc
         .get_segment_fund_available(SegmentFundRequest::default())
@@ -834,9 +840,7 @@ async fn test_transfer_segment_fund_typed() {
 async fn test_cancel_segment_fund_wire_method() {
     let server = mock_success_server(r#"null"#).await;
     let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
-    let _ = tc
-        .cancel_segment_fund(SegmentFundRequest::default())
-        .await;
+    let _ = tc.cancel_segment_fund(SegmentFundRequest::default()).await;
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
     assert_eq!(req["method"].as_str().unwrap(), "cancel_segment_fund");
@@ -861,7 +865,10 @@ async fn test_get_fund_details_typed() {
     )
     .await;
     let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
-    let items = tc.get_fund_details(FundDetailsRequest::default()).await.unwrap();
+    let items = tc
+        .get_fund_details(FundDetailsRequest::default())
+        .await
+        .unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].id, "FD001");
     assert_eq!(items[0].amount, 10000.0);

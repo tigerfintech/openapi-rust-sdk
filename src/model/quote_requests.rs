@@ -1157,10 +1157,22 @@ mod tests {
         assert_eq!(to_json(&BriefRequest::default()), serde_json::json!({}));
         assert_eq!(to_json(&SymbolsRequest::default()), serde_json::json!({}));
         assert_eq!(to_json(&KlineRequest::default()), serde_json::json!({}));
-        assert_eq!(to_json(&QuoteDepthRequest::default()), serde_json::json!({}));
-        assert_eq!(to_json(&OptionChainRequest::default()), serde_json::json!({}));
-        assert_eq!(to_json(&OptionQuoteRequest::default()), serde_json::json!({}));
-        assert_eq!(to_json(&OptionKlineRequest::default()), serde_json::json!({}));
+        assert_eq!(
+            to_json(&QuoteDepthRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionChainRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionQuoteRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionKlineRequest::default()),
+            serde_json::json!({})
+        );
         assert_eq!(
             to_json(&FutureKlineRequest::default()),
             serde_json::json!({})

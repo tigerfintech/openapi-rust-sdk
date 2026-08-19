@@ -77,7 +77,10 @@ fn test_convert_stock_price() {
 fn test_convert_stock_part_code() {
     let out = convert_trade_tick(make_stock_data());
     assert_eq!(out.ticks[0].part_code, "NYSE");
-    assert_eq!(out.ticks[0].part_name, "New York Stock Exchange, LLC (NYSE)");
+    assert_eq!(
+        out.ticks[0].part_name,
+        "New York Stock Exchange, LLC (NYSE)"
+    );
     assert_eq!(out.ticks[1].part_code, "NSDQ");
     assert_eq!(out.ticks[2].part_code, "ARCA");
 }
@@ -86,7 +89,7 @@ fn test_convert_stock_part_code() {
 fn test_convert_stock_us_cond() {
     let out = convert_trade_tick(make_stock_data());
     assert_eq!(out.ticks[0].cond, "US_BUNCHED_TRADE"); // 'B'
-    assert_eq!(out.ticks[1].cond, "US_REGULAR_SALE");  // ' '
+    assert_eq!(out.ticks[1].cond, "US_REGULAR_SALE"); // ' '
 }
 
 #[test]
@@ -135,8 +138,14 @@ fn test_convert_future_merged_vols() {
         time: vec![1000, 500],
         price: vec![0, 100],
         merged_vols: vec![
-            trade_tick_data::MergedVol { merge_times: 2, vol: vec![100, 200] },
-            trade_tick_data::MergedVol { merge_times: 1, vol: vec![300] },
+            trade_tick_data::MergedVol {
+                merge_times: 2,
+                vol: vec![100, 200],
+            },
+            trade_tick_data::MergedVol {
+                merge_times: 1,
+                vol: vec![300],
+            },
         ],
         ..Default::default()
     };
