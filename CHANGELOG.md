@@ -5,11 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.10] - 2026-08-19
+
+### Added
+
+- `OptionLeg` 新增 `mark_price`、`pre_mark_price`、`mark_timestamp`、`mid_price`、`pre_mid_price`、`mid_timestamp` 字段
+
 ## [0.5.9] - 2026-08-04
 
 ### Added
 
 - 行情、交易、订单响应模型统一派生 `Serialize`，调用者可直接将返回数据序列化为 JSON 用于本地缓存。
+
+### Fixed
+
+- `QuoteOvernight` 响应模型与服务端字段对齐，新增最新价、买卖盘、时间戳、交易状态和振幅等字段，并移除服务端不存在的开高低收和起止时间字段。
 
 ## [0.5.8] - 2026-07-24
 
