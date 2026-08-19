@@ -100,12 +100,23 @@ fn hk_trade_cond(ch: char) -> &'static str {
 }
 
 fn get_trade_cond(is_us: bool, ch: char) -> String {
-    let s = if is_us { us_trade_cond(ch) } else { hk_trade_cond(ch) };
-    if s.is_empty() { ch.to_string() } else { s.to_string() }
+    let s = if is_us {
+        us_trade_cond(ch)
+    } else {
+        hk_trade_cond(ch)
+    };
+    if s.is_empty() {
+        ch.to_string()
+    } else {
+        s.to_string()
+    }
 }
 
 fn is_us_symbol(symbol: &str) -> bool {
-    symbol.bytes().next().map_or(false, |b| b.is_ascii_uppercase())
+    symbol
+        .bytes()
+        .next()
+        .map_or(false, |b| b.is_ascii_uppercase())
         && symbol
             .split_once('.')
             .map_or(symbol, |(prefix, _)| prefix)
@@ -127,13 +138,21 @@ pub fn is_us_stock_symbol(symbol: &str) -> bool {
 /// Returns the full exchange name for a partCode letter, or the raw code if unknown.
 pub fn get_part_name_by_code(code: &str) -> String {
     let s = part_code_name(code);
-    if s.is_empty() { code.to_string() } else { s.to_string() }
+    if s.is_empty() {
+        code.to_string()
+    } else {
+        s.to_string()
+    }
 }
 
 /// Returns the short exchange name for a partCode letter, or the raw code if unknown.
 pub fn get_part_short_name_by_code(code: &str) -> String {
     let s = part_code_short_name(code);
-    if s.is_empty() { code.to_string() } else { s.to_string() }
+    if s.is_empty() {
+        code.to_string()
+    } else {
+        s.to_string()
+    }
 }
 
 /// Single decoded tick from a push message.

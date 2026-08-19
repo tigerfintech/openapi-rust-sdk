@@ -28,7 +28,9 @@ pub fn has_creds() -> bool {
     if std::env::var(ENV_TIGER_ID).is_ok() && std::env::var(ENV_PRIVATE_KEY).is_ok() {
         return true;
     }
-    std::env::var(ENV_PROPS_PATH).map(|p| !p.is_empty()).unwrap_or(false)
+    std::env::var(ENV_PROPS_PATH)
+        .map(|p| !p.is_empty())
+        .unwrap_or(false)
 }
 
 /// Parse a `.properties` file at the path given by `TIGEROPEN_PROPS_PATH`,

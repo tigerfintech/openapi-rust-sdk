@@ -44,7 +44,13 @@ mod tests {
     fn test_decode_value_normal_object() {
         let v = serde_json::json!({"name": "test", "value": 42});
         let result: Item = decode_value(v).unwrap();
-        assert_eq!(result, Item { name: "test".into(), value: 42 });
+        assert_eq!(
+            result,
+            Item {
+                name: "test".into(),
+                value: 42
+            }
+        );
     }
 
     #[test]
@@ -53,7 +59,13 @@ mod tests {
         let inner = r#"{"name":"abc","value":7}"#;
         let v = Value::String(inner.to_string());
         let result: Item = decode_value(v).unwrap();
-        assert_eq!(result, Item { name: "abc".into(), value: 7 });
+        assert_eq!(
+            result,
+            Item {
+                name: "abc".into(),
+                value: 7
+            }
+        );
     }
 
     #[test]

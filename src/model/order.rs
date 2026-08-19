@@ -976,7 +976,9 @@ mod tests {
 
     #[test]
     fn test_iceberg_order_basic() {
-        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, None, None);
+        let o = iceberg_order(
+            "ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, None, None,
+        );
         assert_eq!(o.order_type, Some("ICEBERG".to_string()));
         assert_eq!(o.total_quantity, Some(1000));
         assert_eq!(o.limit_price, Some(180.0));
@@ -991,8 +993,18 @@ mod tests {
         let start_time: i64 = 1782293585902;
         let end_time: i64 = 1782297185902;
         let o = iceberg_order(
-            "ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100,
-            Some(50), Some(30), Some("LIMIT_PRICE"), Some(start_time), Some(end_time),
+            "ACC",
+            "AAPL",
+            "STK",
+            "BUY",
+            1000,
+            180.0,
+            100,
+            Some(50),
+            Some(30),
+            Some("LIMIT_PRICE"),
+            Some(start_time),
+            Some(end_time),
         );
         assert_eq!(o.order_type, Some("ICEBERG".to_string()));
         assert_eq!(o.display_size, Some(100));
@@ -1005,7 +1017,20 @@ mod tests {
 
     #[test]
     fn test_iceberg_order_no_time_window() {
-        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, Some(50), Some(30), Some("ASK_PRICE"), None, None);
+        let o = iceberg_order(
+            "ACC",
+            "AAPL",
+            "STK",
+            "BUY",
+            1000,
+            180.0,
+            100,
+            Some(50),
+            Some(30),
+            Some("ASK_PRICE"),
+            None,
+            None,
+        );
         assert_eq!(o.price_type, Some("ASK_PRICE".to_string()));
         assert_eq!(o.start_time, None);
         assert_eq!(o.end_time, None);
@@ -1013,7 +1038,9 @@ mod tests {
 
     #[test]
     fn test_iceberg_request_serializes_snake_case() {
-        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, None, None);
+        let o = iceberg_order(
+            "ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, None, None,
+        );
         let json_value: serde_json::Value = serde_json::to_value(&o).unwrap();
         let obj = json_value.as_object().unwrap();
         assert!(
@@ -1114,7 +1141,10 @@ mod tests {
         assert_eq!(o.algo_strategy, Some("TWAP".to_string()));
         assert_eq!(o.limit_price, Some(150.0));
         assert!(o.algo_params.is_some());
-        assert_eq!(o.algo_params.as_ref().unwrap().participation_rate, Some(10.0));
+        assert_eq!(
+            o.algo_params.as_ref().unwrap().participation_rate,
+            Some(10.0)
+        );
     }
 
     /// AlgoParamsRequest 必须序列化成 `[{tag, value}, ...]` 数组
@@ -1225,7 +1255,15 @@ mod tests {
     fn test_combo_order_helper() {
         let legs = vec![contract_leg("AAPL", "STK", "BUY", 1, None, None, None)];
         let o = combo_order(
-            "ACC", "BUY", 100, "LMT", legs, Some("GUARDED"), Some(150.0), None, None,
+            "ACC",
+            "BUY",
+            100,
+            "LMT",
+            legs,
+            Some("GUARDED"),
+            Some(150.0),
+            None,
+            None,
         );
         assert_eq!(o.sec_type, Some("MLEG".to_string()));
         assert_eq!(o.order_type, Some("LMT".to_string()));
@@ -1245,7 +1283,15 @@ mod tests {
 
     #[test]
     fn test_contract_leg_helper() {
-        let leg = contract_leg("AAPL", "OPT", "BUY", 1, Some("2024-01-19"), Some("150.0"), Some("CALL"));
+        let leg = contract_leg(
+            "AAPL",
+            "OPT",
+            "BUY",
+            1,
+            Some("2024-01-19"),
+            Some("150.0"),
+            Some("CALL"),
+        );
         assert_eq!(leg.symbol, Some("AAPL".to_string()));
         assert_eq!(leg.sec_type, Some("OPT".to_string()));
         assert_eq!(leg.ratio, Some(1));
@@ -1265,7 +1311,20 @@ mod tests {
     #[test]
     fn test_iceberg_order_zero_start_end_time_filtered() {
         // start_time=0 and end_time=0 should be filtered out (filter |&v| v > 0)
-        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, Some(0), Some(0));
+        let o = iceberg_order(
+            "ACC",
+            "AAPL",
+            "STK",
+            "BUY",
+            1000,
+            180.0,
+            100,
+            None,
+            None,
+            None,
+            Some(0),
+            Some(0),
+        );
         assert_eq!(o.start_time, None);
         assert_eq!(o.end_time, None);
     }
@@ -1273,7 +1332,9 @@ mod tests {
     #[test]
     fn test_iceberg_order_default_price_type() {
         // price_type=None → default "LIMIT_PRICE"
-        let o = iceberg_order("ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, None, None);
+        let o = iceberg_order(
+            "ACC", "AAPL", "STK", "BUY", 1000, 180.0, 100, None, None, None, None, None,
+        );
         assert_eq!(o.price_type, Some("LIMIT_PRICE".to_string()));
     }
 }

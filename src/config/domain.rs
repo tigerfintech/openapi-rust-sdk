@@ -209,7 +209,10 @@ mod tests {
     fn test_resolve_quote_url_non_string_value_ignored() {
         let mut conf = HashMap::new();
         conf.insert("TBNZ-QUOTE".to_string(), serde_json::json!(null));
-        conf.insert("COMMON".to_string(), serde_json::Value::String("https://c.example.com".into()));
+        conf.insert(
+            "COMMON".to_string(),
+            serde_json::Value::String("https://c.example.com".into()),
+        );
         let url = resolve_dynamic_quote_server_url(&conf, Some("TBNZ")).unwrap();
         assert_eq!(url, "https://c.example.com/gateway");
     }

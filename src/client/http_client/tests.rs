@@ -702,9 +702,10 @@ fn test_user_agent_format() {
 async fn test_with_quote_server_uses_quote_url() {
     let mock_server = MockServer::start().await;
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"code":0,"message":"success","data":null}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"code":0,"message":"success","data":null}"#),
+        )
         .expect(1)
         .mount(&mock_server)
         .await;
@@ -721,8 +722,7 @@ async fn test_execute_request_with_version_override() {
     let mock_server = MockServer::start().await;
     Mock::given(method("POST"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string(r#"{"code":0,"message":"ok","data":null}"#),
+            ResponseTemplate::new(200).set_body_string(r#"{"code":0,"message":"ok","data":null}"#),
         )
         .mount(&mock_server)
         .await;
@@ -777,9 +777,10 @@ async fn test_query_token_double_encoded_response() {
 async fn test_query_token_missing_data_returns_error() {
     let mock_server = MockServer::start().await;
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"code":0,"message":"success","data":null}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"code":0,"message":"success","data":null}"#),
+        )
         .mount(&mock_server)
         .await;
 
