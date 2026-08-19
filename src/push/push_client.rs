@@ -20,6 +20,7 @@ use super::pb::push_data::Body;
 use super::pb::socket_common::{Command, DataType};
 use super::proto_message;
 use super::push_message::SubjectType;
+use super::tick_util::convert_trade_tick;
 use super::varint::{decode_varint32, encode_varint32};
 use crate::config::ClientConfig;
 use crate::signer::sign_with_rsa;
@@ -325,7 +326,7 @@ impl PushClient {
             }
             Body::TradeTickData(d) => {
                 if let Some(cb) = &cbs.on_tick {
-                    cb(d);
+                    cb(convert_trade_tick(d));
                 }
             }
             Body::PositionData(d) => {

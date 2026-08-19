@@ -504,7 +504,7 @@ fn test_tick_callback() {
     let count = Arc::new(AtomicI32::new(0));
     let count_clone = count.clone();
     client.set_callbacks(Callbacks {
-        on_tick: Some(Arc::new(move |data: pb::TradeTickData| {
+        on_tick: Some(Arc::new(move |data: tigeropen::push::PushTradeTick| {
             assert_eq!(data.symbol, "TSLA");
             count_clone.fetch_add(1, Ordering::SeqCst);
         })),

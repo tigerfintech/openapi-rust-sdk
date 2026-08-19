@@ -1422,7 +1422,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "GrabQuotePermission", e),
     }
 
-    // Enhanced: print pre_close and volume of first item
+    // Enhanced: print current overnight price and best bid/ask of first item
     match qc
         .get_quote_overnight(QuoteOvernightRequest {
             symbols: Some(vec!["AAPL".to_string()]),
@@ -1434,10 +1434,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &mut results,
             "GetQuoteOvernight(AAPL)",
             format!(
-                "count={} pre_close={:.4} volume={}",
+                "count={} latest={:.4} bid={:.4} ask={:.4}",
                 items.len(),
-                items[0].pre_close,
-                items[0].volume
+                items[0].latest_price,
+                items[0].bid_price,
+                items[0].ask_price
             ),
         ),
         Ok(items) => ok(

@@ -220,7 +220,16 @@ impl QuoteClient {
         &self,
         req: TradeTickRequest,
     ) -> Result<Vec<TradeTick>, TigerError> {
-        self.call_into("trade_tick", req).await
+        let mut out: Vec<TradeTick> = self.call_into("trade_tick", req).await?;
+        for tick in &mut out {
+            let is_us = crate::push::is_us_stock_symbol(&tick.symbol);
+            for item in &mut tick.items {
+                if let Some(ch) = item.cond.chars().next() {
+                    item.cond = crate::push::get_trade_cond_by_code(is_us, ch);
+                }
+            }
+        }
+        Ok(out)
     }
 
     /// 获取深度报价（v0.4.0 新签名：接受 QuoteDepthRequest）。wire: quote_depth

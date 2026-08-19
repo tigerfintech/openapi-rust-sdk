@@ -127,6 +127,40 @@ async fn test_get_real_time_quote_parses_typed() {
 }
 
 #[tokio::test]
+async fn test_get_quote_overnight_parses_all_fields() {
+    let server = mock_success_server(
+        r#"[{"symbol":"AAPL","latestPrice":234.56,"askPrice":234.6,"askSize":120,"bidPrice":234.5,"bidSize":80,"preClose":230.0,"volume":12345,"amount":2895643.21,"timestamp":1723456789000,"tradingStatus":1,"change":4.56,"changeRate":0.019826,"amplitude":0.025}]"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+
+    let quotes = qc
+        .get_quote_overnight(QuoteOvernightRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(quotes.len(), 1);
+    let quote = &quotes[0];
+    assert_eq!(quote.symbol, "AAPL");
+    assert_eq!(quote.latest_price, 234.56);
+    assert_eq!(quote.ask_price, 234.6);
+    assert_eq!(quote.ask_size, 120);
+    assert_eq!(quote.bid_price, 234.5);
+    assert_eq!(quote.bid_size, 80);
+    assert_eq!(quote.pre_close, 230.0);
+    assert_eq!(quote.volume, 12_345);
+    assert_eq!(quote.amount, 2_895_643.21);
+    assert_eq!(quote.timestamp, 1_723_456_789_000);
+    assert_eq!(quote.trading_status, 1);
+    assert_eq!(quote.change, 4.56);
+    assert_eq!(quote.change_rate, 0.019826);
+    assert_eq!(quote.amplitude, 0.025);
+}
+
+#[tokio::test]
 async fn test_get_kline_parses_typed() {
     let server = mock_success_server(
         r#"[{"symbol":"AAPL","period":"day","items":[{"time":1700000000,"open":150.0,"close":151.0,"high":152.0,"low":149.0,"volume":1000}]}]"#,
@@ -775,6 +809,38 @@ async fn test_get_trade_tick_wire_method() {
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
     assert_eq!(req["method"].as_str().unwrap(), "trade_tick");
+}
+
+#[tokio::test]
+async fn test_get_trade_tick_decodes_part_code_and_part_name() {
+    // REST response carries partCode/partName as server-sent strings;
+    // verify TradeTickItem deserializes them correctly.
+    let server = mock_success_server(r#"[{
+        "symbol": "AAPL",
+        "beginIndex": 0,
+        "endIndex": 1,
+        "items": [
+            {"time": 1700000000000, "volume": 100, "price": 150.25, "type": "+",
+             "partCode": "NYSE", "partName": "New York Stock Exchange, LLC (NYSE)"},
+            {"time": 1700000001000, "volume": 200, "price": 150.50, "type": "-",
+             "partCode": "NSDQ", "partName": "NASDAQ Stock Market, LLC (NASDAQ)"}
+        ]
+    }]"#).await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let result = qc
+        .get_trade_tick(TradeTickRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 1);
+    let items = &result[0].items;
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].part_code, "NYSE");
+    assert_eq!(items[0].part_name, "New York Stock Exchange, LLC (NYSE)");
+    assert_eq!(items[1].part_code, "NSDQ");
+    assert_eq!(items[1].part_name, "NASDAQ Stock Market, LLC (NASDAQ)");
 }
 
 // --- 4. get_symbols ---
