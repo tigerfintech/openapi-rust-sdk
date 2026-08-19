@@ -565,6 +565,31 @@ fn test_full_tick_callback() {
 }
 
 #[test]
+fn test_empty_push_payload_is_ignored() {
+    let client = PushClient::new(test_config(), None);
+    let error_count = Arc::new(AtomicI32::new(0));
+    let error_count_clone = error_count.clone();
+    client.set_callbacks(Callbacks {
+        on_error: Some(Arc::new(move |_| {
+            error_count_clone.fetch_add(1, Ordering::SeqCst);
+        })),
+        ..Default::default()
+    });
+
+    let response = pb::Response {
+        command: pb::socket_common::Command::Message as i32,
+        body: Some(pb::PushData {
+            data_type: pb::socket_common::DataType::TradeTick as i32,
+            body: None,
+        }),
+        ..Default::default()
+    };
+    client.handle_message(&encode_response(&response));
+
+    assert_eq!(error_count.load(Ordering::SeqCst), 0);
+}
+
+#[test]
 fn test_option_top_callback() {
     let client = PushClient::new(test_config(), None);
     let count = Arc::new(AtomicI32::new(0));
