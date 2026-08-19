@@ -9,22 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
-- `Callbacks::on_tick` 回调参数类型由原始 `pb::TradeTickData` 改为解码后的 `PushTradeTick`，每笔成交以 `PushTick` 结构体返回，包含 `price`、`volume`、`cond`、`part_code`、`part_name` 等字段
+- `Callbacks::on_tick` 回调参数类型由原始 `pb::TradeTickData` 改为解码后的 `PushTradeTick`，每笔成交以 `PushTick` 结构体返回，包含 `price`、`volume`、`cond`、`part_code`、`part_name` 等字段。迁移方式：将注册回调的闭包入参类型从 `pb::TradeTickData` 改为 `PushTradeTick`，原字段通过 `.ticks[i].price` 等访问。
+- `ForexOrderResult.id` 字段类型由 `String` 改为 `i64`，与服务端 wire 类型对齐。原按 `String` 访问此字段的代码需改为 `i64`。
 
 ### Added
 
 - `OptionLeg` 新增 `mark_price`、`pre_mark_price`、`mark_timestamp`、`mid_price`、`pre_mid_price`、`mid_timestamp` 字段
 - `TradeTickItem` 新增 `cond` 字段，原始单字符代码已转换为可读字符串（如 `US_REGULAR_SALE`、`HK_AUTOMATCH_NORMAL`）
+- `QuoteOvernight` 响应模型与服务端字段对齐，新增最新价、买卖盘、时间戳、交易状态和振幅等字段，并移除服务端不存在的开高低收和起止时间字段
 
 ## [0.5.9] - 2026-08-04
 
 ### Added
 
 - 行情、交易、订单响应模型统一派生 `Serialize`，调用者可直接将返回数据序列化为 JSON 用于本地缓存。
-
-### Fixed
-
-- `QuoteOvernight` 响应模型与服务端字段对齐，新增最新价、买卖盘、时间戳、交易状态和振幅等字段，并移除服务端不存在的开高低收和起止时间字段。
 
 ## [0.5.8] - 2026-07-24
 

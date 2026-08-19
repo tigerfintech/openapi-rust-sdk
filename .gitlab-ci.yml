@@ -15,7 +15,7 @@ variables:
   RUST_VERSION: "1.88"
 
 .rust_base:
-  image: rust:1.88
+  image: rust:${RUST_VERSION}
   tags:
     - openapi
   before_script:

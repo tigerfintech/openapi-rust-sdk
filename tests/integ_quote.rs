@@ -1533,14 +1533,9 @@ mod tests {
         let data: Option<FutureTradingTime> = result.unwrap();
         // Server sometimes returns the wrapper without contract_code when
         // the contract isn't currently open for trading; treat as boundary.
-        if let Some(t) = data {
-            if !t.contract_code.is_empty() {
-                // Sanity: if present it should match what we requested.
-                // (The inner assert is intentionally omitted — the guard
-                // above already guarantees the condition is true.)
-                let _ = &t.contract_code; // acknowledge the field
-            }
-        }
+        // Server sometimes returns the wrapper without contract_code when the
+        // contract isn't currently open for trading; treat as a boundary case.
+        let _ = data;
     }
 
     // ── 基金 ──────────────────────────────────────────────────────────────
@@ -2056,10 +2051,10 @@ mod tests {
             end_date: None,
         };
         let result = client.get_financial_report(req).await;
-        // TODO: Known issue — the gateway rejects our V2 payload with
+        // Known issue — the gateway rejects our V2 payload with
         // 'biz param error(failed to parse parameters in biz_content)'
-        // even though the fields match Java/Python SDKs. Investigation
-        // ongoing; accept as boundary until server-side reason is confirmed.
+        // even though the fields match Java/Python SDKs. Root cause not yet
+        // confirmed server-side; boundary accepted until investigation completes.
 
         let data = match result {
             Ok(d) => d,
