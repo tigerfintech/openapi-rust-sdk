@@ -45,7 +45,7 @@ coverage:rust:
   allow_failure: true
   before_script:
     - !reference [.rust_base, before_script]
-    - cargo install cargo-tarpaulin --locked || true
+    - cargo install cargo-tarpaulin --version 0.31.4 --locked || true
   script:
     - unset TIGEROPEN_TIGER_ID TIGEROPEN_PRIVATE_KEY TIGEROPEN_ACCOUNT
     - cargo tarpaulin --lib --engine llvm --out Xml --output-dir coverage/ 2>&1
