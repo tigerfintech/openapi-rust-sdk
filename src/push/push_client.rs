@@ -60,6 +60,9 @@ pub struct PushClientOptions {
     pub reconnect_interval_secs: Option<u64>,
     pub auto_reconnect: Option<bool>,
     pub connect_timeout_secs: Option<u64>,
+    /// Request full-tick (逐笔成交完整数据) payload for tick subscriptions.
+    /// Defaults to `false` when not set.
+    pub use_full_tick: Option<bool>,
 }
 
 /// TCP+TLS push client
@@ -90,18 +93,18 @@ pub struct PushClient {
 }
 
 impl PushClient {
-    /// Create a new push client
+    /// Create a new push client.
+    ///
+    /// To enable full-tick mode, set `options.use_full_tick = Some(true)`:
+    /// ```rust,ignore
+    /// PushClient::new(config, Some(PushClientOptions {
+    ///     use_full_tick: Some(true),
+    ///     ..Default::default()
+    /// }))
+    /// ```
     pub fn new(config: ClientConfig, options: Option<PushClientOptions>) -> Self {
-        Self::new_with_full_tick(config, options, false)
-    }
-
-    /// Create a new push client and select the full-tick payload for tick subscriptions.
-    pub fn new_with_full_tick(
-        config: ClientConfig,
-        options: Option<PushClientOptions>,
-        use_full_tick: bool,
-    ) -> Self {
         let opts = options.unwrap_or_default();
+        let use_full_tick = opts.use_full_tick.unwrap_or(false);
         Self {
             config,
             push_url: opts.push_url.unwrap_or_else(|| DEFAULT_PUSH_URL.into()),
@@ -296,9 +299,19 @@ impl PushClient {
         let data_type = push_data.data_type;
         let body = match push_data.body {
             Some(b) => b,
-            // Subscription acknowledgements can contain PushData metadata
-            // without a market-data payload.
-            None => return,
+            // Subscription acknowledgements arrive as Command::Message frames with
+            // PushData metadata but no market-data payload; this is normal protocol
+            // behaviour and must NOT trigger on_error.  For any other data_type an
+            // empty body is unexpected, so emit a debug log to aid diagnosis without
+            // surfacing a false-positive error to the caller.
+            None => {
+                tracing::debug!(
+                    data_type,
+                    "push: received PushData with no body; \
+                     treating as subscription acknowledgement and skipping dispatch"
+                );
+                return;
+            }
         };
 
         match body {
