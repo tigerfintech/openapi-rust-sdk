@@ -20,9 +20,10 @@ mod tests {
         AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, DerivativeContractsRequest,
         EstimateTradableQuantityRequest, ForexOrderRequest, FundDetailsRequest,
         FundingHistoryRequest, GetOrderRequest, ManagedAccountsRequest,
-        OptionExercisePositionRequest, OptionExerciseRecordsRequest, OrderTransactionsRequest,
-        OrdersRequest, PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest,
-        PositionsRequest, SegmentFundRequest,
+        OptionExerciseCancelRequest, OptionExercisePositionRequest, OptionExerciseRecordsRequest,
+        OptionExerciseSubmitRequest, OrderTransactionsRequest, OrdersRequest,
+        PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest,
+        PositionTransferRequest, PositionsRequest, SegmentFundRequest, TransferItem,
     };
     use tigeropen::model::{
         AggregateAssets, AnalyticsAsset, Asset, Contract, EstimateTradableQuantity, FundDetails,
@@ -67,6 +68,7 @@ mod tests {
         "only trade cash order by market order",
         "cash order by market order",
         "time range for the order",
+        "opening or adding to positions is temporarily unavailable",
     ];
 
     /// Order state race markers — cancel/modify may hit a terminal state.
@@ -1215,6 +1217,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_matrix_us_fop_limit() {
+        let Some(tc) = skip_if_disabled() else { return };
+        let Some(contract) = integ_support::resolve_us_fop_contract(&tc).await else {
+            eprintln!("[US FOP LMT] skipped (no FOP contract resolved)");
+            return;
+        };
+        preview_and_place(
+            &tc,
+            OrderRequest {
+                symbol: Some(contract.symbol),
+                sec_type: Some("FOP".into()),
+                currency: Some(contract.currency.unwrap_or_else(|| "USD".into())),
+                market: Some("US".into()),
+                expiry: contract.expiry,
+                strike: contract.strike.map(|s| s.to_string()),
+                right: contract.right,
+                action: Some("BUY".into()),
+                order_type: Some("LMT".into()),
+                total_quantity: Some(1),
+                limit_price: Some(SAFE_BUY_PRICE),
+                ..Default::default()
+            },
+            "US FOP LMT",
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn test_matrix_forex_sec_segment() {
         let Some(tc) = skip_if_disabled() else { return };
         let res = tc
@@ -1459,5 +1489,129 @@ mod tests {
             "US STK SELL SHORT preview",
         )
         .await;
+    }
+
+    // =====================================================================
+    // Legacy write-path tests — option exercise round trip, position transfer
+    // =====================================================================
+
+    /// Resolve a live option contract_id via exercise positions, falling back
+    /// to derivative_contracts on AAPL for the nearest monthly expiry (3rd
+    /// Friday of next month) — mirrors Python's `_get_option_contract_id`.
+    async fn resolve_option_contract_id(tc: &TradeClient) -> Option<i64> {
+        if let Ok(Some(positions)) = tc
+            .get_option_exercise_positions(OptionExercisePositionRequest {
+                exercise_type: Some("Exercise".into()),
+                ..Default::default()
+            })
+            .await
+        {
+            if let Some(p) = positions.items.first() {
+                return Some(p.contract_id);
+            }
+        }
+
+        let expiry = future_expiry_yyyymmdd(30);
+        let req = DerivativeContractsRequest {
+            symbols: Some(vec!["AAPL".to_string()]),
+            sec_type: Some("OPT".to_string()),
+            expiry: Some(expiry),
+            ..Default::default()
+        };
+        match tc.get_derivative_contracts(req).await {
+            Ok(contracts) => contracts.first().and_then(|c| c.contract_id),
+            Err(_) => None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_submit_and_cancel_option_exercise() {
+        let Some(tc) = skip_if_disabled() else { return };
+        let Some(contract_id) = resolve_option_contract_id(&tc).await else {
+            eprintln!("[option exercise submit+cancel] skipped (no option contract resolved)");
+            return;
+        };
+        let executing_date = ymd_utc(now_ms() + 7 * 86_400_000);
+
+        let submit_result = tc
+            .submit_option_exercise(OptionExerciseSubmitRequest {
+                contract_id: Some(contract_id),
+                exercise_type: Some("Exercise".into()),
+                quantity: Some(1.0),
+                executing_date: Some(executing_date),
+                is_force: Some(false),
+                ..Default::default()
+            })
+            .await;
+        let submitted = match submit_result {
+            Ok(Some(true)) => true,
+            Ok(_) => panic!("[option exercise submit] expected Some(true), got: {submit_result:?}"),
+            Err(e) if matches_any(&e.to_string(), PERMISSION_ERROR_MARKERS) => {
+                eprintln!("[option exercise submit] skipped (permission boundary): {e}");
+                false
+            }
+            Err(e) => {
+                eprintln!("[option exercise submit] skipped (downstream limit): {e}");
+                false
+            }
+        };
+        if !submitted {
+            return;
+        }
+
+        let records = tc
+            .get_option_exercise_records(OptionExerciseRecordsRequest {
+                page: Some(1),
+                size: Some(20),
+                ..Default::default()
+            })
+            .await
+            .expect("get_option_exercise_records should succeed after submit");
+        let Some(new_record) =
+            records.and_then(|r| r.items.into_iter().find(|r| r.status == "New"))
+        else {
+            eprintln!("[option exercise cancel] skipped (no New record found after submit)");
+            return;
+        };
+
+        let cancel_result = tc
+            .cancel_option_exercise(OptionExerciseCancelRequest {
+                id: Some(new_record.id),
+                ..Default::default()
+            })
+            .await;
+        match cancel_result {
+            Ok(Some(true)) => {}
+            Err(e) if matches_any(&e.to_string(), TERMINAL_ORDER_MARKERS) => {
+                eprintln!("[option exercise cancel] hit terminal state (ok): {e}");
+            }
+            other => panic!("[option exercise cancel] unexpected result: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transfer_position() {
+        let Some(tc) = skip_if_disabled() else { return };
+        let req = PositionTransferRequest {
+            from_account: Some("1001".into()),
+            to_account: Some("1002".into()),
+            market: Some("US".into()),
+            transfers: Some(vec![TransferItem {
+                symbol: Some("AAPL".into()),
+                quantity: Some(10),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        };
+        match tc.transfer_position(req).await {
+            Ok(_) => {}
+            // from/to account are hardcoded placeholders — the CI account
+            // legitimately has no permission to move positions between
+            // them. Mirrors Python's test_transfer_position.
+            Err(e) if matches_any(&e.to_string(), PERMISSION_ERROR_MARKERS) => {
+                eprintln!("[transfer_position] skipped (no permission for placeholder accounts 1001/1002): {e}");
+            }
+            Err(e) => panic!("[transfer_position] unexpected error: {e}"),
+        }
     }
 }

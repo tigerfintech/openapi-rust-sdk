@@ -73,3 +73,67 @@ pub fn integ_config() -> tigeropen::config::ClientConfig {
         .build()
         .expect("Failed to build ClientConfig for integration tests")
 }
+
+/// Resolve a live US FOP (future option) contract on `CL` (crude oil) for the
+/// nearest monthly expiry (3rd Friday of next month), mirroring Python's
+/// `_get_option_contract_id` / TS's `resolveUsFopContract`. Returns `None` on
+/// any gateway failure or empty response — the caller decides whether that
+/// should fail or skip.
+pub async fn resolve_us_fop_contract(
+    tc: &tigeropen::trade::TradeClient,
+) -> Option<tigeropen::model::Contract> {
+    use tigeropen::model::trade_requests::DerivativeContractsRequest;
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let now_days = now_ms / 86_400_000;
+    let (y, m, _) = civil_from_days(now_days);
+    let (next_y, next_m) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+    let first_day_days = days_from_civil(next_y, next_m, 1);
+    let first_day_weekday = ((first_day_days % 7) + 11) % 7; // 0=Mon..6=Sun (1970-01-01 was Thu)
+    let days_to_first_friday = (4 - first_day_weekday + 7) % 7;
+    let third_friday_days = first_day_days + days_to_first_friday + 14;
+    let (fy, fm, fd) = civil_from_days(third_friday_days);
+    let expiry = format!("{:04}{:02}{:02}", fy, fm, fd);
+
+    let req = DerivativeContractsRequest {
+        symbols: Some(vec!["CL".to_string()]),
+        sec_type: Some("FOP".to_string()),
+        expiry: Some(expiry),
+        ..Default::default()
+    };
+    match tc.get_derivative_contracts(req).await {
+        Ok(contracts) if !contracts.is_empty() => Some(contracts[0].clone()),
+        _ => None,
+    }
+}
+
+/// Converts days-since-1970-01-01 into (year, month, day).
+/// Based on Howard Hinnant's date algorithms — public domain.
+fn civil_from_days(z: i64) -> (i32, u32, u32) {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as i32, m, d)
+}
+
+/// Inverse of `civil_from_days` — converts (year, month, day) into
+/// days-since-1970-01-01. Based on Howard Hinnant's date algorithms.
+fn days_from_civil(y: i32, m: u32, d: u32) -> i64 {
+    let y = if m <= 2 { y as i64 - 1 } else { y as i64 };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = (y - era * 400) as u32;
+    let mp = if m > 2 { m - 3 } else { m + 9 };
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe as i64 - 719_468
+}
