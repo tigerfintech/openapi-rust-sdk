@@ -22,17 +22,6 @@ pub fn is_integ_run() -> bool {
     std::env::var(ENV_RUN_INTEG).as_deref() == Ok("true")
 }
 
-/// Returns true when credentials are available (env vars or a properties file).
-#[allow(dead_code)]
-pub fn has_creds() -> bool {
-    if std::env::var(ENV_TIGER_ID).is_ok() && std::env::var(ENV_PRIVATE_KEY).is_ok() {
-        return true;
-    }
-    std::env::var(ENV_PROPS_PATH)
-        .map(|p| !p.is_empty())
-        .unwrap_or(false)
-}
-
 /// Parse a `.properties` file at the path given by `TIGEROPEN_PROPS_PATH`,
 /// returning `tiger_id` and `private_key` fields.
 fn load_props_credentials() -> (String, String) {
