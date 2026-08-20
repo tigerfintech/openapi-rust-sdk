@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Callbacks::on_tick` 回调参数类型由原始 `pb::TradeTickData` 改为解码后的 `PushTradeTick`，每笔成交以 `PushTick` 结构体返回，包含 `price`、`volume`、`cond`、`part_code`、`part_name` 等字段。迁移方式：将注册回调的闭包入参类型从 `pb::TradeTickData` 改为 `PushTradeTick`，原字段通过 `.ticks[i].price` 等访问。
 - `ForexOrderResult.id` 字段类型由 `String` 改为 `i64`，与服务端 wire 类型对齐。原按 `String` 访问此字段的代码需改为 `i64`。
+- `FundDetailsRequest.start_date` / `end_date` 字段类型由 `Option<i64>`（毫秒时间戳）改为 `Option<String>`（`yyyy-MM-dd` 格式），与服务端 wire 格式对齐。原传毫秒时间戳的调用方需改为传日期字符串，如 `Some("2024-01-01".to_string())`。
+- `AlgoParams.algo_strategy` 字段已从 `AlgoParams` 移至 `OrderRequest` 顶层（`OrderRequest.algo_strategy`）。原通过 `AlgoParams.algo_strategy` 赋值的代码需迁移至 `OrderRequest.algo_strategy`，否则该值会被静默丢弃。
 
 ### Added
 
-- `PushClient::new_with_full_tick(config, options, use_full_tick)` 可选择在连接认证时请求完整逐笔成交推送；现有 `PushClient::new` 保持兼容并默认关闭
+- `PushClientOptions.use_full_tick: Option<bool>` 新增字段，设为 `Some(true)` 时在连接认证时请求完整逐笔成交推送；现有 `PushClient::new` 默认 `false` 保持向后兼容
 - `OptionLeg` 新增 `mark_price`、`pre_mark_price`、`mark_timestamp`、`mid_price`、`pre_mid_price`、`mid_timestamp` 字段
 - `TradeTickItem` 新增 `cond` 字段，原始单字符代码已转换为可读字符串（如 `US_REGULAR_SALE`、`HK_AUTOMATCH_NORMAL`）
 - `QuoteOvernight` 响应模型与服务端字段对齐，新增最新价、买卖盘、时间戳、交易状态和振幅等字段，并移除服务端不存在的开高低收和起止时间字段

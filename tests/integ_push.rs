@@ -15,14 +15,14 @@ async fn test_integ_full_tick_connection_and_subscription() {
     }
 
     let config = integ_support::integ_config();
-    let client = Arc::new(PushClient::new_with_full_tick(
+    let client = Arc::new(PushClient::new(
         config,
         Some(PushClientOptions {
             auto_reconnect: Some(false),
             connect_timeout_secs: Some(15),
+            use_full_tick: Some(true),
             ..Default::default()
         }),
-        true,
     ));
 
     let (event_tx, event_rx) = oneshot::channel::<Result<String, String>>();

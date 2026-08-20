@@ -23,10 +23,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("tiger_id: {}, account: {}", config.tiger_id, config.account);
 
     let account = config.account.clone();
-    let pc = Arc::new(PushClient::new_with_full_tick(
+    let pc = Arc::new(PushClient::new(
         config,
-        Some(PushClientOptions::default()),
-        true,
+        Some(PushClientOptions {
+            use_full_tick: Some(true),
+            ..Default::default()
+        }),
     ));
 
     // Register callbacks for all supported push data types
