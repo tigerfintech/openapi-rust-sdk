@@ -132,7 +132,18 @@ pub struct KlineByPageRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trade_session: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub sec_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
+}
+
+/// 分时请求。wire: timeline
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct TimelineRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbols: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sec_type: Option<String>,
 }
 
 /// 历史分时请求。wire: history_timeline

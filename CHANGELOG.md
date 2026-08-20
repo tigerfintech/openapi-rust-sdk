@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `OptionLeg` 新增 `mark_price`、`pre_mark_price`、`mark_timestamp`、`mid_price`、`pre_mid_price`、`mid_timestamp` 字段
 - `TradeTickItem` 新增 `cond` 字段，原始单字符代码已转换为可读字符串（如 `US_REGULAR_SALE`、`HK_AUTOMATCH_NORMAL`）
 - `QuoteOvernight` 响应模型与服务端字段对齐，新增最新价、买卖盘、时间戳、交易状态和振幅等字段，并移除服务端不存在的开高低收和起止时间字段
+- `KlineItem::volume_decimal` 和 `TimelineItem::volume_decimal` 新增可空字段，支持数字货币小数成交量
+- `QuoteClient::get_timeline_with_request` 接受包含 `sec_type` 的 `TimelineRequest`（数字货币使用 `CC`），分页 K 线请求会在每一页保留 `KlineByPageRequest::sec_type`
 
 ## [0.5.9] - 2026-08-04
 
