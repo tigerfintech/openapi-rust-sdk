@@ -27,8 +27,8 @@ use tigeropen::model::quote_requests::{
     OptionQuoteRequest, OptionTimelineRequest, OptionTradeTicksRequest, QuoteDepthRequest,
     QuoteOvernightRequest, QuotePermissionRequest, RangeF64, ShortInterestRequest,
     StockBrokerRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
-    SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
-    TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
+    SymbolsRequest, TimelineHistoryRequest, TimelineRequest, TradeMetasRequest, TradeRankRequest,
+    TradeTickRequest, TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
 };
 use tigeropen::quote::QuoteClient;
 
@@ -184,6 +184,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(_) => ok(&mut results, "GetTimeline", "(empty)"),
         Err(e) => fail(&mut results, "GetTimeline", e),
+    }
+
+    match qc
+        .get_kline(KlineRequest {
+            symbols: Some(vec!["BTC.USD".to_string()]),
+            period: Some("day".to_string()),
+            sec_type: Some("CC".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(klines) if !klines.is_empty() && !klines[0].items.is_empty() => ok(
+            &mut results,
+            "GetKline(BTC.USD CC)",
+            format!("volumeDecimal={:?}", klines[0].items[0].volume_decimal),
+        ),
+        Ok(_) => ok(&mut results, "GetKline(BTC.USD CC)", "(empty)"),
+        Err(e) => fail(&mut results, "GetKline(BTC.USD CC)", e),
+    }
+
+    match qc
+        .get_timeline_with_request(TimelineRequest {
+            symbols: Some(vec!["BTC.USD".to_string()]),
+            sec_type: Some("CC".to_string()),
+        })
+        .await
+    {
+        Ok(timeline) if !timeline.is_empty() => ok(
+            &mut results,
+            "GetTimeline(BTC.USD CC)",
+            format!(
+                "volumeDecimal={:?}",
+                timeline[0]
+                    .intraday
+                    .as_ref()
+                    .and_then(|bucket| bucket.items.first())
+                    .and_then(|item| item.volume_decimal)
+            ),
+        ),
+        Ok(_) => ok(&mut results, "GetTimeline(BTC.USD CC)", "(empty)"),
+        Err(e) => fail(&mut results, "GetTimeline(BTC.USD CC)", e),
     }
 
     // v0.4.0 new signature: TradeTickRequest — enhanced with first-tick field values

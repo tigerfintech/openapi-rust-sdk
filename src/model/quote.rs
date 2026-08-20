@@ -96,6 +96,8 @@ pub struct KlineItem {
     #[serde(default)]
     pub volume: i64,
     #[serde(default)]
+    pub volume_decimal: Option<f64>,
+    #[serde(default)]
     pub open: f64,
     #[serde(default)]
     pub close: f64,
@@ -129,6 +131,8 @@ pub struct TimelineItem {
     pub time: i64,
     #[serde(default)]
     pub volume: i64,
+    #[serde(default)]
+    pub volume_decimal: Option<f64>,
     #[serde(default)]
     pub price: f64,
     #[serde(default)]

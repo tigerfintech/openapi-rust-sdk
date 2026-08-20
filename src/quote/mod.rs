@@ -36,8 +36,8 @@ use crate::model::quote_requests::{
     OptionQuoteRequest, OptionSymbolsRequest, OptionTimelineRequest, OptionTradeTicksRequest,
     QuoteDepthRequest, QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest,
     StockBrokerRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
-    SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
-    TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
+    SymbolsRequest, TimelineHistoryRequest, TimelineRequest, TradeMetasRequest, TradeRankRequest,
+    TradeTickRequest, TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
 };
 
 /// API 版本常量
@@ -207,12 +207,20 @@ impl QuoteClient {
 
     /// 获取分时数据（v3.0）
     pub async fn get_timeline(&self, symbols: &[&str]) -> Result<Vec<Timeline>, TigerError> {
-        self.call_into_versioned(
-            "timeline",
-            serde_json::json!({ "symbols": symbols }),
-            Some(VERSION_V3),
-        )
+        self.get_timeline_with_request(TimelineRequest {
+            symbols: Some(symbols.iter().map(|symbol| (*symbol).to_string()).collect()),
+            ..Default::default()
+        })
         .await
+    }
+
+    /// 获取分时数据（v3.0），支持通过 `sec_type` 查询数字货币。
+    pub async fn get_timeline_with_request(
+        &self,
+        req: TimelineRequest,
+    ) -> Result<Vec<Timeline>, TigerError> {
+        self.call_into_versioned("timeline", req, Some(VERSION_V3))
+            .await
     }
 
     /// 获取逐笔成交（v0.4.0 新签名：接受 TradeTickRequest）。wire: trade_tick
@@ -304,6 +312,7 @@ impl QuoteClient {
                 end_time,
                 limit: Some(page_size),
                 trade_session: req.trade_session.clone(),
+                sec_type: req.sec_type.clone(),
                 lang: req.lang.clone(),
                 ..Default::default()
             };

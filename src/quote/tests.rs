@@ -19,7 +19,7 @@ use crate::model::quote_requests::{
     BriefRequest, FutureKlineRequest, FutureRealTimeQuoteRequest, KlineRequest,
     OptionAnalysisSymbol, OptionChainFilter, OptionChainItem, OptionChainRequest,
     OptionContractItem, OptionKlineItem, OptionKlineRequest, OptionQuoteRequest, QuoteDepthRequest,
-    RangeF64,
+    RangeF64, TimelineRequest,
 };
 
 fn cached_test_private_key() -> &'static str {
@@ -163,23 +163,27 @@ async fn test_get_quote_overnight_parses_all_fields() {
 #[tokio::test]
 async fn test_get_kline_parses_typed() {
     let server = mock_success_server(
-        r#"[{"symbol":"AAPL","period":"day","items":[{"time":1700000000,"open":150.0,"close":151.0,"high":152.0,"low":149.0,"volume":1000}]}]"#,
+        r#"[{"symbol":"BTCUSD","period":"day","items":[{"time":1700000000,"open":150.0,"close":151.0,"high":152.0,"low":149.0,"volume":1000,"volumeDecimal":1000.125}]}]"#,
     )
     .await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
 
     let kline = qc
         .get_kline(KlineRequest {
-            symbols: Some(vec!["AAPL".into()]),
+            symbols: Some(vec!["BTCUSD".into()]),
             period: Some("day".into()),
+            sec_type: Some("CC".into()),
             ..Default::default()
         })
         .await
         .unwrap();
     assert_eq!(kline.len(), 1);
-    assert_eq!(kline[0].symbol, "AAPL");
+    assert_eq!(kline[0].symbol, "BTCUSD");
     assert_eq!(kline[0].items.len(), 1);
     assert_eq!(kline[0].items[0].open, 150.0);
+    assert_eq!(kline[0].items[0].volume_decimal, Some(1000.125));
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(biz_of(&requests[0])["sec_type"], "CC");
 }
 
 #[tokio::test]
@@ -794,6 +798,32 @@ async fn test_get_timeline_wire_method() {
     assert_eq!(req["version"].as_str().unwrap(), "3.0");
 }
 
+#[tokio::test]
+async fn test_get_timeline_crypto_request_and_fractional_volume() {
+    let server = mock_success_server(
+        r#"[{"symbol":"BTCUSD","period":"day","preClose":65000.0,"intraday":{"items":[{"time":1700000000,"price":65100.0,"avgPrice":65050.0,"volume":1,"volumeDecimal":1.25}]}}]"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+
+    let timeline = qc
+        .get_timeline_with_request(TimelineRequest {
+            symbols: Some(vec!["BTCUSD".into()]),
+            sec_type: Some("CC".into()),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        timeline[0].intraday.as_ref().unwrap().items[0].volume_decimal,
+        Some(1.25)
+    );
+    let requests = server.received_requests().await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert_eq!(body["version"], "3.0");
+    assert_eq!(biz_of(&requests[0])["sec_type"], "CC");
+}
+
 // --- 3. get_trade_tick ---
 
 #[tokio::test]
@@ -968,12 +998,14 @@ async fn test_get_kline_by_page_wire_method() {
             period: Some("day".into()),
             page_size: Some(10),
             total_size: Some(10),
+            sec_type: Some("CC".into()),
             ..Default::default()
         })
         .await;
     let received = server.received_requests().await.unwrap();
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
     assert_eq!(req["method"].as_str().unwrap(), "kline");
+    assert_eq!(biz_of(&received[0])["sec_type"], "CC");
 }
 
 // --- 11. get_timeline_history ---
