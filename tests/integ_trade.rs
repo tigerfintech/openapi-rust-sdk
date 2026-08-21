@@ -41,8 +41,24 @@ mod tests {
     const SAFE_SELL_PRICE: f64 = 999_999.0;
     const SAFE_STOP_BUY_TRIGGER: f64 = 999_999.0;
 
-    /// Permission / license / session boundary phrases — legitimate skips.
-    /// Same set used in the Java / Python / Go integ suites.
+    /// Out-of-hours / session-boundary phrases — before treating these as a
+    /// legitimate skip, re-check live market status (mirrors the C++ / Java /
+    /// Go reference pattern): a hit during genuine trading hours is a real
+    /// bug (fail), not a boundary condition (skip).
+    const HOURS_ERROR_MARKERS: &[&str] = &[
+        "outside of regular trading hours",
+        "market is closed",
+        "only limit orders can be placed",
+        "only limit, stop or stop-limit orders are allowed",
+        "at non-trading hour",
+        "orders cannot be placed at this moment",
+        "auction order is not allowed at this moment",
+        "time range for the order",
+    ];
+
+    /// Permission / license / capability boundary phrases — legitimate skips,
+    /// unconditionally (no market-status re-check). Same set used in the
+    /// Java / Python / Go integ suites.
     const PERMISSION_ERROR_MARKERS: &[&str] = &[
         "access forbidden",
         "forbidden",
@@ -56,18 +72,10 @@ mod tests {
         "don\u{2019}t support trading",
         "unsupported instrument",
         "only limit orders are supported",
-        "outside of regular trading hours",
-        "market is closed",
-        "only limit orders can be placed",
-        "only limit, stop or stop-limit orders are allowed",
-        "at non-trading hour",
-        "orders cannot be placed at this moment",
-        "auction order is not allowed at this moment",
         "does not support stock long",
         "does not support stock short",
         "only trade cash order by market order",
         "cash order by market order",
-        "time range for the order",
         "opening or adding to positions is temporarily unavailable",
     ];
 
@@ -91,6 +99,38 @@ mod tests {
     fn matches_any(msg: &str, markers: &[&str]) -> bool {
         let lower = msg.to_lowercase();
         markers.iter().any(|m| lower.contains(m))
+    }
+
+    /// Outcome of classifying a failed preview/place call.
+    enum FailureClass {
+        /// Legitimate boundary — soft-skip.
+        Skip,
+        /// Real bug (hours-boundary error during genuine trading hours, or
+        /// an unrecognized error) — the caller should panic/fail.
+        Fail,
+    }
+
+    /// Classifies a preview/place failure message, mirroring the C++ / Java
+    /// / Go reference pattern: an hours-boundary marker is re-checked
+    /// against live market status before being treated as a skip. A hit
+    /// during genuine trading hours is a real bug, not a boundary
+    /// condition. Pure permission/capability markers are an unconditional
+    /// skip (no market-status re-check).
+    async fn classify_failure(msg: &str, market: &str, ctx: &str) -> FailureClass {
+        if matches_any(msg, HOURS_ERROR_MARKERS) {
+            let qc = tigeropen::quote::QuoteClient::from_config(integ_support::integ_config());
+            if integ_support::is_market_trading(&qc, market).await {
+                eprintln!("[{ctx}] hours-boundary error during live trading hours: {msg}");
+                return FailureClass::Fail;
+            }
+            eprintln!("[{ctx}] skipped (out-of-hours boundary): {msg}");
+            return FailureClass::Skip;
+        }
+        if matches_any(msg, PERMISSION_ERROR_MARKERS) {
+            eprintln!("[{ctx}] skipped (permission boundary): {msg}");
+            return FailureClass::Skip;
+        }
+        FailureClass::Fail
     }
 
     fn now_ms() -> i64 {
@@ -152,17 +192,18 @@ mod tests {
     }
 
     async fn preview_only(tc: &TradeClient, order: OrderRequest, ctx: &str) -> bool {
+        let market = order.market.clone().unwrap_or_else(|| "US".into());
         match tc.preview_order(order).await {
             Ok(_) => true,
-            Err(e) if matches_any(&e.to_string(), PERMISSION_ERROR_MARKERS) => {
-                eprintln!("[{ctx}] skipped (preview boundary): {e}");
-                false
-            }
-            Err(e) => panic!("[{ctx}] preview failed: {e}"),
+            Err(e) => match classify_failure(&e.to_string(), &market, ctx).await {
+                FailureClass::Skip => false,
+                FailureClass::Fail => panic!("[{ctx}] preview failed: {e}"),
+            },
         }
     }
 
     async fn preview_and_place(tc: &TradeClient, order: OrderRequest, ctx: &str) -> bool {
+        let market = order.market.clone().unwrap_or_else(|| "US".into());
         if !preview_only(tc, order.clone(), ctx).await {
             return false;
         }
@@ -177,16 +218,15 @@ mod tests {
                 Ok(None) => panic!("[{ctx}] place_order returned Ok(None)"),
                 Err(e) => {
                     let msg = e.to_string();
-                    if matches_any(&msg, PERMISSION_ERROR_MARKERS) {
-                        eprintln!("[{ctx}] skipped (place boundary): {e}");
-                        return false;
-                    }
                     if matches_any(&msg, RATE_LIMIT_MARKERS) && attempt < 2 {
                         tokio::time::sleep(delay).await;
                         delay *= 2;
                         continue;
                     }
-                    panic!("[{ctx}] place_order failed: {e}");
+                    match classify_failure(&msg, &market, ctx).await {
+                        FailureClass::Skip => return false,
+                        FailureClass::Fail => panic!("[{ctx}] place_order failed: {e}"),
+                    }
                 }
             }
         }
