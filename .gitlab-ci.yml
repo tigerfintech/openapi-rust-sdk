@@ -63,6 +63,9 @@ integration:rust:
   extends: .rust_base
   stage: integration
   allow_failure: true
+  # Serialize per-branch: a scheduled pipeline overlapping a manual one on
+  # the same runner can corrupt the shared test-results/integ.txt file.
+  resource_group: $CI_COMMIT_REF_SLUG
   variables:
     TIGER_RUN_INTEG: "true"
   script:
