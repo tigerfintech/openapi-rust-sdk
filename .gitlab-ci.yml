@@ -153,7 +153,10 @@ notify:webhook:
                           failed += int(m.group(2))
                           ignored += int(m.group(3))
           except Exception as e:
-              print(f"Failed to open {path}: {e}")
+              # Covers both the open and the read/parse below it, so don't
+              # claim "failed to open" — a decode error mid-file would send
+              # whoever reads this looking for a missing artifact instead.
+              print(f"Failed to read {path}: {type(e).__name__}: {e}")
               return None, None, None, None
           if not found:
               print(f"No test result lines found in {path}")
