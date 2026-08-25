@@ -151,12 +151,21 @@ mod tests {
         Fut: std::future::Future<Output = Result<T, E>>,
         E: std::fmt::Display,
     {
+        const MAX_ATTEMPTS: u32 = 3;
         let mut delay = std::time::Duration::from_secs(1);
         let mut last = op().await;
-        for attempt in 1..3 {
+        // `attempt` numbers the call that just failed, and the message is only
+        // emitted when another call follows, so the highest number logged is
+        // MAX_ATTEMPTS - 1. That is intentional: there is no back-off after the
+        // final attempt. The count is spelled out in the message so a reader
+        // seeing "2/3" knows a third call was still made.
+        for attempt in 1..MAX_ATTEMPTS {
             match &last {
                 Err(e) if matches_any(&e.to_string(), RATE_LIMIT_MARKERS) => {
-                    eprintln!("[{ctx}] rate-limited (attempt {attempt}/3); backing off {delay:?}");
+                    eprintln!(
+                        "[{ctx}] rate-limited (attempt {attempt}/{MAX_ATTEMPTS} failed); \
+                         retrying after {delay:?}"
+                    );
                     tokio::time::sleep(delay).await;
                     delay *= 2;
                     last = op().await;
