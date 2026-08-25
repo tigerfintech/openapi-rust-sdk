@@ -31,12 +31,20 @@ unit:rust:
   stage: unit
   script:
     - unset TIGEROPEN_TIGER_ID TIGEROPEN_PRIVATE_KEY TIGEROPEN_ACCOUNT TIGEROPEN_PROPS_PATH
+    # Drop this job's own stale report first: build dirs get reused, and a
+    # leftover file would be re-archived as if this run had produced it.
+    # Only our own file — a sibling job's report may legitimately sit here.
+    - rm -f test-results/unit.txt
     - mkdir -p test-results
     - set -o pipefail; cargo test --lib 2>&1 | tee test-results/unit.txt
   artifacts:
     when: always
+    # Explicit file, not the whole directory: the runner reuses build dirs, so a
+    # directory glob can also archive the *other* job's stale report from a
+    # previous pipeline. Artifact download order across `needs` is not
+    # guaranteed, so a stale copy can overwrite the real one in notify:webhook.
     paths:
-      - test-results/
+      - test-results/unit.txt
     expire_in: 1 week
 
 coverage:rust:
@@ -70,6 +78,10 @@ integration:rust:
     TIGER_RUN_INTEG: "true"
   script:
     - test -n "$TIGEROPEN_TIGER_ID" && test -n "$TIGEROPEN_PRIVATE_KEY" || { echo "No credentials (TIGEROPEN_TIGER_ID + TIGEROPEN_PRIVATE_KEY required) — skipping"; exit 1; }
+    # Drop this job's own stale report first: build dirs get reused, and a
+    # leftover file would be re-archived as if this run had produced it.
+    # Only our own file — a sibling job's report may legitimately sit here.
+    - rm -f test-results/integ.txt
     - mkdir -p test-results
     # --no-fail-fast: cargo test bails after the first test binary fails,
     # which was silently skipping integ_trade whenever any integ_quote
@@ -81,8 +93,12 @@ integration:rust:
     - set -o pipefail; cargo test --no-fail-fast --test integ_quote --test integ_trade -- --nocapture 2>&1 | tee test-results/integ.txt
   artifacts:
     when: always
+    # Explicit file, not the whole directory: the runner reuses build dirs, so a
+    # directory glob can also archive the *other* job's stale report from a
+    # previous pipeline. Artifact download order across `needs` is not
+    # guaranteed, so a stale copy can overwrite the real one in notify:webhook.
     paths:
-      - test-results/
+      - test-results/integ.txt
     expire_in: 1 week
 
 # Pipeline result notification via chat webhook.
