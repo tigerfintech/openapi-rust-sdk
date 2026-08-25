@@ -800,4 +800,241 @@ mod tests {
             clear_env_vars();
         }
     }
+
+    // ========== apply_properties 覆盖测试 ==========
+
+    #[test]
+    fn test_apply_properties_private_key_pk8() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_rust_pk8_config.properties");
+        std::fs::write(&path, "tiger_id=pk8_id\nprivate_key_pk8=pk8_key_data\n").unwrap();
+        let config = ClientConfig::builder()
+            .properties_file(path.to_str().unwrap())
+            .build()
+            .unwrap();
+        assert_eq!(config.tiger_id, "pk8_id");
+        assert_eq!(config.private_key, "pk8_key_data");
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_apply_properties_private_key_pk1() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_rust_pk1_config.properties");
+        std::fs::write(&path, "tiger_id=pk1_id\nprivate_key_pk1=pk1_key_data\n").unwrap();
+        let config = ClientConfig::builder()
+            .properties_file(path.to_str().unwrap())
+            .build()
+            .unwrap();
+        assert_eq!(config.tiger_id, "pk1_id");
+        assert_eq!(config.private_key, "pk1_key_data");
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_apply_properties_private_key_priority_over_pk8_pk1() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_rust_priority_config.properties");
+        std::fs::write(
+            &path,
+            "tiger_id=pri_id\nprivate_key=main_key\nprivate_key_pk8=pk8_key\nprivate_key_pk1=pk1_key\n",
+        )
+        .unwrap();
+        let config = ClientConfig::builder()
+            .properties_file(path.to_str().unwrap())
+            .build()
+            .unwrap();
+        // private_key takes priority over pk8 and pk1
+        assert_eq!(config.private_key, "main_key");
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_apply_properties_language_zh_tw() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_rust_lang_tw.properties");
+        std::fs::write(&path, "tiger_id=lid\nprivate_key=pk\nlanguage=zh_TW\n").unwrap();
+        let config = ClientConfig::builder()
+            .properties_file(path.to_str().unwrap())
+            .build()
+            .unwrap();
+        assert_eq!(config.language, Language::ZhTw);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_apply_properties_language_en_us() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_rust_lang_en.properties");
+        std::fs::write(&path, "tiger_id=lid\nprivate_key=pk\nlanguage=en_US\n").unwrap();
+        let config = ClientConfig::builder()
+            .properties_file(path.to_str().unwrap())
+            .build()
+            .unwrap();
+        assert_eq!(config.language, Language::EnUs);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_apply_properties_language_invalid_falls_back_default() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_rust_lang_invalid.properties");
+        std::fs::write(&path, "tiger_id=lid\nprivate_key=pk\nlanguage=fr_FR\n").unwrap();
+        let config = ClientConfig::builder()
+            .properties_file(path.to_str().unwrap())
+            .build()
+            .unwrap();
+        // Invalid language → default zh_CN
+        assert_eq!(config.language, Language::ZhCn);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_apply_properties_secret_key() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_rust_secret.properties");
+        std::fs::write(
+            &path,
+            "tiger_id=lid\nprivate_key=pk\nsecret_key=my_secret\n",
+        )
+        .unwrap();
+        let config = ClientConfig::builder()
+            .properties_file(path.to_str().unwrap())
+            .build()
+            .unwrap();
+        assert_eq!(config.secret_key, Some("my_secret".to_string()));
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_apply_properties_server_urls() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_rust_urls.properties");
+        std::fs::write(
+            &path,
+            "tiger_id=lid\nprivate_key=pk\nserver_url=https://custom.example.com\ntiger_public_key=custom_pub\n",
+        )
+        .unwrap();
+        let config = ClientConfig::builder()
+            .properties_file(path.to_str().unwrap())
+            .build()
+            .unwrap();
+        assert_eq!(config.server_url, "https://custom.example.com");
+        assert_eq!(config.tiger_public_key, "custom_pub");
+        std::fs::remove_file(&path).ok();
+    }
+
+    // ========== Builder setter 覆盖 ==========
+
+    #[test]
+    fn test_builder_all_setters() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let config = ClientConfig::builder()
+            .tiger_id("tid")
+            .private_key("pk")
+            .account("DU1")
+            .secret_key("sk")
+            .license("TBNZ")
+            .language(Language::EnUs)
+            .timezone("America/New_York")
+            .timeout(Duration::from_secs(60))
+            .token("tok")
+            .token_refresh_duration(Duration::from_secs(3600))
+            .token_check_interval(Duration::from_secs(60))
+            .server_url("https://server.example.com")
+            .quote_server_url("https://quote.example.com")
+            .tiger_public_key("pubkey")
+            .device_id("AA:BB:CC:DD:EE:FF")
+            .build()
+            .unwrap();
+        assert_eq!(config.secret_key, Some("sk".to_string()));
+        assert_eq!(config.device_id, "AA:BB:CC:DD:EE:FF");
+        assert_eq!(config.server_url, "https://server.example.com");
+        assert_eq!(config.quote_server_url, "https://quote.example.com");
+        assert_eq!(config.tiger_public_key, "pubkey");
+        assert_eq!(config.token_check_interval, Some(Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn test_builder_enable_dynamic_domain_false() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let config = ClientConfig::builder()
+            .tiger_id("tid")
+            .private_key("pk")
+            .enable_dynamic_domain(false)
+            .build()
+            .unwrap();
+        // Dynamic domain disabled → default server URL
+        assert_eq!(config.server_url, DEFAULT_SERVER_URL);
+    }
+
+    #[test]
+    fn test_builder_token_loader_callback() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let config = ClientConfig::builder()
+            .tiger_id("tid")
+            .private_key("pk")
+            .token_loader(|| Ok("loaded_token".to_string()))
+            .build()
+            .unwrap();
+        assert_eq!(config.token, Some("loaded_token".to_string()));
+    }
+
+    #[test]
+    fn test_builder_token_writer_callback() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let config = ClientConfig::builder()
+            .tiger_id("tid")
+            .private_key("pk")
+            .token_writer(|_t: String| {})
+            .build()
+            .unwrap();
+        assert!(config.token_writer.is_some());
+    }
+
+    #[test]
+    fn test_debug_impl_redacts_sensitive_fields() {
+        let _lock = lock_env();
+        clear_env_vars();
+        let config = ClientConfig::builder()
+            .tiger_id("tid")
+            .private_key("super_secret_private_key")
+            .secret_key("super_secret")
+            .token("my_token_value")
+            .tiger_public_key("my_public_key")
+            .build()
+            .unwrap();
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("tid"));
+        assert!(debug_str.contains("[redacted]"));
+        assert!(!debug_str.contains("super_secret_private_key"));
+        assert!(!debug_str.contains("my_token_value"));
+        assert!(!debug_str.contains("my_public_key"));
+    }
+
+    #[test]
+    fn test_sandbox_tiger_public_key_constant() {
+        assert!(!SANDBOX_TIGER_PUBLIC_KEY.is_empty());
+        assert!(SANDBOX_TIGER_PUBLIC_KEY != TIGER_PUBLIC_KEY);
+    }
 }

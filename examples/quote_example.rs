@@ -27,8 +27,8 @@ use tigeropen::model::quote_requests::{
     OptionQuoteRequest, OptionTimelineRequest, OptionTradeTicksRequest, QuoteDepthRequest,
     QuoteOvernightRequest, QuotePermissionRequest, RangeF64, ShortInterestRequest,
     StockBrokerRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
-    SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
-    TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
+    SymbolsRequest, TimelineHistoryRequest, TimelineRequest, TradeMetasRequest, TradeRankRequest,
+    TradeTickRequest, TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
 };
 use tigeropen::quote::QuoteClient;
 
@@ -184,6 +184,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(_) => ok(&mut results, "GetTimeline", "(empty)"),
         Err(e) => fail(&mut results, "GetTimeline", e),
+    }
+
+    match qc
+        .get_kline(KlineRequest {
+            symbols: Some(vec!["BTC.USD".to_string()]),
+            period: Some("day".to_string()),
+            sec_type: Some("CC".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(klines) if !klines.is_empty() && !klines[0].items.is_empty() => ok(
+            &mut results,
+            "GetKline(BTC.USD CC)",
+            format!("volumeDecimal={:?}", klines[0].items[0].volume_decimal),
+        ),
+        Ok(_) => ok(&mut results, "GetKline(BTC.USD CC)", "(empty)"),
+        Err(e) => fail(&mut results, "GetKline(BTC.USD CC)", e),
+    }
+
+    match qc
+        .get_timeline_with_request(TimelineRequest {
+            symbols: Some(vec!["BTC.USD".to_string()]),
+            sec_type: Some("CC".to_string()),
+        })
+        .await
+    {
+        Ok(timeline) if !timeline.is_empty() => ok(
+            &mut results,
+            "GetTimeline(BTC.USD CC)",
+            format!(
+                "volumeDecimal={:?}",
+                timeline[0]
+                    .intraday
+                    .as_ref()
+                    .and_then(|bucket| bucket.items.first())
+                    .and_then(|item| item.volume_decimal)
+            ),
+        ),
+        Ok(_) => ok(&mut results, "GetTimeline(BTC.USD CC)", "(empty)"),
+        Err(e) => fail(&mut results, "GetTimeline(BTC.USD CC)", e),
     }
 
     // v0.4.0 new signature: TradeTickRequest — enhanced with first-tick field values
@@ -1181,8 +1222,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "split".into(),
-            begin_date: "2020-01-01".into(),
-            end_date: "2026-05-07".into(),
+            // 2020-01-01 → 2026-05-11 (epoch-ms UTC)
+            begin_date: Some(1_577_836_800_000),
+            end_date: Some(1_778_457_600_000),
         })
         .await
     {
@@ -1209,8 +1251,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "dividend".into(),
-            begin_date: "2024-01-01".into(),
-            end_date: "2024-12-31".into(),
+            // 2024-01-01 → 2024-12-31 (epoch-ms UTC)
+            begin_date: Some(1_704_067_200_000),
+            end_date: Some(1_735_603_200_000),
         })
         .await
     {
@@ -1237,8 +1280,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "DIVIDEND".into(),
-            begin_date: "2024-01-01".into(),
-            end_date: "2024-12-31".into(),
+            // 2024-01-01 → 2024-12-31 (epoch-ms UTC)
+            begin_date: Some(1_704_067_200_000),
+            end_date: Some(1_735_603_200_000),
         })
         .await
     {
@@ -1265,8 +1309,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             symbols: vec!["AAPL".into()],
             market: "US".into(),
             action_type: "earning".into(),
-            begin_date: "2026-07-01".into(),
-            end_date: "2026-07-31".into(),
+            // 2026-07-02 → 2026-08-01 (epoch-ms UTC); server caps range at 1 month
+            begin_date: Some(1_782_950_400_000),
+            end_date: Some(1_785_542_400_000),
         })
         .await
     {
@@ -1282,8 +1327,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get_corporate_symbol_change(CorporateActionRequest {
             symbols: vec!["META".into()],
             market: "US".into(),
-            begin_date: "2022-01-01".into(),
-            end_date: "2023-01-01".into(),
+            // 2022-01-01 → 2023-01-01 (epoch-ms UTC)
+            begin_date: Some(1_640_995_200_000),
+            end_date: Some(1_672_531_200_000),
             ..Default::default()
         })
         .await
@@ -1300,8 +1346,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get_corporate_delisting(CorporateActionRequest {
             symbols: vec!["TWTR".into()],
             market: "US".into(),
-            begin_date: "2022-01-01".into(),
-            end_date: "2023-01-01".into(),
+            // 2022-01-01 → 2023-01-01 (epoch-ms UTC)
+            begin_date: Some(1_640_995_200_000),
+            end_date: Some(1_672_531_200_000),
             ..Default::default()
         })
         .await
@@ -1318,8 +1365,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get_corporate_ipo(CorporateActionRequest {
             symbols: vec!["RIVN".into()],
             market: "US".into(),
-            begin_date: "2021-01-01".into(),
-            end_date: "2022-01-01".into(),
+            // 2021-01-01 → 2022-01-01 (epoch-ms UTC)
+            begin_date: Some(1_609_459_200_000),
+            end_date: Some(1_640_995_200_000),
             ..Default::default()
         })
         .await
@@ -1415,7 +1463,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => fail(&mut results, "GrabQuotePermission", e),
     }
 
-    // Enhanced: print pre_close and volume of first item
+    // Enhanced: print current overnight price and best bid/ask of first item
     match qc
         .get_quote_overnight(QuoteOvernightRequest {
             symbols: Some(vec!["AAPL".to_string()]),
@@ -1427,10 +1475,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &mut results,
             "GetQuoteOvernight(AAPL)",
             format!(
-                "count={} pre_close={:.4} volume={}",
+                "count={} latest={:.4} bid={:.4} ask={:.4}",
                 items.len(),
-                items[0].pre_close,
-                items[0].volume
+                items[0].latest_price,
+                items[0].bid_price,
+                items[0].ask_price
             ),
         ),
         Ok(items) => ok(

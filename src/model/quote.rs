@@ -96,6 +96,8 @@ pub struct KlineItem {
     #[serde(default)]
     pub volume: i64,
     #[serde(default)]
+    pub volume_decimal: Option<f64>,
+    #[serde(default)]
     pub open: f64,
     #[serde(default)]
     pub close: f64,
@@ -129,6 +131,8 @@ pub struct TimelineItem {
     pub time: i64,
     #[serde(default)]
     pub volume: i64,
+    #[serde(default)]
+    pub volume_decimal: Option<f64>,
     #[serde(default)]
     pub price: f64,
     #[serde(default)]
@@ -173,6 +177,12 @@ pub struct TradeTickItem {
     pub price: f64,
     #[serde(default)]
     pub r#type: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub part_code: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub part_name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub cond: String,
 }
 
 /// 逐笔（一个标的一组）
@@ -273,6 +283,18 @@ pub struct OptionLeg {
     pub vega: f64,
     #[serde(default)]
     pub rho: f64,
+    #[serde(default)]
+    pub mark_price: f64,
+    #[serde(default)]
+    pub pre_mark_price: f64,
+    #[serde(default)]
+    pub mark_timestamp: i64,
+    #[serde(default)]
+    pub mid_price: f64,
+    #[serde(default)]
+    pub pre_mid_price: f64,
+    #[serde(default)]
+    pub mid_timestamp: i64,
 }
 
 /// Put/Call 配对
@@ -704,7 +726,12 @@ pub struct FinancialDailyRequest {
     pub end_date: String,
 }
 
-/// 财报数据请求
+/// 财报数据请求。
+///
+/// **breaking change (0.6):** `begin_date` / `end_date` 由 `String`
+/// 改为 `Option<i64>` epoch-ms。Python SDK 一直用 `date_str_to_timestamp`
+/// 把日期转成毫秒时间戳发到网关,Rust 侧原来直接发字符串,服务端始终
+/// 拒收 (`biz param error(failed to parse parameters in 'biz_content')`)。
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct FinancialReportRequest {
@@ -712,23 +739,31 @@ pub struct FinancialReportRequest {
     pub market: String,
     pub fields: Vec<String>,
     pub period_type: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub begin_date: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub end_date: String,
+    /// epoch-ms 起始时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub begin_date: Option<i64>,
+    /// epoch-ms 结束时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_date: Option<i64>,
 }
 
-/// 公司行动请求
+/// 公司行动请求。
+///
+/// **breaking change (0.6):** `begin_date` / `end_date` 由 `String`
+/// 改为 `Option<i64>` epoch-ms,与 [`FinancialReportRequest`] 保持一致。
+/// 服务端要求日期字段为毫秒时间戳。
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct CorporateActionRequest {
     pub symbols: Vec<String>,
     pub market: String,
     pub action_type: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub begin_date: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub end_date: String,
+    /// epoch-ms 起始时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub begin_date: Option<i64>,
+    /// epoch-ms 结束时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_date: Option<i64>,
 }
 
 /// 选股扫描请求
@@ -858,6 +893,46 @@ mod tests {
         assert_eq!(ps.len(), 1);
         assert_eq!(ps[0].name, "usStockQuote");
         assert_eq!(ps[0].expire_at, 1700000000);
+    }
+
+    #[test]
+    fn test_quote_overnight_serde_all_fields() {
+        let quote = QuoteOvernight {
+            symbol: "AAPL".into(),
+            latest_price: 234.56,
+            ask_price: 234.60,
+            ask_size: 120,
+            bid_price: 234.50,
+            bid_size: 80,
+            pre_close: 230.00,
+            volume: 12_345,
+            amount: 2_895_643.21,
+            timestamp: 1_723_456_789_000,
+            trading_status: 1,
+            change: 4.56,
+            change_rate: 0.019826,
+            amplitude: 0.025,
+        };
+        let expected = serde_json::json!({
+            "symbol": "AAPL",
+            "latestPrice": 234.56,
+            "askPrice": 234.60,
+            "askSize": 120,
+            "bidPrice": 234.50,
+            "bidSize": 80,
+            "preClose": 230.00,
+            "volume": 12_345,
+            "amount": 2_895_643.21,
+            "timestamp": 1_723_456_789_000_i64,
+            "tradingStatus": 1,
+            "change": 4.56,
+            "changeRate": 0.019826,
+            "amplitude": 0.025
+        });
+
+        assert_eq!(serde_json::to_value(&quote).unwrap(), expected);
+        let decoded: QuoteOvernight = serde_json::from_value(expected.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), expected);
     }
 }
 
@@ -1302,15 +1377,42 @@ pub struct WarrantFilterResult {
 }
 
 /// 行业列表条目（industry_list）。
+///
+/// **Wire field mapping (0.6):** 服务端返回 `nameCN` / `nameEN` /
+/// `industryLevel`,不是 `name` / `level`。此前的 struct 字段名会导致
+/// `IndustryItem.name` 永远为空(Python SDK 也是把两者都拿出来放到
+/// `name_cn` / `name_en` 里)。新字段 `name_cn` / `name_en` 分别映射到
+/// `nameCN` / `nameEN`,`level` 映射到 `industryLevel`。
+/// 兼容性:老字段 `name` 仍保留(不参与反序列化),赋值为 `name_en` 或
+/// `name_cn`(优先英文)以最小化调用方改动。
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct IndustryItem {
     #[serde(default)]
     pub id: String,
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
+    /// 英文名称,wire: `nameEN`
+    #[serde(default, rename = "nameEN")]
+    pub name_en: String,
+    /// 中文名称,wire: `nameCN`
+    #[serde(default, rename = "nameCN")]
+    pub name_cn: String,
+    /// 行业级别,wire: `industryLevel`
+    #[serde(default, rename = "industryLevel")]
     pub level: String,
+    /// 兼容字段:优先返回英文名,英文空则回退中文。反序列化时不从 wire 读取。
+    #[serde(default, skip)]
+    pub name: String,
+}
+
+impl IndustryItem {
+    /// 反序列化后填充兼容字段 `name`。若结构由 SDK 内部构造后再暴露给调用方,
+    /// 会自动调用此方法把 `name_en` / `name_cn` 合并成 `name`。
+    pub(crate) fn hydrate_name(&mut self) {
+        if !self.name_en.is_empty() {
+            self.name = self.name_en.clone();
+        } else if !self.name_cn.is_empty() {
+            self.name = self.name_cn.clone();
+        }
+    }
 }
 
 /// 行业归属股票条目（industry_stock_list）。
@@ -1405,25 +1507,29 @@ pub struct QuoteOvernight {
     #[serde(default)]
     pub symbol: String,
     #[serde(default)]
+    pub latest_price: f64,
+    #[serde(default)]
+    pub ask_price: f64,
+    #[serde(default)]
+    pub ask_size: i64,
+    #[serde(default)]
+    pub bid_price: f64,
+    #[serde(default)]
+    pub bid_size: i64,
+    #[serde(default)]
     pub pre_close: f64,
-    #[serde(default)]
-    pub open: f64,
-    #[serde(default)]
-    pub close: f64,
-    #[serde(default)]
-    pub high: f64,
-    #[serde(default)]
-    pub low: f64,
     #[serde(default)]
     pub volume: i64,
     #[serde(default)]
     pub amount: f64,
     #[serde(default)]
+    pub timestamp: i64,
+    #[serde(default)]
+    pub trading_status: i32,
+    #[serde(default)]
     pub change: f64,
     #[serde(default)]
     pub change_rate: f64,
     #[serde(default)]
-    pub begin_time: i64,
-    #[serde(default)]
-    pub end_time: i64,
+    pub amplitude: f64,
 }

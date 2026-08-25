@@ -36,8 +36,8 @@ use crate::model::quote_requests::{
     OptionQuoteRequest, OptionSymbolsRequest, OptionTimelineRequest, OptionTradeTicksRequest,
     QuoteDepthRequest, QuoteOvernightRequest, QuotePermissionRequest, ShortInterestRequest,
     StockBrokerRequest, StockDetailsRequest, StockFundamentalRequest, StockIndustryRequest,
-    SymbolsRequest, TimelineHistoryRequest, TradeMetasRequest, TradeRankRequest, TradeTickRequest,
-    TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
+    SymbolsRequest, TimelineHistoryRequest, TimelineRequest, TradeMetasRequest, TradeRankRequest,
+    TradeTickRequest, TradingCalendarRequest, WarrantFilterRequest, WarrantQuoteRequest,
 };
 
 /// API 版本常量
@@ -207,12 +207,20 @@ impl QuoteClient {
 
     /// 获取分时数据（v3.0）
     pub async fn get_timeline(&self, symbols: &[&str]) -> Result<Vec<Timeline>, TigerError> {
-        self.call_into_versioned(
-            "timeline",
-            serde_json::json!({ "symbols": symbols }),
-            Some(VERSION_V3),
-        )
+        self.get_timeline_with_request(TimelineRequest {
+            symbols: Some(symbols.iter().map(|symbol| (*symbol).to_string()).collect()),
+            ..Default::default()
+        })
         .await
+    }
+
+    /// 获取分时数据（v3.0），支持通过 `sec_type` 查询数字货币。
+    pub async fn get_timeline_with_request(
+        &self,
+        req: TimelineRequest,
+    ) -> Result<Vec<Timeline>, TigerError> {
+        self.call_into_versioned("timeline", req, Some(VERSION_V3))
+            .await
     }
 
     /// 获取逐笔成交（v0.4.0 新签名：接受 TradeTickRequest）。wire: trade_tick
@@ -220,7 +228,16 @@ impl QuoteClient {
         &self,
         req: TradeTickRequest,
     ) -> Result<Vec<TradeTick>, TigerError> {
-        self.call_into("trade_tick", req).await
+        let mut out: Vec<TradeTick> = self.call_into("trade_tick", req).await?;
+        for tick in &mut out {
+            let is_us = crate::push::is_us_stock_symbol(&tick.symbol);
+            for item in &mut tick.items {
+                if let Some(ch) = item.cond.chars().next() {
+                    item.cond = crate::push::get_trade_cond_by_code(is_us, ch);
+                }
+            }
+        }
+        Ok(out)
     }
 
     /// 获取深度报价（v0.4.0 新签名：接受 QuoteDepthRequest）。wire: quote_depth
@@ -295,6 +312,7 @@ impl QuoteClient {
                 end_time,
                 limit: Some(page_size),
                 trade_session: req.trade_session.clone(),
+                sec_type: req.sec_type.clone(),
                 lang: req.lang.clone(),
                 ..Default::default()
             };
@@ -761,11 +779,26 @@ impl QuoteClient {
     // ========== 行业 ==========
 
     /// 行业列表。wire: industry_list
+    ///
+    /// `industry_level` 服务端必填 —— 缺省时会返回
+    /// `biz param error(industry level error, all supported is: [GSECTOR, GGROUP, GIND, GSUBIND])`。
+    /// 未指定时默认 `GGROUP`,与 Python SDK (`IndustryLevel.GGROUP`) 一致。
+    ///
+    /// 返回的每个 `IndustryItem` 会自动填充兼容字段 `name`(优先 `name_en`,
+    /// 空则回退 `name_cn`),保留 `name_cn` / `name_en` / `level` 完整数据。
     pub async fn get_industry_list(
         &self,
         req: IndustryListRequest,
     ) -> Result<Vec<IndustryItem>, TigerError> {
-        self.call_into("industry_list", req).await
+        let mut req = req;
+        if req.industry_level.is_none() {
+            req.industry_level = Some("GGROUP".to_string());
+        }
+        let mut items: Vec<IndustryItem> = self.call_into("industry_list", req).await?;
+        for it in &mut items {
+            it.hydrate_name();
+        }
+        Ok(items)
     }
 
     /// 行业下股票列表。wire: industry_stock_list
@@ -874,12 +907,16 @@ impl QuoteClient {
         self.call_into("financial_daily", req).await
     }
 
-    /// 获取财报数据
+    /// 获取财报数据。wire: financial_report (V2)
+    ///
+    /// **API version:** Java SDK 用 `V2_0`;走 V1 会被网关拒 `biz param
+    /// error(failed to parse parameters in 'biz_content')`。这里显式指定 V2。
     pub async fn get_financial_report(
         &self,
         req: FinancialReportRequest,
     ) -> Result<Vec<FinancialReportItem>, TigerError> {
-        self.call_into("financial_report", req).await
+        self.call_into_versioned("financial_report", req, Some(VERSION_V2))
+            .await
     }
 
     /// 财报币种。wire: financial_currency
@@ -898,12 +935,16 @@ impl QuoteClient {
         self.call_into("financial_exchange_rate", req).await
     }
 
-    /// 交易日历。wire: trading_calendar
+    /// 交易日历。wire: trading_calendar (V2)
+    ///
+    /// **API version:** Java SDK `QuoteTradeCalendarRequest` 用 `V2_0`。V1
+    /// 会返回错误的 `market` 字段(空字符串)导致断言失败。
     pub async fn get_trading_calendar(
         &self,
         req: TradingCalendarRequest,
     ) -> Result<Vec<TradingCalendarItem>, TigerError> {
-        self.call_into("trading_calendar", req).await
+        self.call_into_versioned("trading_calendar", req, Some(VERSION_V2))
+            .await
     }
 
     // ========== 资金流向 ==========
@@ -946,7 +987,7 @@ impl QuoteClient {
             .await
     }
 
-    /// 获取行情权限（老接口）
+    /// 抢占行情设备访问权
     pub async fn grab_quote_permission(&self) -> Result<Vec<QuotePermission>, TigerError> {
         self.call_into("grab_quote_permission", serde_json::json!({}))
             .await

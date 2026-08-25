@@ -521,3 +521,108 @@ fn test_transaction_callback() {
     client.handle_message(&encode_response(&response));
     assert_eq!(count.load(Ordering::SeqCst), 1);
 }
+
+// ===== subscribe_cc / unsubscribe_cc / subscribe_market / unsubscribe_market =====
+
+#[test]
+fn test_subscribe_cc_adds_subscription() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_cc(&["BTC", "ETH"]).unwrap();
+    let subs = client.get_subscriptions();
+    assert!(subs.contains_key(&SubjectType::Cc));
+    assert_eq!(subs[&SubjectType::Cc].len(), 2);
+}
+
+#[test]
+fn test_unsubscribe_cc_removes_symbols() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_cc(&["BTC", "ETH"]).unwrap();
+    client.unsubscribe_cc(Some(&["BTC"])).unwrap();
+    let subs = client.get_subscriptions();
+    assert_eq!(subs[&SubjectType::Cc].len(), 1);
+    assert_eq!(subs[&SubjectType::Cc][0], "ETH");
+}
+
+#[test]
+fn test_unsubscribe_cc_all() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_cc(&["BTC", "ETH"]).unwrap();
+    client.unsubscribe_cc(None).unwrap();
+    let subs = client.get_subscriptions();
+    assert!(!subs.contains_key(&SubjectType::Cc));
+}
+
+#[test]
+fn test_subscribe_market_adds_subscription() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_market("US").unwrap();
+    let subs = client.get_subscriptions();
+    assert!(subs.contains_key(&SubjectType::Market));
+}
+
+#[test]
+fn test_unsubscribe_market_removes() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_market("US").unwrap();
+    client.unsubscribe_market("US").unwrap();
+    let subs = client.get_subscriptions();
+    assert!(!subs.contains_key(&SubjectType::Market));
+}
+
+#[test]
+fn test_send_heartbeat_without_connection_returns_false() {
+    let client = PushClient::new(test_config(), None);
+    assert!(!client.send_heartbeat());
+}
+
+#[test]
+fn test_disconnect_without_connection() {
+    let client = PushClient::new(test_config(), None);
+    client.disconnect();
+    assert_eq!(client.state(), ConnectionState::Disconnected);
+}
+
+#[test]
+fn test_set_callbacks() {
+    let client = PushClient::new(test_config(), None);
+    client.set_callbacks(Callbacks {
+        on_connect: Some(Arc::new(|| {})),
+        ..Default::default()
+    });
+    assert_eq!(client.state(), ConnectionState::Disconnected);
+}
+
+#[test]
+fn test_push_client_new_with_options() {
+    let client = PushClient::new(
+        test_config(),
+        Some(PushClientOptions {
+            auto_reconnect: Some(true),
+            ..Default::default()
+        }),
+    );
+    assert_eq!(client.state(), ConnectionState::Disconnected);
+}
+
+#[test]
+fn test_add_remove_account_subscriptions() {
+    let client = PushClient::new(test_config(), None);
+    client.add_account_sub(SubjectType::Order);
+    client.add_account_sub(SubjectType::Asset);
+    let subs = client.get_account_subscriptions();
+    assert_eq!(subs.len(), 2);
+
+    client.remove_account_sub(&SubjectType::Order);
+    let subs = client.get_account_subscriptions();
+    assert_eq!(subs.len(), 1);
+    assert!(subs.contains(&SubjectType::Asset));
+}
+
+#[test]
+fn test_add_account_sub_dedup() {
+    let client = PushClient::new(test_config(), None);
+    client.add_account_sub(SubjectType::Order);
+    client.add_account_sub(SubjectType::Order);
+    let subs = client.get_account_subscriptions();
+    assert_eq!(subs.len(), 1);
+}

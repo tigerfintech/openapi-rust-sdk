@@ -329,11 +329,17 @@ pub struct EstimateTradableQuantity {
 }
 
 /// 外汇下单返回结果。
+///
+/// 注意: `id` 字段服务端返回的是 JSON number(与 `PlaceOrderResult.id` 一致),
+/// 不是 string。历史上 Rust / Go / TS SDK 都把它定义成 string,这在 Rust /
+/// Go 里会导致 `place_forex_order` 响应反序列化失败
+/// ("invalid type: integer, expected a string"),TS 因为 JS 弱类型而静默
+/// 接受了脏数据。这里对齐 wire 类型定义为 i64。
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ForexOrderResult {
     #[serde(default)]
-    pub id: String,
+    pub id: i64,
     #[serde(default)]
     pub status: String,
     #[serde(default)]

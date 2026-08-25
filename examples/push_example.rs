@@ -23,7 +23,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("tiger_id: {}, account: {}", config.tiger_id, config.account);
 
     let account = config.account.clone();
-    let pc = Arc::new(PushClient::new(config, None));
+    let pc = Arc::new(PushClient::new(
+        config,
+        Some(PushClientOptions {
+            use_full_tick: Some(true),
+            ..Default::default()
+        }),
+    ));
 
     // Register callbacks for all supported push data types
     pc.set_callbacks(Callbacks {
@@ -34,14 +40,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 data.symbol, data.latest_price, data.volume
             );
         })),
-        on_tick: Some(Arc::new(|data| {
-            println!(
-                "[Tick] {} sn={} prices={} volumes={}",
-                data.symbol,
-                data.sn,
-                data.price.len(),
-                data.volume.len()
-            );
+        // use_full_tick selects the full-tick payload and on_full_tick callback
+        // for ordinary SubjectType::Tick subscriptions, so on_tick is unused here.
+        on_full_tick: Some(Arc::new(|data| {
+            println!("[FullTick] {}", data.symbol);
         })),
         on_depth: Some(Arc::new(|data| {
             let ask_levels = data.ask.as_ref().map_or(0, |a| a.price.len());

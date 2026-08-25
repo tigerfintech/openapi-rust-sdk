@@ -20,6 +20,7 @@ use super::pb::push_data::Body;
 use super::pb::socket_common::{Command, DataType};
 use super::proto_message;
 use super::push_message::SubjectType;
+use super::tick_util::convert_trade_tick;
 use super::varint::{decode_varint32, encode_varint32};
 use crate::config::ClientConfig;
 use crate::signer::sign_with_rsa;
@@ -59,6 +60,9 @@ pub struct PushClientOptions {
     pub reconnect_interval_secs: Option<u64>,
     pub auto_reconnect: Option<bool>,
     pub connect_timeout_secs: Option<u64>,
+    /// Request full-tick (逐笔成交完整数据) payload for tick subscriptions.
+    /// Defaults to `false` when not set.
+    pub use_full_tick: Option<bool>,
 }
 
 /// TCP+TLS push client
@@ -73,6 +77,7 @@ pub struct PushClient {
     reconnect_interval: Duration,
     connect_timeout: Duration,
     auto_reconnect: bool,
+    use_full_tick: bool,
     state: Arc<RwLock<ConnectionState>>,
     callbacks: Arc<RwLock<Callbacks>>,
     /// Market data subscriptions: subject -> symbols set
@@ -88,9 +93,18 @@ pub struct PushClient {
 }
 
 impl PushClient {
-    /// Create a new push client
+    /// Create a new push client.
+    ///
+    /// To enable full-tick mode, set `options.use_full_tick = Some(true)`:
+    /// ```rust,ignore
+    /// PushClient::new(config, Some(PushClientOptions {
+    ///     use_full_tick: Some(true),
+    ///     ..Default::default()
+    /// }))
+    /// ```
     pub fn new(config: ClientConfig, options: Option<PushClientOptions>) -> Self {
         let opts = options.unwrap_or_default();
+        let use_full_tick = opts.use_full_tick.unwrap_or(false);
         Self {
             config,
             push_url: opts.push_url.unwrap_or_else(|| DEFAULT_PUSH_URL.into()),
@@ -107,6 +121,7 @@ impl PushClient {
                     .unwrap_or(DEFAULT_CONNECT_TIMEOUT_SECS),
             ),
             auto_reconnect: opts.auto_reconnect.unwrap_or(true),
+            use_full_tick,
             state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
             callbacks: Arc::new(RwLock::new(Callbacks::default())),
             subscriptions: Arc::new(RwLock::new(HashMap::new())),
@@ -284,10 +299,17 @@ impl PushClient {
         let data_type = push_data.data_type;
         let body = match push_data.body {
             Some(b) => b,
+            // Subscription acknowledgements arrive as Command::Message frames with
+            // PushData metadata but no market-data payload; this is normal protocol
+            // behaviour and must NOT trigger on_error.  For any other data_type an
+            // empty body is unexpected, so emit a debug log to aid diagnosis without
+            // surfacing a false-positive error to the caller.
             None => {
-                if let Some(cb) = &cbs.on_error {
-                    cb("PushData body is empty".to_string());
-                }
+                tracing::debug!(
+                    data_type,
+                    "push: received PushData with no body; \
+                     treating as subscription acknowledgement and skipping dispatch"
+                );
                 return;
             }
         };
@@ -325,7 +347,7 @@ impl PushClient {
             }
             Body::TradeTickData(d) => {
                 if let Some(cb) = &cbs.on_tick {
-                    cb(d);
+                    cb(convert_trade_tick(d));
                 }
             }
             Body::PositionData(d) => {
@@ -564,7 +586,7 @@ pub async fn connect(client: &Arc<PushClient>) -> Result<(), String> {
         ACCEPT_VERSION,
         DEFAULT_SEND_INTERVAL,
         DEFAULT_RECEIVE_INTERVAL,
-        false,
+        client.use_full_tick,
     );
     if !client.send_request(&connect_req) {
         *client.state.write().unwrap() = ConnectionState::Disconnected;

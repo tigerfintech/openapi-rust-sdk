@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.10] - 2026-08-19
+
+### Breaking
+
+- `Callbacks::on_tick` 回调参数类型由原始 `pb::TradeTickData` 改为解码后的 `PushTradeTick`，每笔成交以 `PushTick` 结构体返回，包含 `price`、`volume`、`cond`、`part_code`、`part_name` 等字段。迁移方式：将注册回调的闭包入参类型从 `pb::TradeTickData` 改为 `PushTradeTick`，原字段通过 `.ticks[i].price` 等访问。
+- `ForexOrderResult.id` 字段类型由 `String` 改为 `i64`，与服务端 wire 类型对齐。原按 `String` 访问此字段的代码需改为 `i64`。
+- `FundDetailsRequest.start_date` / `end_date` 字段类型由 `Option<i64>`（毫秒时间戳）改为 `Option<String>`（`yyyy-MM-dd` 格式），与服务端 wire 格式对齐。原传毫秒时间戳的调用方需改为传日期字符串，如 `Some("2024-01-01".to_string())`。
+- `AlgoParams.algo_strategy` 字段已从 `AlgoParams` 移至 `OrderRequest` 顶层（`OrderRequest.algo_strategy`）。原通过 `AlgoParams.algo_strategy` 赋值的代码需迁移至 `OrderRequest.algo_strategy`，否则该值会被静默丢弃。
+
+### Added
+
+- `PushClientOptions.use_full_tick: Option<bool>` 新增字段，设为 `Some(true)` 时在连接认证时请求完整逐笔成交推送；现有 `PushClient::new` 默认 `false` 保持向后兼容
+- `OptionLeg` 新增 `mark_price`、`pre_mark_price`、`mark_timestamp`、`mid_price`、`pre_mid_price`、`mid_timestamp` 字段
+- `TradeTickItem` 新增 `cond` 字段，原始单字符代码已转换为可读字符串（如 `US_REGULAR_SALE`、`HK_AUTOMATCH_NORMAL`）
+- `QuoteOvernight` 响应模型与服务端字段对齐，新增最新价、买卖盘、时间戳、交易状态和振幅等字段，并移除服务端不存在的开高低收和起止时间字段
+- `KlineItem::volume_decimal` 和 `TimelineItem::volume_decimal` 新增可空字段，支持数字货币小数成交量
+- `QuoteClient::get_timeline_with_request` 接受包含 `sec_type` 的 `TimelineRequest`（数字货币使用 `CC`），分页 K 线请求会在每一页保留 `KlineByPageRequest::sec_type`
+
 ## [0.5.9] - 2026-08-04
 
 ### Added
@@ -21,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `iceberg_order` 合并可选参数（原基础版与全参版统一为一个函数）
 
 ### Fixed
+
+- 推送订阅确认消息不含行情 payload 时不再误触发 `on_error`
 - token 文件与 config 文件同目录自动加载，不再依赖当前工作目录
 - `query_token` / `query_token_from_config` 正确处理服务端 `data` 双重编码的 JSON 响应
 - `inject_secret_key_json`：正确判断 `secret_key` 是否已设置（类型感知）
@@ -47,42 +67,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `TradeClient::get_order` now correctly calls the `order_no` wire method instead of `orders` (which is the batch list API); previously single-order lookup was silently broken.
 - `QuoteClient::get_kline_by_page` now correctly accumulates K-line items for **all** symbols in the request. Previously only the first symbol's bars were collected; remaining symbols' data was silently dropped.
-- `RetryPolicy::calculate_backoff` no longer panics on large retry counts. The exponent is clamped to 62 before `mul_f64` to prevent `f64::INFINITY` from triggering a panic inside the standard library.
+- `RetryPolicy::calculate_backoff` no longer panics on large retry counts.
 - `TokenManager::should_token_refresh` (both struct method and standalone function) now uses `i64::try_from` for the Unix epoch seconds conversion instead of `as i64` truncation, avoiding the Y2038 correctness hazard.
 
 ### Added
 
-- **`OptionChainRequest`**: new optional fields `return_greek_value: Option<bool>` and `option_filter: Option<OptionChainFilter>` (matching Java `OptionChainV3Model`). New structs `OptionChainFilter` and `OptionChainFilterGreeks` expose the full filter schema (ITM flag, IV/OI ranges, delta/gamma/vega/theta/rho ranges).
-- **`OptionKlineItem`**: new optional field `sort_dir: Option<String>` (matching Java `OptionKlineModel.sortDir`).
-- **`OptionAnalysisSymbol`**: new optional field `require_volatility_list: Option<bool>` (matching Java `OptionAnalysisModel.requireVolatilityList`), allowing per-symbol volatility list opt-in.
-- **`OrderRequest`**: added 22 fields that were present in the Java SDK but missing in Rust: `adjust_limit`, `expire_time`, `trading_session_type`, `exchange`, `multiplier`, `local_symbol`, `alloc_accounts`, `alloc_shares`, `total_quantity_scale`, `attach_type`, `profit_taker_order_id`, `profit_taker_price`, `profit_taker_tif`, `profit_taker_rth`, `stop_loss_order_type`, `stop_loss_order_id`, `stop_loss_price`, `stop_loss_limit_price`, `stop_loss_tif`, `stop_loss_trailing_percent`, `stop_loss_trailing_amount`, `combo_type`, `contract_legs`, `oca_orders`, `cash_amount`. These enable bracket orders, stop-loss/take-profit orders, MLEG combos, GTD expiry, and institutional allocation.
-
-
+- 期权链请求新增筛选条件（ITM、IV/持仓量区间、希腊值区间），期权分析支持按 symbol 单独指定统计周期。
+- `OrderRequest` 新增一批字段，支持止盈止损单、MLEG 组合单、GTD 到期时间和机构分仓下单。
+- `Contract` 新增 `primary_exchange` 字段，之前访问主交易所返回为空。
 
 ### Breaking Changes
 
-- **`OptionAnalysis` 响应模型完全重写**：原字段（`historical_volatility30_day`、`historical_volatility60_day`、`historical_volatility90_day`、`implied_volatility`）均与服务端不符，已全部替换：
-
-  | 旧字段（已删除）| 新字段 | 服务端 wire |
-  |---|---|---|
-  | `implied_volatility: f64` | `implied_vol30_days: f64` | `impliedVol30Days` |
-  | `historical_volatility30_day: f64` | `his_volatility: f64` | `hisVolatility` |
-  | `historical_volatility60_day: f64` | `iv_his_v_ratio: f64` | `ivHisVRatio` |
-  | `historical_volatility90_day: f64` | `call_put_ratio: f64` | `callPutRatio` |
-  | —（无此字段）| `implied_vol_metric: Option<ImpliedVolMetric>` | `impliedVolMetric` |
-
-- **`OptionVolatilityPoint` 响应模型完全重写**：原字段（`date: String`、`volatility: f64`）已替换：
-  - 新增字段：`implied_vol: f64`、`percentile: f64`、`rank: f64`、`his_volatility: f64`、`timestamp: i64`
-
-- **`OptionAnalysisRequest.symbols` 新增 `symbol_items` 对应字段**：原 `symbols: Option<Vec<String>>` 保留；新增 `symbol_items: Option<Vec<OptionAnalysisSymbol>>`，支持为每个 symbol 单独指定 period（与 Python SDK 对齐）。发送时 `symbol_items` 优先于 `symbols`。
-
-### Added
-
-- **`ImpliedVolMetric` 新类型**：对应 `impliedVolMetric`，含 `period: String`、`percentile: f64`、`rank: f64`。
-- **`OptionAnalysisSymbol` 新类型**：`{symbol, period?}`，用于 per-symbol period 格式（与 Python SDK `[{"symbol": "AAPL", "period": "26week"}]` 对齐）。
-- **`get_option_analysis` 覆盖 US + HK**：`quote_example.rs` 新增 US（AAPL）和 HK（00700.HK）的 option_analysis 集成测试，均通过。
-- **`Contract.primary_exchange` 新字段**：对应服务端 `primaryExchange`（如 `NASDAQ`、`NYSE`），之前访问主交易所需查 `exchange` 但实际返回空。
-- **全接口集成测试覆盖**：`quote_example.rs` 新增 19 个接口测试（含 `get_short_interest`、`get_stock_broker`、`get_stock_fundamental`、`get_kline_by_page`、`get_market_scanner_tags`、`get_corporate_earnings_calendar`、`get_industry_stocks`、期货系列、基金系列、窝轮系列）；`trade_example.rs` 新增 7 个接口测试（含 `get_derivative_contracts`、`get_fund_details`、`get_segment_fund_available`、`get_position_transfer_records` 等，`get_option_exercise_records` 已在 main 分支）。
+- **`OptionAnalysis` 响应模型字段重命名**：原字段名与服务端不符，已全部替换为新字段名。迁移方式：`implied_volatility` 改用 `implied_vol30_days`；`historical_volatility30_day` 改用 `his_volatility`；`historical_volatility60_day` 改用 `iv_his_v_ratio`；`historical_volatility90_day` 改用 `call_put_ratio`；新增 `implied_vol_metric` 字段。
+- **`OptionVolatilityPoint` 响应模型字段重命名**：原 `date`/`volatility` 字段已替换为 `implied_vol`、`percentile`、`rank`、`his_volatility`、`timestamp`。
 
 ### Fixed
 
@@ -130,7 +127,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **冰山单支持**：新增 `iceberg_order()` 订单构造辅助函数，支持通过 `OrderRequest` 字段设置 `min_display_size`、`check_intervals`、`price_type`、`start_time`、`end_time` 等可选参数。
 - **`Order` 结构体新增冰山单字段**：`display_size`、`min_display_size`、`check_intervals`、`price_type`、`start_time`、`end_time`。
 - **`TradeClient::preview_order()`**：新增预览下单接口，接受任意 `Order`，返回 `Result<OrderPreviewResult>`。
-- **单元测试**：`iceberg_order` 覆盖基础构造、可选参数、零值省略及序列化字段名五个场景。
 
 ### Deprecated
 
@@ -161,7 +157,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`file_enabled` 标志**：`TokenManager::set_token()` 仅在显式调用 `with_token_file_path()` 后才写文件，防止意外写入默认路径。
 - **`Arc<RwLock<ClientConfig>>`**：`HttpClient` 将 config 包裹为共享引用，支持后台任务安全更新 token。
 - **`HttpClient::query_token()` / `refresh_token()` / `start_token_auto_refresh()`**：手动刷新与自动刷新控制接口。
-- **`src/client/decode.rs`**：提取共用 `decode_value<T>()` 函数，消除 quote/trade 模块重复代码。
 
 ### Fixed
 
@@ -174,86 +169,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`get_funding_history` 反序列化修正**（对应 Go SDK v0.3.3）：服务端返回裸 list，从 `decode_items` 改为 `decode_value`。
 - **重试非幂等写操作**：`TRADE_OPERATIONS` 补充 `place_order`/`modify_order`/`cancel_order`/`place_forex_order` 四个方法，防止误触发重试。
 - **`max_retry_time` deadline 实际生效**：原实现未在循环中检查 deadline，修正为每次 retry 前检查。
-- **`eprintln!` 替换为 `tracing::info!`**：token 刷新日志改用结构化日志。
 
 ## [0.4.0] - 2026-05-09
 
-本次发布达到与 Python / Java / Go / TypeScript SDK **100% API 覆盖**。新增约 65 个方法，重构 12 个方法签名，OrderStatus 枚举对齐 Java SDK。包含多处 breaking change。
+本次发布达到与 Python / Java / Go / TypeScript SDK 的 API 覆盖对齐，包含多处 breaking change。
 
 ### Added
 
-**Trade (17 个新方法)**
-
-- `get_order(req)` — 按 ID 查询单个订单（wire: `orders`，传 id/order_id，返回单个对象）
-- `get_managed_accounts(req)` — 查询机构子账户列表（`accounts`）
-- `get_derivative_contracts(req)` — 衍生品合约列表（`quote_contract`）
-- `get_analytics_asset(req)` — 按日资产分析（`analytics_asset`）
-- `get_aggregate_assets(req)` — 综合账户资产汇总（`aggregate_assets`）
-- `get_estimate_tradable_quantity(req)` — 可交易数量估算（`estimate_tradable_quantity`）
-- `place_forex_order(req)` — 外汇下单（`place_forex_order`）
-- `get_segment_fund_available(req)` / `get_segment_fund_history(req)` / `transfer_segment_fund(req)` / `cancel_segment_fund(req)` — 子账户资金调拨
-- `get_fund_details(req)` — 资金流水明细（`fund_details`）
-- `get_funding_history(req)` — 资金调拨记录（`transfer_fund`）
-- `transfer_position(req)` — 内部转股（`position_transfer`）
-- `get_position_transfer_records(req)` / `get_position_transfer_detail(req)` / `get_position_transfer_external_records(req)` — 转股记录查询
-
-**Quote (~45 个新方法)**
-
-- 股票基础(15): `get_symbols` / `get_symbol_names` / `get_trade_metas` / `get_stock_details` / `get_stock_delay_briefs` / `get_bars` / `get_bars_by_page` / `get_timeline_history` / `get_trade_rank` / `get_short_interest` / `get_stock_broker` / `get_stock_fundamental` / `get_stock_industry` / `get_quote_permission` / `get_kline_quota`
-- 期权扩展(6): `get_option_bars` / `get_option_trade_ticks` / `get_option_timeline` / `get_option_depth` / `get_option_symbols` / `get_option_analysis`
-- 期货扩展(10): `get_future_contract` / `get_all_future_contracts` / `get_current_future_contract` / `get_future_continuous_contracts` / `get_future_history_main_contract` / `get_future_bars` / `get_future_bars_by_page` / `get_future_trade_ticks` / `get_future_depth` / `get_future_trading_times`
-- 基金(4): `get_fund_symbols` / `get_fund_contracts` / `get_fund_quote` / `get_fund_history_quote`
-- 窝轮(2): `get_warrant_briefs` / `get_warrant_filter`
-- 行业(2): `get_industry_list` / `get_industry_stocks`
-- 公司行动/财务/日历(6): `get_corporate_split` / `get_corporate_dividend` / `get_corporate_earnings_calendar` / `get_financial_currency` / `get_financial_exchange_rate` / `get_trading_calendar`
-- 其他(2): `get_market_scanner_tags` / `get_quote_overnight`
-
-**Push (4 对新订阅)**
-
-- `subscribe_cc(symbols)` / `unsubscribe_cc(symbols)` — 加密货币行情（Cc 数据走 `on_quote` 回调）
-- `subscribe_market(market)` / `unsubscribe_market(market)` — 市场状态（数据走 `on_quote` 回调）
-- StockTop / OptionTop 订阅已在 v0.3.1 中存在，本次确认其 v0.4.0 行为不变
-
-**枚举 (7 个新专属枚举)**
-
-- `OrderSortBy` — 订单排序字段(LATEST_CREATED / LATEST_STATUS_UPDATED)
-- `SegmentType` — 账户分部类型(SEC / FUT / FUND / ALL)
-- `CorporateActionType` — 公司行动类型(split / dividend / earning)
-- `IndustryLevel` — 行业级别(GSECTOR / GGROUP / GIND / GSUBIND)
-- `SortDirection` — 排序方向
-- `OptionAnalysisPeriod` — 期权分析周期
-- `FinancialReportPeriod` — 财报类型(Annual / Quarterly / Ltm)
-- `License::Tbms` 新增 `"TBMS"` 变体
-
-**Request structs**
-
-- 新建 `src/model/trade_requests.rs`：`OrdersRequest` / `GetOrderRequest` / `OrderTransactionsRequest` / `PositionsRequest` / `AssetsRequest` 等 18 个 Request struct
-- 新建 `src/model/quote_requests.rs`：`BriefRequest` / `TradeTickRequest` / `DepthQuoteRequest` / `FutureBriefRequest` 等 47 个 Request struct
+- **交易接口扩展**：新增单个订单查询、机构子账户列表、衍生品合约列表、按日资产分析、综合账户资产汇总、可交易数量估算、外汇下单、子账户资金调拨、资金流水与调拨记录查询、内部转股及转股记录查询。
+- **行情接口大幅扩展**：新增股票基础信息、期权扩展查询、期货扩展查询、基金、窝轮、行业分类、公司行动/财务/日历等接口。
+- **推送新增两类订阅**：加密货币行情（`subscribe_cc`/`unsubscribe_cc`）和市场状态（`subscribe_market`/`unsubscribe_market`），均通过 `on_quote` 回调返回数据。
+- **新增多个业务枚举**：订单排序、账户分部类型、公司行动类型、行业级别、排序方向、期权分析周期、财报类型等，`License` 新增 `Tbms` 变体。
+- **交易与行情方法统一改用 Request struct 传参**，替代此前分散的位置参数。
 
 ### Changed (BREAKING)
 
-1. **`OrderStatus` 枚举对齐 Java SDK**：删除 `PendingNew` 和 `PartiallyFilled`（Python 客户端派生，服务端不返回）；新增 `PendingSubmit`（code=8）。所有变体添加显式 `#[serde(rename = "...")]`。最终 8 个值：`Invalid(-2)` / `Initial(-1)` / `PendingCancel(3)` / `Cancelled(4)` / `Submitted(5)` / `Filled(6)` / `Inactive(7)` / `PendingSubmit(8)`。新增 `OrderStatus::code()` 方法。
-
-2. **8 个 Trade 方法改签名为 Request struct**：
-   - `get_orders()` → `get_orders(req: OrdersRequest)`
-   - `get_active_orders()` → `get_active_orders(req: OrdersRequest)`
-   - `get_inactive_orders()` → `get_inactive_orders(req: OrdersRequest)`
-   - `get_filled_orders(start_ms, end_ms)` → `get_filled_orders(req: OrdersRequest)`（start_ms/end_ms 改为 `req.start_date`/`req.end_date`）
-   - `get_order_transactions(id, symbol, sec_type)` → `get_order_transactions(req: OrderTransactionsRequest)`（全字段可选）
-   - `get_positions()` → `get_positions(req: PositionsRequest)`
-   - `get_assets()` → `get_assets(req: AssetsRequest)`
-   - `get_prime_assets()` → `get_prime_assets(req: AssetsRequest)`
-
-3. **4 个 Quote 方法改签名为 Request struct**：
-   - `get_brief(symbols: &[&str])` → `get_brief(req: BriefRequest)`
-   - `get_trade_tick(symbols: &[&str])` → `get_trade_tick(req: TradeTickRequest)`
-   - `get_quote_depth(symbol: &str, market: &str)` → `get_quote_depth(req: DepthQuoteRequest)`
-   - `get_future_real_time_quote(contract_codes: &[&str])` → `get_future_real_time_quote(req: FutureBriefRequest)`
+- **`OrderStatus` 枚举对齐服务端语义**：删除服务端不会返回的 `PendingNew`、`PartiallyFilled`；新增 `PendingSubmit`。新增 `OrderStatus::code()` 方法用于获取对应数值码。
+- **多个 Trade / Quote 方法改为接受 Request struct 参数**，替代原先的位置参数列表（如 `get_orders`、`get_active_orders`、`get_inactive_orders`、`get_filled_orders`、`get_order_transactions`、`get_positions`、`get_assets`、`get_prime_assets`、`get_brief`、`get_trade_tick`、`get_quote_depth`、`get_future_real_time_quote`）；请参考下方迁移指引更新调用方式。
 
 ### Fixed
 
-- **Push dispatcher Cc dataType bug**：`Cc` 类型的推送数据（加密货币）之前会错误落入 `QuoteBBO` fallback 分支。现已修复，`Cc` 明确路由到 `on_quote` 回调，与 Go/Python/Java SDK 一致。
-- **`Order.status` 整数反序列化**：服务端可能返回整数 status 码（如 `6` = Filled），之前 `String` 字段会反序列化失败。现在 `status` 字段使用自定义 deserializer，自动将整数转为 Java 枚举字符串名（`-2→Invalid`, `-1→Initial`, `3→PendingCancel`, `4→Cancelled`, `5→Submitted`, `6→Filled`, `7→Inactive`, `8→PendingSubmit`）。
+- **Push dispatcher Cc dataType bug**：加密货币推送数据之前会错误落入 `QuoteBBO` fallback 分支，现已修复为路由到 `on_quote` 回调。
+- **`Order.status` 整数反序列化**：服务端返回整数 status 码时原先会反序列化失败，现在自动转换为对应的枚举值。
 - **examples 支持 `TIGER_CONFIG_PATH` env var**：不再依赖 CWD 内的配置文件，避免凭证文件被误提交。用法：`TIGER_CONFIG_PATH=~/.tigeropen/tiger_openapi_config.properties cargo run --example trade_example`
 
 ### 迁移指引
@@ -290,11 +227,6 @@ let depth = qc.get_quote_depth(DepthQuoteRequest {
 // OrderStatus::PartiallyFilled → removed (same)
 // OrderStatus::PendingSubmit   → added (maps to server code 8)
 ```
-
-### 设计原则
-
-- **Request struct 字段名 = 服务端 wire 真名**，Rust 字段天然 snake_case，无需额外 rename。Response struct 用 `#[serde(rename_all = "camelCase")]` 对齐服务端 camelCase 返回。
-- 所有 Request 字段 `Option<T>` + `#[serde(skip_serializing_if = "Option::is_none")]`；`account` / `account_id` 留 None 时自动填充 client 初始化的默认账户。
 
 ## [0.3.1] - 2026-05-07
 
