@@ -154,13 +154,38 @@ notify:webhook:
       # 2. Determine pass/fail.
       #    unit_f is None  → txt missing/no results; treat as failed (conservative).
       #    unit_f > 0      → explicit unit failures.
+      #    integ_f is None → integration:rust exits early when
+      #                      TIGEROPEN_TIGER_ID/TIGEROPEN_PRIVATE_KEY aren't
+      #                      configured (fork MRs, unprotected branches), so a
+      #                      missing integ.txt is an expected skip there. When
+      #                      those credentials ARE set the job was expected to
+      #                      produce output, so an absent trace means it crashed
+      #                      before `tee` flushed — treat as failed, since we
+      #                      now stay silent on passes and scoring this green
+      #                      would notify nobody.
       #    CI_PIPELINE_STATUS is unreliable in .post stage (reads "running"),
       #    so we rely exclusively on parsed text counts.
+      integ_expected = bool(os.environ.get("TIGEROPEN_TIGER_ID")) and \
+          bool(os.environ.get("TIGEROPEN_PRIVATE_KEY"))
+
       if unit_f is None:
           has_failed = True
           print("Unit test output unavailable — treating pipeline as failed")
+      elif integ_expected and integ_f is None:
+          has_failed = True
+          print("Integration test output unavailable despite credentials being "
+                "configured — treating pipeline as failed")
       else:
           has_failed = (unit_f > 0) or (integ_f is not None and integ_f > 0)
+
+      # 2b. Notify on failure only. A green card every 4 hours is noise nobody
+      #     reads, which also desensitises the channel to the red ones.
+      #     has_failed already covers "output unavailable" above, so an
+      #     unreadable artifact still notifies — silence here means "we
+      #     positively verified everything passed", never "we couldn't tell".
+      if not has_failed:
+          print(f"Pipeline passed — {unit_stats} | {integ_stats} — skipping notification")
+          exit(0)
 
       # 3. Build notification card
       title = "❌ Pipeline failed" if has_failed else "✅ Pipeline passed"
