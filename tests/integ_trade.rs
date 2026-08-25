@@ -117,6 +117,13 @@ mod tests {
     /// condition. Pure permission/capability markers are an unconditional
     /// skip (no market-status re-check).
     async fn classify_failure(msg: &str, market: &str, ctx: &str) -> FailureClass {
+        // Checked first: a sustained account-level throttle is exhausted CI
+        // capacity, not a product defect. Without this it falls through to
+        // `Fail` and panics a test that found nothing wrong.
+        if matches_any(msg, RATE_LIMIT_MARKERS) {
+            eprintln!("[{ctx}] skipped (account rate limit): {msg}");
+            return FailureClass::Skip;
+        }
         if matches_any(msg, HOURS_ERROR_MARKERS) {
             let qc = tigeropen::quote::QuoteClient::from_config(integ_support::integ_config());
             if integ_support::is_market_trading(&qc, market).await {
@@ -131,6 +138,33 @@ mod tests {
             return FailureClass::Skip;
         }
         FailureClass::Fail
+    }
+
+    /// Runs `op`, backing off while the gateway reports an account-level rate
+    /// limit. The trading account is shared by all 7 SDK pipelines, so any
+    /// mutating call can be throttled — not just `place_order`. Returns the
+    /// last result; callers hand a surviving error to `classify_failure`,
+    /// which turns the throttle into a skip.
+    async fn with_rate_limit_retry<T, F, Fut, E>(ctx: &str, mut op: F) -> Result<T, E>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = Result<T, E>>,
+        E: std::fmt::Display,
+    {
+        let mut delay = std::time::Duration::from_secs(1);
+        let mut last = op().await;
+        for attempt in 1..3 {
+            match &last {
+                Err(e) if matches_any(&e.to_string(), RATE_LIMIT_MARKERS) => {
+                    eprintln!("[{ctx}] rate-limited (attempt {attempt}/3); backing off {delay:?}");
+                    tokio::time::sleep(delay).await;
+                    delay *= 2;
+                    last = op().await;
+                }
+                _ => return last,
+            }
+        }
+        last
     }
 
     fn now_ms() -> i64 {
@@ -193,7 +227,9 @@ mod tests {
 
     async fn preview_only(tc: &TradeClient, order: OrderRequest, ctx: &str) -> bool {
         let market = order.market.clone().unwrap_or_else(|| "US".into());
-        match tc.preview_order(order).await {
+        let result =
+            with_rate_limit_retry(ctx, || tc.preview_order(order.clone())).await;
+        match result {
             Ok(_) => true,
             Err(e) => match classify_failure(&e.to_string(), &market, ctx).await {
                 FailureClass::Skip => false,
@@ -207,30 +243,18 @@ mod tests {
         if !preview_only(tc, order.clone(), ctx).await {
             return false;
         }
-        let mut delay = std::time::Duration::from_secs(1);
-        let mut place_result = None;
-        for attempt in 0..3 {
-            match tc.place_order(order.clone()).await {
-                Ok(Some(res)) => {
-                    place_result = Some(res);
-                    break;
-                }
-                Ok(None) => panic!("[{ctx}] place_order returned Ok(None)"),
-                Err(e) => {
-                    let msg = e.to_string();
-                    if matches_any(&msg, RATE_LIMIT_MARKERS) && attempt < 2 {
-                        tokio::time::sleep(delay).await;
-                        delay *= 2;
-                        continue;
-                    }
-                    match classify_failure(&msg, &market, ctx).await {
-                        FailureClass::Skip => return false,
-                        FailureClass::Fail => panic!("[{ctx}] place_order failed: {e}"),
-                    }
+        // Rate-limit backoff lives in the shared helper; a throttle that
+        // survives it is classified as a skip rather than a panic.
+        let place_result = match with_rate_limit_retry(ctx, || tc.place_order(order.clone())).await {
+            Ok(Some(res)) => res,
+            Ok(None) => panic!("[{ctx}] place_order returned Ok(None)"),
+            Err(e) => {
+                return match classify_failure(&e.to_string(), &market, ctx).await {
+                    FailureClass::Skip => false,
+                    FailureClass::Fail => panic!("[{ctx}] place_order failed: {e}"),
                 }
             }
-        }
-        let place_result = place_result.expect("place_result set after loop");
+        };
         let order_id = if place_result.id != 0 {
             place_result.id
         } else if place_result.order_id != 0 {
@@ -244,12 +268,20 @@ mod tests {
     }
 
     async fn cancel_tolerant(tc: &TradeClient, order_id: i64, ctx: &str) {
-        match tc.cancel_order(order_id).await {
+        match with_rate_limit_retry(ctx, || tc.cancel_order(order_id)).await {
             Ok(_) => {}
             Err(e) => {
                 let msg = e.to_string();
                 if matches_any(&msg, TERMINAL_ORDER_MARKERS) {
                     eprintln!("[{ctx}] cancel hit terminal state (ok): {e}");
+                    return;
+                }
+                // Cleanup runs after several API calls, so it is the likeliest
+                // to be throttled — and a rate-limit message matches no
+                // TERMINAL_ORDER_MARKER, so without this it would panic a test
+                // whose assertions all already passed.
+                if matches_any(&msg, RATE_LIMIT_MARKERS) {
+                    eprintln!("[{ctx}] cancel skipped (account rate limit): {e}");
                     return;
                 }
                 panic!("[{ctx}] unexpected cancel failure: {e}");
@@ -1486,10 +1518,17 @@ mod tests {
         if !preview_only(&tc, order.clone(), "US STK ICEBERG modify preview").await {
             return;
         }
-        let placed = match tc.place_order(order.clone()).await {
+        let placed = match with_rate_limit_retry("US STK ICEBERG modify", || {
+            tc.place_order(order.clone())
+        })
+        .await
+        {
             Ok(Some(r)) => r,
             Ok(None) => panic!("place returned Ok(None)"),
-            Err(e) if matches_any(&e.to_string(), PERMISSION_ERROR_MARKERS) => {
+            Err(e)
+                if matches_any(&e.to_string(), PERMISSION_ERROR_MARKERS)
+                    || matches_any(&e.to_string(), RATE_LIMIT_MARKERS) =>
+            {
                 eprintln!("[US STK ICEBERG modify] skipped: {e}");
                 return;
             }
@@ -1506,7 +1545,11 @@ mod tests {
             limit_price: Some(SAFE_BUY_PRICE * 2.0),
             ..order
         };
-        if let Err(e) = tc.modify_order(order_id, modified).await {
+        if let Err(e) = with_rate_limit_retry("US STK ICEBERG modify — modify", || {
+            tc.modify_order(order_id, modified.clone())
+        })
+        .await
+        {
             if !matches_any(&e.to_string(), TERMINAL_ORDER_MARKERS) {
                 eprintln!("[US STK ICEBERG modify] modify failed (best-effort): {e}");
             }
