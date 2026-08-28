@@ -21,7 +21,11 @@ pub const DEFAULT_SERVER_URL: &str = "https://openapi.tigerfintech.com/gateway";
 pub fn diagnostic<Req: std::fmt::Debug, Resp: std::fmt::Debug>(req: &Req, resp: &Resp) -> String {
     let mut out = format!("request={req:?} response={resp:?}");
     if out.len() > 3000 {
-        out.truncate(3000);
+        let mut end = 3000;
+        while !out.is_char_boundary(end) {
+            end -= 1;
+        }
+        out.truncate(end);
         out.push_str("...<truncated>");
     }
     out
