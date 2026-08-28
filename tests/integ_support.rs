@@ -16,6 +16,21 @@ pub const ENV_SERVER_URL: &str = "TIGEROPEN_SERVER_URL";
 pub const ENV_PROPS_PATH: &str = "TIGEROPEN_PROPS_PATH";
 
 pub const DEFAULT_SERVER_URL: &str = "https://openapi.tigerfintech.com/gateway";
+const MAX_DIAGNOSTIC_BYTES: usize = 3000;
+
+/// Compact request/response context for integration-test failure messages.
+pub fn diagnostic<Req: std::fmt::Debug, Resp: std::fmt::Debug>(req: &Req, resp: &Resp) -> String {
+    let mut out = format!("request={req:?} response={resp:?}");
+    if out.len() > MAX_DIAGNOSTIC_BYTES {
+        let mut end = MAX_DIAGNOSTIC_BYTES;
+        while !out.is_char_boundary(end) {
+            end -= 1;
+        }
+        out.truncate(end);
+        out.push_str("...<truncated>");
+    }
+    out
+}
 
 /// Returns true when integration tests should run.
 pub fn is_integ_run() -> bool {
