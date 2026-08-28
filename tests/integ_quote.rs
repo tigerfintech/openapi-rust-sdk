@@ -1571,15 +1571,20 @@ mod tests {
             contract_codes: Some(vec![contract_code.clone()]),
             ..Default::default()
         };
-        let result = client.get_future_depth(req).await;
+        let result = client.get_future_depth(req.clone()).await;
         if result.is_err() {
+            eprintln!(
+                "get_future_depth failed: {}",
+                integ_support::diagnostic(&req, &result)
+            );
             return;
         }
         let data: Vec<FutureDepth> = result.unwrap();
         if !data.is_empty() {
             assert_eq!(
                 data[0].contract_code, contract_code,
-                "FutureDepth.contract_code mismatch"
+                "FutureDepth.contract_code mismatch; {}",
+                integ_support::diagnostic(&req, &data)
             );
         }
     }

@@ -17,6 +17,16 @@ pub const ENV_PROPS_PATH: &str = "TIGEROPEN_PROPS_PATH";
 
 pub const DEFAULT_SERVER_URL: &str = "https://openapi.tigerfintech.com/gateway";
 
+/// Compact request/response context for integration-test failure messages.
+pub fn diagnostic<Req: std::fmt::Debug, Resp: std::fmt::Debug>(req: &Req, resp: &Resp) -> String {
+    let mut out = format!("request={req:?} response={resp:?}");
+    if out.len() > 3000 {
+        out.truncate(3000);
+        out.push_str("...<truncated>");
+    }
+    out
+}
+
 /// Returns true when integration tests should run.
 pub fn is_integ_run() -> bool {
     std::env::var(ENV_RUN_INTEG).as_deref() == Ok("true")
