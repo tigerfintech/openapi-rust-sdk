@@ -1372,13 +1372,21 @@ mod tests {
     #[tokio::test]
     async fn test_matrix_hk_stk_limit() {
         let Some(tc) = skip_if_disabled() else { return };
+        // HK LMT orders are validated against a price-deviation tolerance
+        // (unlike AL, see the sibling test below), so the shared
+        // near-zero SAFE_BUY_PRICE gets rejected. Compute a price close to
+        // the live quote instead, aligned to the symbol's min_tick.
+        let Some(price) = integ_support::safe_hk_buy_price("00700").await else {
+            eprintln!("[HK STK LMT] skipped: cannot resolve safe buy price for 00700");
+            return;
+        };
         preview_and_place(
             &tc,
             OrderRequest {
                 action: Some("BUY".into()),
                 order_type: Some("LMT".into()),
                 total_quantity: Some(100),
-                limit_price: Some(SAFE_BUY_PRICE),
+                limit_price: Some(price),
                 ..hk_stk()
             },
             "HK STK LMT",
