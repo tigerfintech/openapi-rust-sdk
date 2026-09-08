@@ -134,6 +134,49 @@ pub async fn is_market_trading(qc: &tigeropen::quote::QuoteClient, market: &str)
     }
 }
 
+/// A BUY limit price far below the current HK quote, but within the
+/// exchange's price-deviation tolerance — unlike a hardcoded absolute
+/// constant, this never falls too far outside whatever range the exchange
+/// currently allows. Aligned to the symbol's `min_tick`, since HK's tick
+/// size varies by price band and a price that isn't a clean multiple of it
+/// is rejected outright.
+///
+/// Returns `None` when no live quote/trade-meta is available, rather than
+/// guessing a price that may or may not be accepted — caller should skip.
+pub async fn safe_hk_buy_price(symbol: &str) -> Option<f64> {
+    use tigeropen::model::quote_requests::{BriefRequest, TradeMetasRequest};
+
+    let qc = tigeropen::quote::QuoteClient::from_config(integ_config());
+
+    let briefs = qc
+        .get_real_time_quote(BriefRequest {
+            symbols: Some(vec![symbol.to_string()]),
+            ..Default::default()
+        })
+        .await
+        .ok()?;
+    let latest_price = briefs.first()?.latest_price;
+    if !(latest_price > 0.0) {
+        return None;
+    }
+
+    let metas = qc
+        .get_trade_metas(TradeMetasRequest {
+            symbols: Some(vec![symbol.to_string()]),
+            ..Default::default()
+        })
+        .await
+        .ok()?;
+    let min_tick = metas.first()?.min_tick;
+    if !(min_tick > 0.0) {
+        return None;
+    }
+
+    let raw_price = latest_price * 0.5;
+    let ticks = (raw_price / min_tick).floor();
+    Some((ticks * min_tick * 10_000.0).round() / 10_000.0)
+}
+
 /// Converts days-since-1970-01-01 into (year, month, day).
 /// Based on Howard Hinnant's date algorithms — public domain.
 fn civil_from_days(z: i64) -> (i32, u32, u32) {
