@@ -113,11 +113,49 @@ fn test_account_subscription_asset_quote_type_bookkeeping() {
     );
     assert_eq!(client.get_account_subscriptions().len(), 3);
 
+    // 大小写不敏感，落库统一成大写枚举名
+    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, " overnight ");
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Asset),
+        Some("OVERNIGHT".to_string())
+    );
+
+    // 拼错的口径不记，否则每次重连都按一个服务端读不懂的值重放
+    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNGHT");
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Asset)
+        .is_none());
+
+    // 改回不带口径订阅时要把旧口径清掉，否则重连会静默按 OVERNIGHT 恢复
+    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT");
+    client.add_account_sub(SubjectType::Asset);
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Asset)
+        .is_none());
+    assert!(client
+        .get_account_subscriptions()
+        .contains(&SubjectType::Asset));
+
     // 退订同时清掉口径记录
+    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT");
     client.remove_account_sub(&SubjectType::Asset);
     assert!(client
         .get_account_sub_asset_quote_type(&SubjectType::Asset)
         .is_none());
+}
+
+#[test]
+fn test_normalize_asset_quote_type() {
+    use crate::push::proto_message::normalize_asset_quote_type;
+
+    assert_eq!(
+        normalize_asset_quote_type("overnight"),
+        Some("OVERNIGHT".to_string())
+    );
+    assert_eq!(normalize_asset_quote_type("  RTH "), Some("RTH".to_string()));
+    // 拼错、空串都不放行，避免静默发到服务端后按默认 ETH 处理
+    assert_eq!(normalize_asset_quote_type("OVERNGHT"), None);
+    assert_eq!(normalize_asset_quote_type(""), None);
 }
 
 // ===== 消息处理回调测试 =====

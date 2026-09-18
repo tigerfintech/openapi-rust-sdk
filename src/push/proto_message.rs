@@ -54,6 +54,24 @@ pub fn build_heartbeat_message() -> pb::Request {
     }
 }
 
+/// 合法的资产行情口径枚举名。
+pub const ASSET_QUOTE_TYPES: [&str; 3] = ["ETH", "RTH", "OVERNIGHT"];
+
+/// 校验并归一化资产行情口径。
+///
+/// 服务端的 `AssetQuoteType.isValid` 是大小写不敏感的（先 trim 再 `equalsIgnoreCase`），
+/// 这里保持同样的宽松度，但统一归一化成大写枚举名再上送，免得同一口径在客户端日志、
+/// 服务端日志里长得不一样。拼错的值返回 `None`，由调用方决定报错还是忽略——
+/// 静默发上去只会让排查更贵。
+pub fn normalize_asset_quote_type(asset_quote_type: &str) -> Option<String> {
+    let normalized = asset_quote_type.trim().to_uppercase();
+    if ASSET_QUOTE_TYPES.contains(&normalized.as_str()) {
+        Some(normalized)
+    } else {
+        None
+    }
+}
+
 /// 构建 SUBSCRIBE 请求消息
 pub fn build_subscribe_message(
     data_type: i32,
