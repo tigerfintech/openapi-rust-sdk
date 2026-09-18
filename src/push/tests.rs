@@ -90,6 +90,36 @@ fn test_account_subscription_management() {
     assert_eq!(client.get_account_subscriptions().len(), 2);
 }
 
+#[test]
+fn test_account_subscription_asset_quote_type_bookkeeping() {
+    let client = PushClient::new(test_config(), None);
+
+    // 未记录行情口径时返回 None（老行为）
+    client.add_account_sub(SubjectType::Order);
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Order)
+        .is_none());
+
+    // 记录后重连恢复订阅时会带上该口径
+    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT");
+    client.add_account_sub_with_asset_quote_type(SubjectType::Position, "RTH");
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Asset),
+        Some("OVERNIGHT".to_string())
+    );
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Position),
+        Some("RTH".to_string())
+    );
+    assert_eq!(client.get_account_subscriptions().len(), 3);
+
+    // 退订同时清掉口径记录
+    client.remove_account_sub(&SubjectType::Asset);
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Asset)
+        .is_none());
+}
+
 // ===== 消息处理回调测试 =====
 
 #[test]

@@ -84,6 +84,9 @@ pub struct PushClient {
     subscriptions: Arc<RwLock<HashMap<SubjectType, HashSet<String>>>>,
     /// Account-level subscriptions
     account_subs: Arc<RwLock<HashSet<SubjectType>>>,
+    /// Asset quote type used per account-level subscription (Asset / Position),
+    /// replayed on reconnection
+    account_sub_quote_types: Arc<RwLock<HashMap<SubjectType, String>>>,
     /// Channel sender for writing framed messages to the TLS stream
     write_tx: Arc<RwLock<Option<mpsc::UnboundedSender<Vec<u8>>>>>,
     /// Notification for CONNECTED response received
@@ -126,6 +129,7 @@ impl PushClient {
             callbacks: Arc::new(RwLock::new(Callbacks::default())),
             subscriptions: Arc::new(RwLock::new(HashMap::new())),
             account_subs: Arc::new(RwLock::new(HashSet::new())),
+            account_sub_quote_types: Arc::new(RwLock::new(HashMap::new())),
             write_tx: Arc::new(RwLock::new(None)),
             connected_notify: Arc::new(Notify::new()),
             stop_tx: Arc::new(RwLock::new(None)),
@@ -197,8 +201,31 @@ impl PushClient {
         account: Option<&str>,
         market: Option<&str>,
     ) -> bool {
+        self.subscribe_with_asset_quote_type(subject, symbols, account, market, None)
+    }
+
+    /// Send a subscribe request carrying the asset quote type.
+    ///
+    /// `asset_quote_type` takes the enum name (`"ETH"` / `"RTH"` / `"OVERNIGHT"`)
+    /// and is only meaningful for [`SubjectType::Asset`] and
+    /// [`SubjectType::Position`]; the server ignores it for other subjects.
+    /// Passing `None` behaves exactly like [`PushClient::subscribe`].
+    pub fn subscribe_with_asset_quote_type(
+        &self,
+        subject: &SubjectType,
+        symbols: Option<&str>,
+        account: Option<&str>,
+        market: Option<&str>,
+        asset_quote_type: Option<&str>,
+    ) -> bool {
         let data_type = proto_message::subject_to_data_type(subject);
-        let request = proto_message::build_subscribe_message(data_type, symbols, account, market);
+        let request = proto_message::build_subscribe_message_with_asset_quote_type(
+            data_type,
+            symbols,
+            account,
+            market,
+            asset_quote_type,
+        );
         self.send_request(&request)
     }
 
@@ -210,8 +237,28 @@ impl PushClient {
         account: Option<&str>,
         market: Option<&str>,
     ) -> bool {
+        self.unsubscribe_with_asset_quote_type(subject, symbols, account, market, None)
+    }
+
+    /// Send an unsubscribe request carrying the asset quote type.
+    ///
+    /// Same semantics as [`PushClient::subscribe_with_asset_quote_type`].
+    pub fn unsubscribe_with_asset_quote_type(
+        &self,
+        subject: &SubjectType,
+        symbols: Option<&str>,
+        account: Option<&str>,
+        market: Option<&str>,
+        asset_quote_type: Option<&str>,
+    ) -> bool {
         let data_type = proto_message::subject_to_data_type(subject);
-        let request = proto_message::build_unsubscribe_message(data_type, symbols, account, market);
+        let request = proto_message::build_unsubscribe_message_with_asset_quote_type(
+            data_type,
+            symbols,
+            account,
+            market,
+            asset_quote_type,
+        );
         self.send_request(&request)
     }
 
@@ -437,14 +484,47 @@ impl PushClient {
         self.account_subs.write().unwrap().insert(subject);
     }
 
+    /// Add account subscription together with the asset quote type used when
+    /// subscribing (`"ETH"` / `"RTH"` / `"OVERNIGHT"`).
+    ///
+    /// The recorded value is replayed on automatic reconnection, so
+    /// Asset / Position subscriptions keep the same quote type after a
+    /// reconnect. `add_account_sub` keeps the previous behaviour (no quote
+    /// type sent).
+    pub fn add_account_sub_with_asset_quote_type(
+        &self,
+        subject: SubjectType,
+        asset_quote_type: &str,
+    ) {
+        self.account_subs.write().unwrap().insert(subject.clone());
+        self.account_sub_quote_types
+            .write()
+            .unwrap()
+            .insert(subject, asset_quote_type.to_string());
+    }
+
     /// Remove account subscription
     pub fn remove_account_sub(&self, subject: &SubjectType) {
         self.account_subs.write().unwrap().remove(subject);
+        self.account_sub_quote_types
+            .write()
+            .unwrap()
+            .remove(subject);
     }
 
     /// Get account-level subscriptions
     pub fn get_account_subscriptions(&self) -> Vec<SubjectType> {
         self.account_subs.read().unwrap().iter().cloned().collect()
+    }
+
+    /// Get the asset quote type recorded for an account-level subscription,
+    /// if one was registered via [`PushClient::add_account_sub_with_asset_quote_type`].
+    pub fn get_account_sub_asset_quote_type(&self, subject: &SubjectType) -> Option<String> {
+        self.account_sub_quote_types
+            .read()
+            .unwrap()
+            .get(subject)
+            .cloned()
     }
 
     // ===== Cc / Market 订阅方法 =====
@@ -768,6 +848,7 @@ fn reconnect_loop(
 fn resubscribe(client: &Arc<PushClient>) {
     let subs = client.subscriptions.read().unwrap().clone();
     let acct_subs = client.account_subs.read().unwrap().clone();
+    let acct_quote_types = client.account_sub_quote_types.read().unwrap().clone();
 
     for (subject, symbols) in &subs {
         let symbols_str = symbols.iter().cloned().collect::<Vec<_>>().join(",");
@@ -775,7 +856,15 @@ fn resubscribe(client: &Arc<PushClient>) {
     }
 
     for subject in &acct_subs {
-        client.subscribe(subject, None, Some(&client.config.account), None);
+        // Asset / Position 订阅若记录过行情口径，重连时按原口径恢复
+        let quote_type = acct_quote_types.get(subject);
+        client.subscribe_with_asset_quote_type(
+            subject,
+            None,
+            Some(&client.config.account),
+            None,
+            quote_type.map(|s| s.as_str()),
+        );
     }
 }
 

@@ -241,6 +241,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pc.subscribe(&SubjectType::Asset, None, Some(&account), None);
     pc.subscribe(&SubjectType::Order, None, Some(&account), None);
 
+    // Asset / Position push with a specific quote type ("ETH" / "RTH" / "OVERNIGHT")
+    pc.subscribe_with_asset_quote_type(
+        &SubjectType::Position,
+        None,
+        Some(&account),
+        None,
+        Some("OVERNIGHT"),
+    );
+
     println!("Subscribed. Press Ctrl+C to exit.");
     tokio::signal::ctrl_c().await?;
     pc.disconnect();
@@ -574,6 +583,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 订阅账户推送
     pc.subscribe(&SubjectType::Asset, None, Some(&account), None);
     pc.subscribe(&SubjectType::Order, None, Some(&account), None);
+
+    // 资产 / 持仓推送可指定行情口径（"ETH" / "RTH" / "OVERNIGHT"）
+    pc.subscribe_with_asset_quote_type(
+        &SubjectType::Position,
+        None,
+        Some(&account),
+        None,
+        Some("OVERNIGHT"),
+    );
 
     println!("已订阅，按 Ctrl+C 退出");
     tokio::signal::ctrl_c().await?;

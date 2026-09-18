@@ -153,6 +153,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("\n=== 账户/持仓 查询 ===");
+    // assets / prime_assets / aggregate_assets / positions 均支持指定行情口径：
+    // AssetsRequest { asset_quote_type: Some("OVERNIGHT".into()), ..Default::default() }
     match tc.get_assets(AssetsRequest::default()).await {
         Ok(assets) if !assets.is_empty() => {
             let a = &assets[0];
