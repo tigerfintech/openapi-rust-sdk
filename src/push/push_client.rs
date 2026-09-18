@@ -511,33 +511,31 @@ impl PushClient {
     /// Asset / Position subscriptions keep the same quote type after a
     /// reconnect. `add_account_sub` keeps the previous behaviour (no quote
     /// type sent).
+    ///
+    /// An unknown enum name is rejected the same way
+    /// [`PushClient::subscribe_with_asset_quote_type`] rejects it: `false` is
+    /// returned and the call is a no-op — neither the subject nor the quote
+    /// type is recorded, and any previous registration is left untouched.
     pub fn add_account_sub_with_asset_quote_type(
         &self,
         subject: SubjectType,
         asset_quote_type: &str,
-    ) {
+    ) -> bool {
+        let normalized = match normalize_or_warn(Some(asset_quote_type)) {
+            Ok(Some(normalized)) => normalized,
+            // 拼错的口径整条拒绝，而不是「丢掉口径、照样记 subject」：
+            // 后者会让重连按默认 ETH 重放一条用户从没成功订上的夜盘订阅，
+            // 调用方还以为夜盘口径生效了。输入非法时不写任何状态，返回 false。
+            // Some(_) 输入不会走到 Ok(None)，与 Err 合并处理。
+            Ok(None) | Err(()) => return false,
+        };
         self.account_subs.write().unwrap().insert(subject.clone());
-        match proto_message::normalize_asset_quote_type(asset_quote_type) {
-            // 记归一化后的值：重连重放时发出去的就是它
-            Some(normalized) => {
-                self.account_sub_quote_types
-                    .write()
-                    .unwrap()
-                    .insert(subject, normalized);
-            }
-            // 拼错的口径不记，否则每次重连都按一个服务端读不懂的值重放
-            None => {
-                tracing::warn!(
-                    "invalid asset quote type: {}, expected one of {:?}",
-                    asset_quote_type,
-                    proto_message::ASSET_QUOTE_TYPES
-                );
-                self.account_sub_quote_types
-                    .write()
-                    .unwrap()
-                    .remove(&subject);
-            }
-        }
+        // 记归一化后的值：重连重放时发出去的就是它
+        self.account_sub_quote_types
+            .write()
+            .unwrap()
+            .insert(subject, normalized);
+        true
     }
 
     /// Remove account subscription

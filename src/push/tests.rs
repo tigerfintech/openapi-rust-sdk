@@ -101,8 +101,8 @@ fn test_account_subscription_asset_quote_type_bookkeeping() {
         .is_none());
 
     // 记录后重连恢复订阅时会带上该口径
-    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT");
-    client.add_account_sub_with_asset_quote_type(SubjectType::Position, "RTH");
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT"));
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Position, "RTH"));
     assert_eq!(
         client.get_account_sub_asset_quote_type(&SubjectType::Asset),
         Some("OVERNIGHT".to_string())
@@ -114,20 +114,26 @@ fn test_account_subscription_asset_quote_type_bookkeeping() {
     assert_eq!(client.get_account_subscriptions().len(), 3);
 
     // 大小写不敏感，落库统一成大写枚举名
-    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, " overnight ");
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Asset, " overnight "));
     assert_eq!(
         client.get_account_sub_asset_quote_type(&SubjectType::Asset),
         Some("OVERNIGHT".to_string())
     );
 
-    // 拼错的口径不记，否则每次重连都按一个服务端读不懂的值重放
-    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNGHT");
-    assert!(client
-        .get_account_sub_asset_quote_type(&SubjectType::Asset)
-        .is_none());
+    // 拼错的口径整条拒绝：返回 false，且已有记录原样保留（不降级成默认 ETH 重放）
+    assert!(!client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNGHT"));
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Asset),
+        Some("OVERNIGHT".to_string())
+    );
+
+    // 首次就传错口径时连 subject 都不记，避免重连重放一条从没订上的订阅
+    assert!(!client.add_account_sub_with_asset_quote_type(SubjectType::Transaction, "OVERNGHT"));
+    assert!(!client
+        .get_account_subscriptions()
+        .contains(&SubjectType::Transaction));
 
     // 改回不带口径订阅时要把旧口径清掉，否则重连会静默按 OVERNIGHT 恢复
-    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT");
     client.add_account_sub(SubjectType::Asset);
     assert!(client
         .get_account_sub_asset_quote_type(&SubjectType::Asset)
@@ -137,7 +143,7 @@ fn test_account_subscription_asset_quote_type_bookkeeping() {
         .contains(&SubjectType::Asset));
 
     // 退订同时清掉口径记录
-    client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT");
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT"));
     client.remove_account_sub(&SubjectType::Asset);
     assert!(client
         .get_account_sub_asset_quote_type(&SubjectType::Asset)
