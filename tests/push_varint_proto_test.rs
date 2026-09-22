@@ -160,6 +160,89 @@ fn test_build_unsubscribe_message() {
     assert_eq!(sub.account, Some("test_account".to_string()));
 }
 
+// ===== assetQuoteType (protobuf field 5) =====
+
+#[test]
+fn test_build_subscribe_message_with_asset_quote_type() {
+    let msg = build_subscribe_message_with_asset_quote_type(
+        DataType::Asset as i32,
+        None,
+        Some("DU123"),
+        None,
+        Some("OVERNIGHT"),
+    );
+    assert_eq!(msg.command, Command::Subscribe as i32);
+    let sub = msg.subscribe.unwrap();
+    assert_eq!(sub.data_type, DataType::Asset as i32);
+    assert_eq!(sub.account, Some("DU123".to_string()));
+    // 传枚举名，不是 code
+    assert_eq!(sub.asset_quote_type, Some("OVERNIGHT".to_string()));
+}
+
+#[test]
+fn test_build_unsubscribe_message_with_asset_quote_type() {
+    let msg = build_unsubscribe_message_with_asset_quote_type(
+        DataType::Position as i32,
+        None,
+        Some("DU123"),
+        None,
+        Some("RTH"),
+    );
+    assert_eq!(msg.command, Command::Unsubscribe as i32);
+    let sub = msg.subscribe.unwrap();
+    assert_eq!(sub.data_type, DataType::Position as i32);
+    assert_eq!(sub.asset_quote_type, Some("RTH".to_string()));
+}
+
+/// 老签名保持不传该字段，wire 上不出现 field 5。
+#[test]
+fn test_build_subscribe_message_without_asset_quote_type_omits_field() {
+    let msg = build_subscribe_message(DataType::Asset as i32, None, Some("DU123"), None);
+    let sub = msg.subscribe.unwrap();
+    assert!(sub.asset_quote_type.is_none());
+
+    use prost::Message;
+    let bytes = sub.encode_to_vec();
+    // field 5 (LEN) 的 tag 字节为 0x2A，未设置时不应出现
+    assert!(
+        !bytes.contains(&0x2Au8),
+        "asset_quote_type 未设置时不应写入 field 5, bytes={:?}",
+        bytes
+    );
+}
+
+/// wire 格式断言：assetQuoteType 必须编码在字段号 5、wire type 2（LEN）。
+#[test]
+fn test_subscribe_asset_quote_type_wire_format() {
+    use prost::Message;
+
+    let msg = build_subscribe_message_with_asset_quote_type(
+        DataType::Asset as i32,
+        None,
+        Some("DU123"),
+        None,
+        Some("OVERNIGHT"),
+    );
+    let sub = msg.subscribe.unwrap();
+    let bytes = sub.encode_to_vec();
+
+    let mut expected = Vec::new();
+    // field 1 (dataType, varint) = Asset(6)
+    expected.extend_from_slice(&[0x08, DataType::Asset as u8]);
+    // field 3 (account, LEN) = "DU123"
+    expected.extend_from_slice(&[0x1A, 0x05]);
+    expected.extend_from_slice(b"DU123");
+    // field 5 (assetQuoteType, LEN) = "OVERNIGHT"
+    expected.extend_from_slice(&[0x2A, 0x09]);
+    expected.extend_from_slice(b"OVERNIGHT");
+
+    assert_eq!(bytes, expected, "assetQuoteType 必须是 field 5 的 string");
+
+    // 解码回来字段值不变
+    let decoded = tigeropen::push::pb::request::Subscribe::decode(bytes.as_slice()).unwrap();
+    assert_eq!(decoded.asset_quote_type, Some("OVERNIGHT".to_string()));
+}
+
 #[test]
 fn test_build_disconnect_message() {
     let msg = build_disconnect_message();

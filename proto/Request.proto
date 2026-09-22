@@ -27,5 +27,7 @@ message Request {
     optional string symbols = 2;
     optional string account = 3;
     optional string market = 4;
+    // 资产/持仓行情口径，传枚举名：ETH / RTH / OVERNIGHT
+    optional string assetQuoteType = 5;
   }
 }

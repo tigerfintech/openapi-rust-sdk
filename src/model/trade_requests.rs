@@ -135,6 +135,7 @@ pub struct PositionsRequest {
     pub strike: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub right: Option<String>,
+    /// 持仓行情口径，传枚举名："ETH" / "RTH" / "OVERNIGHT"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub asset_quote_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -153,6 +154,9 @@ pub struct AssetsRequest {
     pub segment: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub market_value: Option<bool>,
+    /// 资产行情口径，传枚举名："ETH" / "RTH" / "OVERNIGHT"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset_quote_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
 }
@@ -212,6 +216,9 @@ pub struct AggregateAssetsRequest {
     pub base_currency: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub seg_type: Option<String>,
+    /// 资产行情口径，传枚举名："ETH" / "RTH" / "OVERNIGHT"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset_quote_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
 }
@@ -671,11 +678,25 @@ mod tests {
             sub_accounts: Some(vec!["sub1".into()]),
             segment: Some(true),
             market_value: Some(false),
+            asset_quote_type: Some("OVERNIGHT".into()),
             lang: Some("en_US".into()),
         };
         let j = to_json(&req);
         assert_eq!(j["segment"], true);
         assert_eq!(j["market_value"], false);
+        // wire 字段名为下划线 asset_quote_type，值为枚举名
+        assert_eq!(j["asset_quote_type"], "OVERNIGHT");
+    }
+
+    #[test]
+    fn test_assets_request_asset_quote_type_omitted_when_none() {
+        // 老用户不传该参数时，wire 上不应出现该字段
+        let req = AssetsRequest {
+            account: Some("DU123".into()),
+            ..Default::default()
+        };
+        let j = to_json(&req);
+        assert!(j.get("asset_quote_type").is_none());
     }
 
     #[test]
@@ -893,10 +914,22 @@ mod tests {
             account: Some("DU1".into()),
             base_currency: Some("USD".into()),
             seg_type: Some("SEC".into()),
+            asset_quote_type: Some("ETH".into()),
             lang: Some("en_US".into()),
         };
         let j = to_json(&req);
         assert_eq!(j["base_currency"], "USD");
+        assert_eq!(j["asset_quote_type"], "ETH");
+    }
+
+    #[test]
+    fn test_positions_request_asset_quote_type_enum_name() {
+        // 服务端契约：枚举名字符串（ETH / RTH / OVERNIGHT）
+        let req = PositionsRequest {
+            asset_quote_type: Some("RTH".into()),
+            ..Default::default()
+        };
+        assert_eq!(to_json(&req)["asset_quote_type"], "RTH");
     }
 
     #[test]

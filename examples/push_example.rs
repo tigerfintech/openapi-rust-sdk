@@ -148,6 +148,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pc.subscribe(&SubjectType::Order, None, Some(&account), None);
     pc.subscribe(&SubjectType::Transaction, None, Some(&account), None);
 
+    // Asset / Position push can carry a quote type ("ETH" / "RTH" / "OVERNIGHT").
+    // Use the *_with_asset_quote_type overload; the plain subscribe() stays unchanged.
+    //
+    // pc.subscribe_with_asset_quote_type(
+    //     &SubjectType::Asset, None, Some(&account), None, Some("OVERNIGHT"),
+    // );
+
     println!("All subscriptions active. Press Ctrl+C to exit.\n");
     tokio::signal::ctrl_c().await?;
 
