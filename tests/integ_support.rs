@@ -115,6 +115,73 @@ pub async fn resolve_us_fop_contract(
     }
 }
 
+/// A listed US option chain slice: the chosen expiry and, for one side, the
+/// strikes the exchange actually lists.
+pub struct UsOptionChain {
+    /// `yyyymmdd` — the shape order requests carry.
+    pub expiry: String,
+    /// Listed strikes for the requested side, ascending by value, wire text.
+    pub strikes: Vec<String>,
+}
+
+/// Resolve a live AAPL option chain: the earliest expiry more than 14 days out,
+/// then that expiry's chain filtered to `right` ("CALL" / "PUT").
+///
+/// Orders have to reference contracts the exchange lists. A synthesised expiry
+/// ("today + 30 days") usually falls on a date Apple does not list — weeklies
+/// stop roughly six weeks out — and the server answers 合约不正确 before it
+/// ever looks at the price, which says nothing about the SDK.
+pub async fn resolve_us_option_chain(right: &str) -> Option<UsOptionChain> {
+    use tigeropen::model::quote_requests::{OptionChainItem, OptionChainRequest};
+
+    let qc = tigeropen::quote::QuoteClient::from_config(integ_config());
+
+    let expirations = qc.get_option_expiration(&["AAPL"], None).await.ok()?;
+    let dates = expirations.first()?.dates.clone();
+    let today = now_days();
+    // The nearest expiry can already be expired or expiring same-day
+    // (untradable), so it is skipped; if every date falls inside that window
+    // the latest one is used rather than returning nothing.
+    let expiry = dates
+        .iter()
+        .find(|d| parse_date_days(d).is_some_and(|days| days - today > 14))
+        .or_else(|| dates.last())
+        .cloned()?;
+
+    let item = OptionChainItem::from_date("AAPL", &expiry).ok()?;
+    let chains = qc
+        .get_option_chain(OptionChainRequest::new(vec![item]))
+        .await
+        .ok()?;
+    let chain = chains.into_iter().next()?;
+
+    let mut strikes: Vec<(f64, String)> = Vec::new();
+    for row in &chain.items {
+        let leg = if right.eq_ignore_ascii_case("PUT") {
+            row.put.as_ref()
+        } else {
+            row.call.as_ref()
+        };
+        let Some(leg) = leg else { continue };
+        if leg.identifier.is_empty() {
+            continue;
+        }
+        if let Ok(value) = leg.strike.parse::<f64>() {
+            strikes.push((value, leg.strike.clone()));
+        }
+    }
+    strikes.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    strikes.dedup_by(|a, b| (a.0 - b.0).abs() < f64::EPSILON);
+    if strikes.is_empty() {
+        return None;
+    }
+
+    Some(UsOptionChain {
+        expiry: expiry.replace('-', ""),
+        strikes: strikes.into_iter().map(|(_, text)| text).collect(),
+    })
+}
+
 /// Returns true when `market` is genuinely in its live trading session,
 /// mirroring the C++ / Java / Go / C# reference helpers: fetch real market
 /// status and compare against `"TRADING"`. Fails closed (`false`) on any
@@ -175,6 +242,26 @@ pub async fn safe_hk_buy_price(symbol: &str) -> Option<f64> {
     let raw_price = latest_price * 0.5;
     let ticks = (raw_price / min_tick).floor();
     Some((ticks * min_tick * 10_000.0).round() / 10_000.0)
+}
+
+/// Days since the Unix epoch.
+fn now_days() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64 / 86_400_000)
+        .unwrap_or(0)
+}
+
+/// Parse the exchange's `yyyy-MM-dd` expiry into days since the Unix epoch.
+fn parse_date_days(date: &str) -> Option<i64> {
+    let mut parts = date.split('-');
+    let y: i32 = parts.next()?.parse().ok()?;
+    let m: u32 = parts.next()?.parse().ok()?;
+    let d: u32 = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(days_from_civil(y, m, d))
 }
 
 /// Converts days-since-1970-01-01 into (year, month, day).
