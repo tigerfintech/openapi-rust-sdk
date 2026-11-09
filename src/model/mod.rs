@@ -34,7 +34,7 @@ pub use quote::{
     IndustryItem, IndustryStock,
     Kline, KlineItem, KlineQuota, KlineQuotaDetail,
     MarketScannerRequest, MarketScannerTag, MarketScannerTagGroup, MarketScannerTags, MarketState,
-    ImpliedVolMetric, OptionAnalysis, OptionBrief, OptionChain, OptionChainRow, OptionExpiration,
+    ImpliedVolMetric, OptionAnalysis, OptionBrief, OptionHourTrading, OptionChain, OptionChainRow, OptionExpiration,
     OptionKline, OptionLeg as OptionChainLeg, OptionSymbol, OptionVolatilityPoint,
     QuoteOvernight, QuotePermission,
     ScannerDataRow, ScannerResult, ScannerResultItem,

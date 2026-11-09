@@ -451,24 +451,27 @@ pub struct OptionKlineItem {
     pub limit: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sort_dir: Option<String>,
+    /// Include GTH/CURB minute bars; None preserves the server default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with_hour_trading: Option<bool>,
 }
 
 impl OptionKlineItem {
     pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: impl Into<String>, period: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into(), period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None }
+        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into(), period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None, with_hour_trading: None }
     }
 
     pub fn from_occ(identifier: &str, period: impl Into<String>) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let tz = infer_option_timezone(&c.symbol);
         let expiry = date_to_expiry_ms(&c.expiry_date, tz)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None })
+        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None, with_hour_trading: None })
     }
 
     pub fn from_occ_tz(identifier: &str, period: impl Into<String>, timezone: &str) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let expiry = date_to_expiry_ms(&c.expiry_date, timezone)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None })
+        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None, with_hour_trading: None })
     }
 }
 

@@ -35,10 +35,27 @@ pub struct MarketState {
     pub open_time: String,
 }
 
+/// Current GTH/CURB quote; individual values may be absent.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct OptionHourTrading {
+    pub tag: Option<String>,
+    pub session: Option<String>,
+    pub latest_price: Option<f64>,
+    pub latest_timestamp: Option<i64>,
+    pub volume: Option<i64>,
+    pub amount: Option<f64>,
+    pub pre_close: Option<f64>,
+}
+
 /// 实时快照（quote_real_time）
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Brief {
+    pub cum_volume: Option<i64>,
+    pub cum_amount: Option<f64>,
+    pub hour_trading: Option<OptionHourTrading>,
+
     #[serde(default)]
     pub symbol: String,
     #[serde(default)]
@@ -235,6 +252,10 @@ pub struct OptionExpiration {
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionLeg {
+    pub cum_volume: Option<i64>,
+    pub cum_amount: Option<f64>,
+    pub hour_trading: Option<OptionHourTrading>,
+
     #[serde(default)]
     pub identifier: String,
     #[serde(default)]
