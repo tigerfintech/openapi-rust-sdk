@@ -146,6 +146,96 @@ let chain = qc.option_chain("AAPL", "2024-01-19").await?;
 let exchanges = qc.future_exchange().await?;
 ```
 
+## News
+
+The SDK exposes two news query APIs. Both are routed to the **main gateway** (`server_url`, same as trade requests), not the quote server:
+
+| API | method | Description |
+|-----|--------|-------------|
+| Stock news | `news_stock_list` | News list for a single symbol, paged by `page_count` / `page_size` |
+| Market highlights | `news_highlight_list` | Market highlights, paged by the `last_id` cursor |
+
+### Stock News
+
+```rust
+use tigeropen::model::enums::Language;
+use tigeropen::model::news_requests::NewsStockListRequest;
+use tigeropen::news::NewsClient;
+
+let nc = NewsClient::from_config(config);
+
+let page = nc
+    .get_stock_news(NewsStockListRequest {
+        symbol: "AAPL".to_string(),
+        lang: Some(Language::ZhCn),
+        page_count: Some(1),
+        page_size: Some(20),
+    })
+    .await?;
+for item in &page.items {
+    println!("{} — {}", item.title, item.url);
+}
+```
+
+Parameters:
+
+| Parameter | Type | Required | Description |
+|-----------|------|:--------:|-------------|
+| `symbol` | `String` | Yes | Stock symbol. **Single symbol only** — batch queries are not supported by the downstream news service |
+| `lang` | `Option<Language>` | No | `zh_CN` / `zh_TW` / `en_US` |
+| `page_count` | `Option<i32>` | No | Page number, default 1 (server side), must be >= 1 |
+| `page_size` | `Option<i32>` | No | Page size, default 20 (server side), range 1–50 |
+
+### Market Highlights
+
+```rust
+use tigeropen::model::news_requests::NewsHighlightListRequest;
+
+let page = nc
+    .get_market_news(NewsHighlightListRequest {
+        lang: Some(Language::EnUs),
+        ..Default::default()
+    })
+    .await?;
+// Next page: pass the id of the last item of this page as last_id
+let next_last_id = page.items.last().map(|item| item.id.clone());
+let next_page = nc
+    .get_market_news(NewsHighlightListRequest {
+        last_id: next_last_id,
+        ..Default::default()
+    })
+    .await?;
+```
+
+Parameters:
+
+| Parameter | Type | Required | Description |
+|-----------|------|:--------:|-------------|
+| `lang` | `Option<Language>` | No | Same as above |
+| `last_id` | `Option<String>` | No | Cursor — the **only** pagination path for this API. `None` starts from the newest; pass the `id` of the last item of the current page to get the next page |
+
+### Response Structure
+
+Both methods return a `NewsPage` (wire fields are camelCase):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `items` | `Vec<NewsItem>` | News items on the current page (may be empty) |
+| `page_count` | `i32` | Current page number (always 1 for market highlights) |
+| `page_size` | `i32` | Page size |
+| `total_page` | `i32` | Total number of pages |
+| `total_size` | `i32` | Total number of items |
+
+Each `NewsItem`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Article ID (source of the `last_id` cursor) |
+| `title` | `String` | Title |
+| `summary` | `String` | Summary |
+| `pub_timestamp` | `i64` | Publish timestamp (seconds) |
+| `url` | `String` | Detail page URL |
+
 ## Trading
 
 ```rust
@@ -266,6 +356,7 @@ openapi-rust-sdk/
 │   ├── signer/    # RSA signing
 │   ├── client/    # HTTP client (request/response, retry, execute)
 │   ├── model/     # Data models (Order, Contract, Position, enums)
+│   ├── news/      # News query client (main gateway)
 │   ├── quote/     # Market data query client
 │   ├── trade/     # Trading client
 │   ├── push/      # TCP+TLS push client (Protobuf binary protocol)
@@ -489,6 +580,96 @@ let ticks = qc.get_trade_tick(TradeTickRequest { symbols: Some(vec!["AAPL".into(
 
 如上表所示，`cond` 值因市场（美股/港股）不同而有所区别。
 
+## 资讯查询
+
+SDK 提供两个资讯查询接口，均路由到**主网关**（`server_url`，与交易请求同款），不走行情域名：
+
+| 接口 | method | 说明 |
+|------|--------|------|
+| 个股新闻 | `news_stock_list` | 查询单只股票的资讯列表，按 `page_count` / `page_size` 翻页 |
+| 市场要闻 | `news_highlight_list` | 查询市场要闻列表，按 `last_id` 游标翻页 |
+
+### 个股新闻
+
+```rust
+use tigeropen::model::enums::Language;
+use tigeropen::model::news_requests::NewsStockListRequest;
+use tigeropen::news::NewsClient;
+
+let nc = NewsClient::from_config(config);
+
+let page = nc
+    .get_stock_news(NewsStockListRequest {
+        symbol: "AAPL".to_string(),
+        lang: Some(Language::ZhCn),
+        page_count: Some(1),
+        page_size: Some(20),
+    })
+    .await?;
+for item in &page.items {
+    println!("{} — {}", item.title, item.url);
+}
+```
+
+参数说明：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:----:|------|
+| `symbol` | `String` | 是 | 股票代码，**仅支持单只**（该接口不支持批量查询，空值由服务端报参数错误） |
+| `lang` | `Option<Language>` | 否 | 语言枚举：`zh_CN` / `zh_TW` / `en_US` |
+| `page_count` | `Option<i32>` | 否 | 页码，缺省 = 服务端默认 1，取值 >= 1 |
+| `page_size` | `Option<i32>` | 否 | 每页条数，缺省 = 服务端默认 20，取值 1–50 |
+
+### 市场要闻
+
+```rust
+use tigeropen::model::news_requests::NewsHighlightListRequest;
+
+let page = nc
+    .get_market_news(NewsHighlightListRequest {
+        lang: Some(Language::EnUs),
+        ..Default::default()
+    })
+    .await?;
+// 下一页：把本页最后一条的 id 作为 last_id 传回
+let next_last_id = page.items.last().map(|item| item.id.clone());
+let next_page = nc
+    .get_market_news(NewsHighlightListRequest {
+        last_id: next_last_id,
+        ..Default::default()
+    })
+    .await?;
+```
+
+参数说明：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:----:|------|
+| `lang` | `Option<Language>` | 否 | 同上 |
+| `last_id` | `Option<String>` | 否 | 游标，该接口**唯一**翻页方式。不传从最新开始；传上一页 `items` 最后一条的 `id` 获取下一页 |
+
+### 响应结构
+
+两个接口的响应均为 `NewsPage`（wire 出参驼峰，SDK 字段为 snake_case）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `items` | `Vec<NewsItem>` | 当前页资讯列表（可为空数组） |
+| `page_count` | `i32` | 当前页码（要闻接口恒为 1） |
+| `page_size` | `i32` | 每页条数 |
+| `total_page` | `i32` | 总页数 |
+| `total_size` | `i32` | 总条数 |
+
+每条 `NewsItem`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `String` | 文章 ID（要闻游标翻页 `last_id` 的取值来源） |
+| `title` | `String` | 标题 |
+| `summary` | `String` | 摘要 |
+| `pub_timestamp` | `i64` | 发布时间戳（秒级） |
+| `url` | `String` | 详情页 URL |
+
 ## 交易操作
 
 ```rust
@@ -609,6 +790,7 @@ openapi-rust-sdk/
 │   ├── signer/    # RSA 签名
 │   ├── client/    # HTTP 客户端（请求/响应、重试策略、execute）
 │   ├── model/     # 数据模型（Order、Contract、Position、枚举）
+│   ├── news/      # 资讯查询客户端（主网关）
 │   ├── quote/     # 行情查询客户端
 │   ├── trade/     # 交易客户端
 │   ├── push/      # TCP+TLS 推送客户端（Protobuf 二进制协议）

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- 资讯查询接口（对齐 Java / Python SDK）：新增 `NewsClient`（`tigeropen::news`）与 `get_stock_news`（wire: `news_stock_list`，单标的 `symbol`，`page_count` / `page_size` 翻页）、`get_market_news`（wire: `news_highlight_list`，`last_id` 游标翻页，唯一翻页路径）。两接口共用响应模型 `NewsPage` / `NewsItem`（`tigeropen::model::news`，wire 出参驼峰），请求结构体 `NewsStockListRequest` / `NewsHighlightListRequest`（`tigeropen::model::news_requests`，入参 snake_case，可选字段缺省不落 key）。请求路由到主网关 `server_url`（与交易域同款），不走行情域名。
 - 资产查询新增行情口径参数：`AssetsRequest.asset_quote_type`（`assets` / `prime_assets`）与 `AggregateAssetsRequest.asset_quote_type`（`aggregate_assets`），传枚举名字符串 `"ETH"` / `"RTH"` / `"OVERNIGHT"`，wire 字段名 `asset_quote_type`。持仓 `PositionsRequest.asset_quote_type` 保持不变。
 - Protobuf 订阅新增 `Subscribe.assetQuoteType`（字段号 5，`optional string`）。新增重载 `PushClient::subscribe_with_asset_quote_type` / `unsubscribe_with_asset_quote_type` 与 `proto_message::build_subscribe_message_with_asset_quote_type` / `build_unsubscribe_message_with_asset_quote_type`，仅对 Asset / Position 订阅有意义；原有 `subscribe` / `unsubscribe` 签名与行为不变。
 - `PushClient::add_account_sub_with_asset_quote_type` / `get_account_sub_asset_quote_type`：记录账户级订阅使用的行情口径，自动重连时按原口径恢复订阅。
