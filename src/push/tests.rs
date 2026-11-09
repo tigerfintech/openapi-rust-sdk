@@ -90,6 +90,80 @@ fn test_account_subscription_management() {
     assert_eq!(client.get_account_subscriptions().len(), 2);
 }
 
+#[test]
+fn test_account_subscription_asset_quote_type_bookkeeping() {
+    let client = PushClient::new(test_config(), None);
+
+    // 未记录行情口径时返回 None（老行为）
+    client.add_account_sub(SubjectType::Order);
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Order)
+        .is_none());
+
+    // 记录后重连恢复订阅时会带上该口径
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT"));
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Position, "RTH"));
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Asset),
+        Some("OVERNIGHT".to_string())
+    );
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Position),
+        Some("RTH".to_string())
+    );
+    assert_eq!(client.get_account_subscriptions().len(), 3);
+
+    // 大小写不敏感，落库统一成大写枚举名
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Asset, " overnight "));
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Asset),
+        Some("OVERNIGHT".to_string())
+    );
+
+    // 拼错的口径整条拒绝：返回 false，且已有记录原样保留（不降级成默认 ETH 重放）
+    assert!(!client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNGHT"));
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Asset),
+        Some("OVERNIGHT".to_string())
+    );
+
+    // 首次就传错口径时连 subject 都不记，避免重连重放一条从没订上的订阅
+    assert!(!client.add_account_sub_with_asset_quote_type(SubjectType::Transaction, "OVERNGHT"));
+    assert!(!client
+        .get_account_subscriptions()
+        .contains(&SubjectType::Transaction));
+
+    // 改回不带口径订阅时要把旧口径清掉，否则重连会静默按 OVERNIGHT 恢复
+    client.add_account_sub(SubjectType::Asset);
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Asset)
+        .is_none());
+    assert!(client
+        .get_account_subscriptions()
+        .contains(&SubjectType::Asset));
+
+    // 退订同时清掉口径记录
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT"));
+    client.remove_account_sub(&SubjectType::Asset);
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Asset)
+        .is_none());
+}
+
+#[test]
+fn test_normalize_asset_quote_type() {
+    use crate::push::proto_message::normalize_asset_quote_type;
+
+    assert_eq!(
+        normalize_asset_quote_type("overnight"),
+        Some("OVERNIGHT".to_string())
+    );
+    assert_eq!(normalize_asset_quote_type("  RTH "), Some("RTH".to_string()));
+    // 拼错、空串都不放行，避免静默发到服务端后按默认 ETH 处理
+    assert_eq!(normalize_asset_quote_type("OVERNGHT"), None);
+    assert_eq!(normalize_asset_quote_type(""), None);
+}
+
 // ===== 消息处理回调测试 =====
 
 #[test]

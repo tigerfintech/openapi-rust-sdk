@@ -16,6 +16,21 @@ pub const ENV_SERVER_URL: &str = "TIGEROPEN_SERVER_URL";
 pub const ENV_PROPS_PATH: &str = "TIGEROPEN_PROPS_PATH";
 
 pub const DEFAULT_SERVER_URL: &str = "https://openapi.tigerfintech.com/gateway";
+const MAX_DIAGNOSTIC_BYTES: usize = 3000;
+
+/// Compact request/response context for integration-test failure messages.
+pub fn diagnostic<Req: std::fmt::Debug, Resp: std::fmt::Debug>(req: &Req, resp: &Resp) -> String {
+    let mut out = format!("request={req:?} response={resp:?}");
+    if out.len() > MAX_DIAGNOSTIC_BYTES {
+        let mut end = MAX_DIAGNOSTIC_BYTES;
+        while !out.is_char_boundary(end) {
+            end -= 1;
+        }
+        out.truncate(end);
+        out.push_str("...<truncated>");
+    }
+    out
+}
 
 /// Returns true when integration tests should run.
 pub fn is_integ_run() -> bool {
@@ -100,6 +115,73 @@ pub async fn resolve_us_fop_contract(
     }
 }
 
+/// A listed US option chain slice: the chosen expiry and, for one side, the
+/// strikes the exchange actually lists.
+pub struct UsOptionChain {
+    /// `yyyymmdd` — the shape order requests carry.
+    pub expiry: String,
+    /// Listed strikes for the requested side, ascending by value, wire text.
+    pub strikes: Vec<String>,
+}
+
+/// Resolve a live AAPL option chain: the earliest expiry more than 14 days out,
+/// then that expiry's chain filtered to `right` ("CALL" / "PUT").
+///
+/// Orders have to reference contracts the exchange lists. A synthesised expiry
+/// ("today + 30 days") usually falls on a date Apple does not list — weeklies
+/// stop roughly six weeks out — and the server answers 合约不正确 before it
+/// ever looks at the price, which says nothing about the SDK.
+pub async fn resolve_us_option_chain(right: &str) -> Option<UsOptionChain> {
+    use tigeropen::model::quote_requests::{OptionChainItem, OptionChainRequest};
+
+    let qc = tigeropen::quote::QuoteClient::from_config(integ_config());
+
+    let expirations = qc.get_option_expiration(&["AAPL"], None).await.ok()?;
+    let dates = expirations.first()?.dates.clone();
+    let today = now_days();
+    // The nearest expiry can already be expired or expiring same-day
+    // (untradable), so it is skipped; if every date falls inside that window
+    // the latest one is used rather than returning nothing.
+    let expiry = dates
+        .iter()
+        .find(|d| parse_date_days(d).is_some_and(|days| days - today > 14))
+        .or_else(|| dates.last())
+        .cloned()?;
+
+    let item = OptionChainItem::from_date("AAPL", &expiry).ok()?;
+    let chains = qc
+        .get_option_chain(OptionChainRequest::new(vec![item]))
+        .await
+        .ok()?;
+    let chain = chains.into_iter().next()?;
+
+    let mut strikes: Vec<(f64, String)> = Vec::new();
+    for row in &chain.items {
+        let leg = if right.eq_ignore_ascii_case("PUT") {
+            row.put.as_ref()
+        } else {
+            row.call.as_ref()
+        };
+        let Some(leg) = leg else { continue };
+        if leg.identifier.is_empty() {
+            continue;
+        }
+        if let Ok(value) = leg.strike.parse::<f64>() {
+            strikes.push((value, leg.strike.clone()));
+        }
+    }
+    strikes.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    strikes.dedup_by(|a, b| (a.0 - b.0).abs() < f64::EPSILON);
+    if strikes.is_empty() {
+        return None;
+    }
+
+    Some(UsOptionChain {
+        expiry: expiry.replace('-', ""),
+        strikes: strikes.into_iter().map(|(_, text)| text).collect(),
+    })
+}
+
 /// Returns true when `market` is genuinely in its live trading session,
 /// mirroring the C++ / Java / Go / C# reference helpers: fetch real market
 /// status and compare against `"TRADING"`. Fails closed (`false`) on any
@@ -117,6 +199,69 @@ pub async fn is_market_trading(qc: &tigeropen::quote::QuoteClient, market: &str)
         }),
         Err(_) => false,
     }
+}
+
+/// A BUY limit price far below the current HK quote, but within the
+/// exchange's price-deviation tolerance — unlike a hardcoded absolute
+/// constant, this never falls too far outside whatever range the exchange
+/// currently allows. Aligned to the symbol's `min_tick`, since HK's tick
+/// size varies by price band and a price that isn't a clean multiple of it
+/// is rejected outright.
+///
+/// Returns `None` when no live quote/trade-meta is available, rather than
+/// guessing a price that may or may not be accepted — caller should skip.
+pub async fn safe_hk_buy_price(symbol: &str) -> Option<f64> {
+    use tigeropen::model::quote_requests::{BriefRequest, TradeMetasRequest};
+
+    let qc = tigeropen::quote::QuoteClient::from_config(integ_config());
+
+    let briefs = qc
+        .get_real_time_quote(BriefRequest {
+            symbols: Some(vec![symbol.to_string()]),
+            ..Default::default()
+        })
+        .await
+        .ok()?;
+    let latest_price = briefs.first()?.latest_price;
+    if !(latest_price > 0.0) {
+        return None;
+    }
+
+    let metas = qc
+        .get_trade_metas(TradeMetasRequest {
+            symbols: Some(vec![symbol.to_string()]),
+            ..Default::default()
+        })
+        .await
+        .ok()?;
+    let min_tick = metas.first()?.min_tick;
+    if !(min_tick > 0.0) {
+        return None;
+    }
+
+    let raw_price = latest_price * 0.5;
+    let ticks = (raw_price / min_tick).floor();
+    Some((ticks * min_tick * 10_000.0).round() / 10_000.0)
+}
+
+/// Days since the Unix epoch.
+fn now_days() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64 / 86_400_000)
+        .unwrap_or(0)
+}
+
+/// Parse the exchange's `yyyy-MM-dd` expiry into days since the Unix epoch.
+fn parse_date_days(date: &str) -> Option<i64> {
+    let mut parts = date.split('-');
+    let y: i32 = parts.next()?.parse().ok()?;
+    let m: u32 = parts.next()?.parse().ok()?;
+    let d: u32 = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(days_from_civil(y, m, d))
 }
 
 /// Converts days-since-1970-01-01 into (year, month, day).

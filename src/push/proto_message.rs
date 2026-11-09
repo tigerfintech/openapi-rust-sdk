@@ -54,12 +54,45 @@ pub fn build_heartbeat_message() -> pb::Request {
     }
 }
 
+/// 合法的资产行情口径枚举名。
+pub const ASSET_QUOTE_TYPES: [&str; 3] = ["ETH", "RTH", "OVERNIGHT"];
+
+/// 校验并归一化资产行情口径。
+///
+/// 服务端的 `AssetQuoteType.isValid` 是大小写不敏感的（先 trim 再 `equalsIgnoreCase`），
+/// 这里保持同样的宽松度，但统一归一化成大写枚举名再上送，免得同一口径在客户端日志、
+/// 服务端日志里长得不一样。拼错的值返回 `None`，由调用方决定报错还是忽略——
+/// 静默发上去只会让排查更贵。
+pub fn normalize_asset_quote_type(asset_quote_type: &str) -> Option<String> {
+    let normalized = asset_quote_type.trim().to_uppercase();
+    if ASSET_QUOTE_TYPES.contains(&normalized.as_str()) {
+        Some(normalized)
+    } else {
+        None
+    }
+}
+
 /// 构建 SUBSCRIBE 请求消息
 pub fn build_subscribe_message(
     data_type: i32,
     symbols: Option<&str>,
     account: Option<&str>,
     market: Option<&str>,
+) -> pb::Request {
+    build_subscribe_message_with_asset_quote_type(data_type, symbols, account, market, None)
+}
+
+/// 构建 SUBSCRIBE 请求消息（带资产行情口径）
+///
+/// `asset_quote_type` 传枚举名（`ETH` / `RTH` / `OVERNIGHT`），
+/// 仅对 Asset / Position 两种订阅有意义，其它 dataType 服务端会忽略。
+/// 传 `None` 时与 [`build_subscribe_message`] 完全一致（字段不上线）。
+pub fn build_subscribe_message_with_asset_quote_type(
+    data_type: i32,
+    symbols: Option<&str>,
+    account: Option<&str>,
+    market: Option<&str>,
+    asset_quote_type: Option<&str>,
 ) -> pb::Request {
     pb::Request {
         command: Command::Subscribe as i32,
@@ -70,6 +103,7 @@ pub fn build_subscribe_message(
             symbols: symbols.map(|s| s.to_string()),
             account: account.map(|s| s.to_string()),
             market: market.map(|s| s.to_string()),
+            asset_quote_type: asset_quote_type.map(|s| s.to_string()),
         }),
     }
 }
@@ -81,6 +115,19 @@ pub fn build_unsubscribe_message(
     account: Option<&str>,
     market: Option<&str>,
 ) -> pb::Request {
+    build_unsubscribe_message_with_asset_quote_type(data_type, symbols, account, market, None)
+}
+
+/// 构建 UNSUBSCRIBE 请求消息（带资产行情口径）
+///
+/// 语义同 [`build_subscribe_message_with_asset_quote_type`]。
+pub fn build_unsubscribe_message_with_asset_quote_type(
+    data_type: i32,
+    symbols: Option<&str>,
+    account: Option<&str>,
+    market: Option<&str>,
+    asset_quote_type: Option<&str>,
+) -> pb::Request {
     pb::Request {
         command: Command::Unsubscribe as i32,
         id: next_request_id(),
@@ -90,6 +137,7 @@ pub fn build_unsubscribe_message(
             symbols: symbols.map(|s| s.to_string()),
             account: account.map(|s| s.to_string()),
             market: market.map(|s| s.to_string()),
+            asset_quote_type: asset_quote_type.map(|s| s.to_string()),
         }),
     }
 }
@@ -190,6 +238,48 @@ mod tests {
         assert_eq!(sub.data_type, DataType::Asset as i32);
         assert!(sub.symbols.is_none());
         assert_eq!(sub.account, Some("test_account".to_string()));
+    }
+
+    #[test]
+    fn test_build_subscribe_message_with_asset_quote_type() {
+        let msg = build_subscribe_message_with_asset_quote_type(
+            DataType::Asset as i32,
+            None,
+            Some("DU123"),
+            None,
+            Some("ETH"),
+        );
+        let sub = msg.subscribe.unwrap();
+        assert_eq!(sub.data_type, DataType::Asset as i32);
+        assert_eq!(sub.account, Some("DU123".to_string()));
+        assert_eq!(sub.asset_quote_type, Some("ETH".to_string()));
+    }
+
+    #[test]
+    fn test_build_unsubscribe_message_with_asset_quote_type() {
+        let msg = build_unsubscribe_message_with_asset_quote_type(
+            DataType::Position as i32,
+            None,
+            Some("DU123"),
+            None,
+            Some("OVERNIGHT"),
+        );
+        let sub = msg.subscribe.unwrap();
+        assert_eq!(sub.data_type, DataType::Position as i32);
+        assert_eq!(sub.asset_quote_type, Some("OVERNIGHT".to_string()));
+    }
+
+    #[test]
+    fn test_legacy_builders_leave_asset_quote_type_unset() {
+        // 老签名行为不变：不传则字段不上线
+        let sub = build_subscribe_message(DataType::Asset as i32, None, Some("DU123"), None)
+            .subscribe
+            .unwrap();
+        assert!(sub.asset_quote_type.is_none());
+        let unsub = build_unsubscribe_message(DataType::Asset as i32, None, Some("DU123"), None)
+            .subscribe
+            .unwrap();
+        assert!(unsub.asset_quote_type.is_none());
     }
 
     #[test]

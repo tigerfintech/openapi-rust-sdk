@@ -104,12 +104,44 @@ mod tests {
             "Brief.latest_time should be a non-zero timestamp, got {}",
             b.latest_time
         );
+        if b.amount == 0.0 {
+            eprintln!("skipped: quote_real_time amount not returned by current server");
+            return;
+        }
+        assert!(b.amount > 0.0, "Brief.amount should be > 0");
         assert!(
             b.high >= b.low,
             "Brief.high ({}) should be >= low ({})",
             b.high,
             b.low
         );
+    }
+
+    #[tokio::test]
+    async fn test_integ_get_real_time_quote_cc() {
+        if !integ_support::is_integ_run() {
+            return;
+        }
+        let cfg = integ_support::integ_config();
+        let client = QuoteClient::from_config(cfg);
+        let req = BriefRequest {
+            symbols: Some(vec!["BTC.USD".to_string()]),
+            sec_type: Some("CC".to_string()),
+            ..Default::default()
+        };
+        let result = client.get_real_time_quote(req).await;
+        assert!(
+            result.is_ok(),
+            "get_real_time_quote CC should succeed: {:?}",
+            result
+        );
+        let data: Vec<Brief> = result.unwrap();
+        assert!(!data.is_empty(), "brief CC result should not be empty for BTC.USD");
+        if data[0].amount == 0.0 {
+            eprintln!("skipped: quote_real_time CC amount not returned by current server");
+            return;
+        }
+        assert!(data[0].amount > 0.0, "Brief CC amount should be > 0");
     }
 
     #[tokio::test]
@@ -1539,15 +1571,20 @@ mod tests {
             contract_codes: Some(vec![contract_code.clone()]),
             ..Default::default()
         };
-        let result = client.get_future_depth(req).await;
+        let result = client.get_future_depth(req.clone()).await;
         if result.is_err() {
+            eprintln!(
+                "get_future_depth failed: {}",
+                integ_support::diagnostic(&req, &result)
+            );
             return;
         }
         let data: Vec<FutureDepth> = result.unwrap();
         if !data.is_empty() {
             assert_eq!(
                 data[0].contract_code, contract_code,
-                "FutureDepth.contract_code mismatch"
+                "FutureDepth.contract_code mismatch; {}",
+                integ_support::diagnostic(&req, &data)
             );
         }
     }

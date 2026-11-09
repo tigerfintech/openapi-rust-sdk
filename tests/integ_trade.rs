@@ -137,6 +137,15 @@ mod tests {
             eprintln!("[{ctx}] skipped (permission boundary): {msg}");
             return FailureClass::Skip;
         }
+        // An SG ticker the account's contract universe does not carry comes
+        // back as 合约不正确 rather than a permission message: the
+        // standard-account order path forwards neither market nor currency, so
+        // nothing else can disambiguate it. Scoped to SG so a genuine contract
+        // bug on US/HK/CN still fails.
+        if market == "SG" && msg.contains("合约不正确") {
+            eprintln!("[{ctx}] skipped (SG contract not available on this account): {msg}");
+            return FailureClass::Skip;
+        }
         FailureClass::Fail
     }
 
@@ -1254,7 +1263,14 @@ mod tests {
     #[tokio::test]
     async fn test_matrix_us_opt_limit() {
         let Some(tc) = skip_if_disabled() else { return };
-        let expiry = future_expiry_yyyymmdd(30);
+        // Expiry and strike both come from the live chain: synthesised values
+        // name contracts the exchange does not list, and the server answers
+        // 合约不正确 before it looks at anything else.
+        let Some(chain) = integ_support::resolve_us_option_chain("CALL").await else {
+            eprintln!("[US OPT LMT] skipped (no listed AAPL call chain)");
+            return;
+        };
+        let strike = chain.strikes[chain.strikes.len() / 2].clone();
         preview_and_place(
             &tc,
             OrderRequest {
@@ -1262,8 +1278,8 @@ mod tests {
                 sec_type: Some("OPT".into()),
                 currency: Some("USD".into()),
                 market: Some("US".into()),
-                expiry: Some(expiry),
-                strike: Some("200".into()),
+                expiry: Some(chain.expiry),
+                strike: Some(strike),
                 right: Some("CALL".into()),
                 action: Some("BUY".into()),
                 order_type: Some("LMT".into()),
@@ -1282,7 +1298,11 @@ mod tests {
         preview_and_place(
             &tc,
             OrderRequest {
-                symbol: Some("CL".into()),
+                // The month has to live in the symbol: a standard account
+                // cannot send expiry for FUT orders, so the bare product root
+                // "CL" carries no month and the server answers 合约不正确.
+                // "CLmain" is quote-only and fails with "symbol error".
+                symbol: Some("CL2712".into()),
                 sec_type: Some("FUT".into()),
                 currency: Some("USD".into()),
                 market: Some("US".into()),
@@ -1372,13 +1392,21 @@ mod tests {
     #[tokio::test]
     async fn test_matrix_hk_stk_limit() {
         let Some(tc) = skip_if_disabled() else { return };
+        // HK LMT orders are validated against a price-deviation tolerance
+        // (unlike AL, see the sibling test below), so the shared
+        // near-zero SAFE_BUY_PRICE gets rejected. Compute a price close to
+        // the live quote instead, aligned to the symbol's min_tick.
+        let Some(price) = integ_support::safe_hk_buy_price("00700").await else {
+            eprintln!("[HK STK LMT] skipped: cannot resolve safe buy price for 00700");
+            return;
+        };
         preview_and_place(
             &tc,
             OrderRequest {
                 action: Some("BUY".into()),
                 order_type: Some("LMT".into()),
                 total_quantity: Some(100),
-                limit_price: Some(SAFE_BUY_PRICE),
+                limit_price: Some(price),
                 ..hk_stk()
             },
             "HK STK LMT",
@@ -1468,7 +1496,20 @@ mod tests {
     #[tokio::test]
     async fn test_matrix_us_mleg_vertical_spread() {
         let Some(tc) = skip_if_disabled() else { return };
-        let expiry = future_expiry_yyyymmdd(45);
+        // Both legs must name contracts the exchange lists — a computed expiry
+        // ("today + 45 days") is usually not a date Apple lists, and the server
+        // answers 合约不正确 before it looks at the price.
+        let Some(chain) = integ_support::resolve_us_option_chain("PUT").await else {
+            eprintln!("[US MLEG VERTICAL] skipped (no listed AAPL put chain)");
+            return;
+        };
+        if chain.strikes.len() < 2 {
+            eprintln!("[US MLEG VERTICAL] skipped (fewer than two listed strikes)");
+            return;
+        }
+        let mid = chain.strikes.len() / 2;
+        let lower = chain.strikes[mid.min(chain.strikes.len() - 2)].clone();
+        let higher = chain.strikes[(mid + 1).min(chain.strikes.len() - 1)].clone();
         preview_and_place(
             &tc,
             OrderRequest {
@@ -1484,8 +1525,8 @@ mod tests {
                     ContractLegRequest {
                         symbol: Some("AAPL".into()),
                         sec_type: Some("OPT".into()),
-                        expiry: Some(expiry.clone()),
-                        strike: Some("200".into()),
+                        expiry: Some(chain.expiry.clone()),
+                        strike: Some(lower),
                         right: Some("PUT".into()),
                         action: Some("BUY".into()),
                         ratio: Some(1),
@@ -1493,8 +1534,8 @@ mod tests {
                     ContractLegRequest {
                         symbol: Some("AAPL".into()),
                         sec_type: Some("OPT".into()),
-                        expiry: Some(expiry),
-                        strike: Some("205".into()),
+                        expiry: Some(chain.expiry),
+                        strike: Some(higher),
                         right: Some("PUT".into()),
                         action: Some("SELL".into()),
                         ratio: Some(1),

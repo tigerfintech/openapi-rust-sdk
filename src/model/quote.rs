@@ -66,6 +66,8 @@ pub struct Brief {
     #[serde(default)]
     pub volume: i64,
     #[serde(default)]
+    pub amount: f64,
+    #[serde(default)]
     pub status: String,
     #[serde(default)]
     pub adj_pre_close: f64,

@@ -229,33 +229,39 @@ mod tests {
                 subscribe: None,
             }),
             // SUBSCRIBE
-            (1..=12i32, ".*", ".*", ".*").prop_map(|(dt, sym, acc, mkt)| {
-                pb::Request {
-                    command: Command::Subscribe as i32,
-                    id: 3,
-                    connect: None,
-                    subscribe: Some(pb::request::Subscribe {
-                        data_type: dt,
-                        symbols: Some(sym),
-                        account: Some(acc),
-                        market: Some(mkt),
-                    }),
+            (1..=12i32, ".*", ".*", ".*", proptest::option::of(".*")).prop_map(
+                |(dt, sym, acc, mkt, aqt)| {
+                    pb::Request {
+                        command: Command::Subscribe as i32,
+                        id: 3,
+                        connect: None,
+                        subscribe: Some(pb::request::Subscribe {
+                            data_type: dt,
+                            symbols: Some(sym),
+                            account: Some(acc),
+                            market: Some(mkt),
+                            asset_quote_type: aqt,
+                        }),
+                    }
                 }
-            }),
+            ),
             // UNSUBSCRIBE
-            (1..=12i32, ".*", ".*", ".*").prop_map(|(dt, sym, acc, mkt)| {
-                pb::Request {
-                    command: Command::Unsubscribe as i32,
-                    id: 4,
-                    connect: None,
-                    subscribe: Some(pb::request::Subscribe {
-                        data_type: dt,
-                        symbols: Some(sym),
-                        account: Some(acc),
-                        market: Some(mkt),
-                    }),
+            (1..=12i32, ".*", ".*", ".*", proptest::option::of(".*")).prop_map(
+                |(dt, sym, acc, mkt, aqt)| {
+                    pb::Request {
+                        command: Command::Unsubscribe as i32,
+                        id: 4,
+                        connect: None,
+                        subscribe: Some(pb::request::Subscribe {
+                            data_type: dt,
+                            symbols: Some(sym),
+                            account: Some(acc),
+                            market: Some(mkt),
+                            asset_quote_type: aqt,
+                        }),
+                    }
                 }
-            }),
+            ),
             // DISCONNECT
             Just(pb::Request {
                 command: Command::Disconnect as i32,

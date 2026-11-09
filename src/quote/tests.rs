@@ -108,7 +108,7 @@ async fn test_get_market_state_parses_typed() {
 #[tokio::test]
 async fn test_get_real_time_quote_parses_typed() {
     let server = mock_success_server(
-        r#"[{"symbol":"AAPL","latestPrice":150.0,"askPrice":150.1,"askSize":100,"volume":1000000}]"#,
+        r#"[{"symbol":"AAPL","latestPrice":150.0,"askPrice":150.1,"askSize":100,"volume":1000000,"amount":123456.78}]"#,
     )
     .await;
     let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
@@ -124,6 +124,30 @@ async fn test_get_real_time_quote_parses_typed() {
     assert_eq!(briefs[0].symbol, "AAPL");
     assert_eq!(briefs[0].latest_price, 150.0);
     assert_eq!(briefs[0].ask_price, 150.1);
+    assert_eq!(briefs[0].amount, 123456.78);
+}
+
+#[tokio::test]
+async fn test_get_real_time_quote_cc_parses_amount() {
+    let server =
+        mock_success_server(r#"[{"symbol":"BTCUSD","latestPrice":65000.0,"amount":987654.32}]"#)
+            .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+
+    let briefs = qc
+        .get_real_time_quote(BriefRequest {
+            symbols: Some(vec!["BTCUSD".into()]),
+            sec_type: Some("CC".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(briefs.len(), 1);
+    assert_eq!(briefs[0].symbol, "BTCUSD");
+    assert_eq!(briefs[0].amount, 987654.32);
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(biz_of(&requests[0])["sec_type"], "CC");
 }
 
 #[tokio::test]
