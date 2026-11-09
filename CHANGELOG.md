@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-11-09
+
 ### Added
 
 - 资讯查询接口（对齐 Java / Python SDK）：新增 `NewsClient`（`tigeropen::news`）与 `get_stock_news`（wire: `news_stock_list`，单标的 `symbol`，`page_count` / `page_size` 翻页）、`get_market_news`（wire: `news_highlight_list`，`last_id` 游标翻页，唯一翻页路径）。两接口共用响应模型 `NewsPage` / `NewsItem`（`tigeropen::model::news`，wire 出参驼峰），请求结构体 `NewsStockListRequest` / `NewsHighlightListRequest`（`tigeropen::model::news_requests`，入参 snake_case，可选字段缺省不落 key）。请求路由到主网关 `server_url`（与交易域同款），不走行情域名。
