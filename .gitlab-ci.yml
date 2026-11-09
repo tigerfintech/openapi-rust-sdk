@@ -1,0 +1,258 @@
+# Three-stage pipeline: unit / coverage / integration
+# Uses a Docker runner tagged 'openapi' (image: rust:1.88 ships cargo).
+#
+# Integration credentials: TIGEROPEN_TIGER_ID, TIGEROPEN_PRIVATE_KEY,
+# TIGEROPEN_ACCOUNT env vars set in GitLab CI Variables (Protected + Masked).
+
+stages:
+  - unit
+  - coverage
+  - integration
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
+  RUST_VERSION: "1.88"
+
+.rust_base:
+  image: rust:${RUST_VERSION}
+  tags:
+    - openapi
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends protobuf-compiler
+  cache:
+    key: rust-cargo-${RUST_VERSION}
+    paths:
+      - .cargo/
+      - target/
+
+unit:rust:
+  extends: .rust_base
+  stage: unit
+  script:
+    - unset TIGEROPEN_TIGER_ID TIGEROPEN_PRIVATE_KEY TIGEROPEN_ACCOUNT TIGEROPEN_PROPS_PATH
+    # Drop this job's own stale report first: build dirs get reused, and a
+    # leftover file would be re-archived as if this run had produced it.
+    # Only our own file — a sibling job's report may legitimately sit here.
+    - rm -f test-results/unit.txt
+    - mkdir -p test-results
+    - set -o pipefail; cargo test --lib 2>&1 | tee test-results/unit.txt
+  artifacts:
+    when: always
+    # Explicit file, not the whole directory: the runner reuses build dirs, so a
+    # directory glob can also archive the *other* job's stale report from a
+    # previous pipeline. Artifact download order across `needs` is not
+    # guaranteed, so a stale copy can overwrite the real one in notify:webhook.
+    paths:
+      - test-results/unit.txt
+    expire_in: 1 week
+
+coverage:rust:
+  extends: .rust_base
+  stage: coverage
+  allow_failure: true
+  before_script:
+    - !reference [.rust_base, before_script]
+    - cargo install cargo-tarpaulin --version 0.31.4 --locked || true
+  script:
+    - unset TIGEROPEN_TIGER_ID TIGEROPEN_PRIVATE_KEY TIGEROPEN_ACCOUNT
+    - cargo tarpaulin --lib --engine llvm --out Xml --output-dir coverage/ 2>&1
+  coverage: '/coverage:\s*(\d+\.?\d*)%/'
+  artifacts:
+    when: always
+    paths: [coverage/]
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura.xml
+    expire_in: 1 week
+
+integration:rust:
+  extends: .rust_base
+  stage: integration
+  allow_failure: true
+  # Serialize per-branch: a scheduled pipeline overlapping a manual one on
+  # the same runner can corrupt the shared test-results/integ.txt file.
+  resource_group: $CI_COMMIT_REF_SLUG
+  variables:
+    TIGER_RUN_INTEG: "true"
+  script:
+    - test -n "$TIGEROPEN_TIGER_ID" && test -n "$TIGEROPEN_PRIVATE_KEY" || { echo "No credentials (TIGEROPEN_TIGER_ID + TIGEROPEN_PRIVATE_KEY required) — skipping"; exit 1; }
+    # Drop this job's own stale report first: build dirs get reused, and a
+    # leftover file would be re-archived as if this run had produced it.
+    # Only our own file — a sibling job's report may legitimately sit here.
+    - rm -f test-results/integ.txt
+    - mkdir -p test-results
+    # --no-fail-fast: cargo test bails after the first test binary fails,
+    # which was silently skipping integ_trade whenever any integ_quote
+    # assertion tripped. Run both regardless of per-binary outcome and
+    # let the artifact log show the full picture.
+    #
+    # NOTE: integ_trade_matrix.rs was merged into integ_trade.rs — do
+    # not add it back as a separate --test target.
+    - set -o pipefail; cargo test --no-fail-fast --test integ_quote --test integ_trade -- --nocapture 2>&1 | tee test-results/integ.txt
+  artifacts:
+    when: always
+    # Explicit file, not the whole directory: the runner reuses build dirs, so a
+    # directory glob can also archive the *other* job's stale report from a
+    # previous pipeline. Artifact download order across `needs` is not
+    # guaranteed, so a stale copy can overwrite the real one in notify:webhook.
+    paths:
+      - test-results/integ.txt
+    expire_in: 1 week
+
+# Pipeline result notification via chat webhook.
+# Parses cargo test trace output (no JUnit XML needed).
+# Rust's `cargo test` prints lines like:
+#   test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+# The notify job greps these from the artifact trace files.
+notify:webhook:
+  image: python:3.11-slim
+  tags:
+    - openapi
+  stage: .post
+  when: always
+  allow_failure: true
+  needs:
+    - job: unit:rust
+      artifacts: true
+      optional: true
+    - job: integration:rust
+      artifacts: true
+      optional: true
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends curl
+  script:
+    - |
+      python3 << 'PYEOF'
+      import os, json, re, urllib.request
+
+      webhook_url = os.environ.get("WEBHOOK_URL", "")
+      if not webhook_url:
+          print("WEBHOOK_URL not configured, skipping notification")
+          exit(0)
+      card_content_tag = os.environ["CARD_CONTENT_TAG"]
+
+      # 1. Parse cargo test trace files — grep "test result:" lines.
+      #    Returns None tuple on file-missing / no-results so callers can
+      #    distinguish "0 failures" from "couldn't read results at all".
+      def parse_trace(path):
+          total = passed = failed = ignored = 0
+          found = False
+          try:
+              with open(path) as f:
+                  for line in f:
+                      # Matches: "test result: ok. 42 passed; 0 failed; 0 ignored; ..."
+                      m = re.search(
+                          r'test result:\s+\w+\.\s+(\d+)\s+passed;\s+(\d+)\s+failed;\s+(\d+)\s+ignored',
+                          line
+                      )
+                      if m:
+                          found = True
+                          passed += int(m.group(1))
+                          failed += int(m.group(2))
+                          ignored += int(m.group(3))
+          except Exception as e:
+              # Covers both the open and the read/parse below it, so don't
+              # claim "failed to open" — a decode error mid-file would send
+              # whoever reads this looking for a missing artifact instead.
+              print(f"Failed to read {path}: {type(e).__name__}: {e}")
+              return None, None, None, None
+          if not found:
+              print(f"No test result lines found in {path}")
+              return None, None, None, None
+          total = passed + failed + ignored
+          return total, passed, failed, ignored
+
+      unit_t, unit_p, unit_f, unit_s = parse_trace("test-results/unit.txt")
+      integ_t, integ_p, integ_f, integ_s = parse_trace("test-results/integ.txt")
+
+      unit_stats = f"Unit: {unit_t} tests: {unit_p} passed, {unit_f} failed, {unit_s} ignored" if unit_t else ""
+      integ_stats = f"Integration: {integ_t} tests: {integ_p} passed, {integ_f} failed, {integ_s} ignored" if integ_t else ""
+
+      # 2. Determine pass/fail.
+      #    unit_f is None  → txt missing/no results; treat as failed (conservative).
+      #    unit_f > 0      → explicit unit failures.
+      #    integ_f is None → integration:rust exits early when
+      #                      TIGEROPEN_TIGER_ID/TIGEROPEN_PRIVATE_KEY aren't
+      #                      configured (fork MRs, unprotected branches), so a
+      #                      missing integ.txt is an expected skip there. When
+      #                      those credentials ARE set the job was expected to
+      #                      produce output, so an absent trace means it crashed
+      #                      before `tee` flushed — treat as failed, since we
+      #                      now stay silent on passes and scoring this green
+      #                      would notify nobody.
+      #    CI_PIPELINE_STATUS is unreliable in .post stage (reads "running"),
+      #    so we rely exclusively on parsed text counts.
+      integ_expected = bool(os.environ.get("TIGEROPEN_TIGER_ID")) and \
+          bool(os.environ.get("TIGEROPEN_PRIVATE_KEY"))
+
+      if unit_f is None:
+          has_failed = True
+          print("Unit test output unavailable — treating pipeline as failed")
+      elif integ_expected and integ_f is None:
+          has_failed = True
+          print("Integration test output unavailable despite credentials being "
+                "configured — treating pipeline as failed")
+      else:
+          has_failed = (unit_f > 0) or (integ_f is not None and integ_f > 0)
+
+      # 2b. Notify on failure only. A green card every 4 hours is noise nobody
+      #     reads, which also desensitises the channel to the red ones.
+      #     has_failed already covers "output unavailable" above, so an
+      #     unreadable artifact still notifies — silence here means "we
+      #     positively verified everything passed", never "we couldn't tell".
+      if not has_failed:
+          print(f"Pipeline passed — {unit_stats} | {integ_stats} — skipping notification")
+          exit(0)
+
+      # 3. Build notification card
+      title = "❌ Pipeline failed" if has_failed else "✅ Pipeline passed"
+      color = "red" if has_failed else "green"
+      project_name = os.environ.get("CI_PROJECT_NAME", "")
+      branch = os.environ.get("CI_COMMIT_REF_NAME", "")
+      commit = os.environ.get("CI_COMMIT_SHORT_SHA", "")
+      pipeline_iid = os.environ.get("CI_PIPELINE_IID", "")
+      pipeline_url = os.environ.get("CI_PROJECT_URL", "") + "/-/pipelines/" + os.environ.get("CI_PIPELINE_ID", "")
+
+      content_parts = [
+          f"**Repo:** {project_name}",
+          f"**Branch:** {branch}",
+          f"**Commit:** {commit}",
+      ]
+      if unit_stats:
+          content_parts.append(f"**Unit tests:** {unit_stats}")
+      if integ_stats:
+          content_parts.append(f"**Integration tests:** {integ_stats}")
+      content_parts.append(f"[View pipeline]({pipeline_url})")
+      content = "\n".join(content_parts)
+
+      payload = {
+          "msg_type": "interactive",
+          "card": {
+              "header": {
+                  "title": {"tag": "plain_text", "content": f"{title} #{pipeline_iid} — {project_name}"},
+                  "template": color
+              },
+              "elements": [
+                  {"tag": "div", "text": {"tag": card_content_tag, "content": content}}
+              ]
+          }
+      }
+
+      data = json.dumps(payload).encode("utf-8")
+      req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
+      try:
+          with urllib.request.urlopen(req, timeout=30) as resp:
+              raw = resp.read()
+              if not raw:
+                  print("Webhook returned empty response")
+              else:
+                  result = json.loads(raw)
+                  if result.get("code", 0) != 0 or result.get("StatusCode", 0) not in (0, 200):
+                      print(f"Webhook returned non-success: {result}")
+                  else:
+                      print(f"Webhook response: {result}")
+      except Exception as e:
+          print(f"Webhook request failed: {e}")
+      PYEOF

@@ -52,15 +52,9 @@ mod tests {
         params.insert("method".to_string(), "market_state".to_string());
         params.insert("charset".to_string(), "UTF-8".to_string());
         params.insert("sign_type".to_string(), "RSA".to_string());
-        params.insert(
-            "timestamp".to_string(),
-            "2024-01-01 00:00:00".to_string(),
-        );
+        params.insert("timestamp".to_string(), "2024-01-01 00:00:00".to_string());
         params.insert("version".to_string(), "3.0".to_string());
-        params.insert(
-            "biz_content".to_string(),
-            r#"{"market":"US"}"#.to_string(),
-        );
+        params.insert("biz_content".to_string(), r#"{"market":"US"}"#.to_string());
 
         let result = get_sign_content(&params);
         let expected = r#"biz_content={"market":"US"}&charset=UTF-8&method=market_state&sign_type=RSA&tiger_id=20150001&timestamp=2024-01-01 00:00:00&version=3.0"#;

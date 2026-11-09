@@ -2,8 +2,8 @@
 //!
 //! 所有字段使用 snake_case（与 wire 协议直接对齐），`Option<T>` + `skip_serializing_if` 跳过空值。
 
-use serde::Serialize;
 use crate::error::TigerError;
+use serde::Serialize;
 
 // ============================================================================
 // 股票基础查询
@@ -132,7 +132,18 @@ pub struct KlineByPageRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trade_session: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub sec_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
+}
+
+/// 分时请求。wire: timeline
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct TimelineRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbols: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sec_type: Option<String>,
 }
 
 /// 历史分时请求。wire: history_timeline
@@ -289,7 +300,10 @@ pub struct OptionChainItem {
 
 impl OptionChainItem {
     pub fn new(symbol: impl Into<String>, expiry: i64) -> Self {
-        Self { symbol: symbol.into(), expiry }
+        Self {
+            symbol: symbol.into(),
+            expiry,
+        }
     }
 
     pub fn from_date(symbol: impl Into<String>, date: &str) -> Result<Self, TigerError> {
@@ -299,7 +313,11 @@ impl OptionChainItem {
         Ok(Self { symbol, expiry })
     }
 
-    pub fn from_date_tz(symbol: impl Into<String>, date: &str, timezone: &str) -> Result<Self, TigerError> {
+    pub fn from_date_tz(
+        symbol: impl Into<String>,
+        date: &str,
+        timezone: &str,
+    ) -> Result<Self, TigerError> {
         let symbol = symbol.into();
         let expiry = date_to_expiry_ms(date, timezone)?;
         Ok(Self { symbol, expiry })
@@ -317,7 +335,10 @@ pub struct RangeF64 {
 
 impl RangeF64 {
     pub fn new(min: f64, max: f64) -> Self {
-        Self { min: Some(min), max: Some(max) }
+        Self {
+            min: Some(min),
+            max: Some(max),
+        }
     }
 }
 
@@ -332,7 +353,10 @@ pub struct RangeI32 {
 
 impl RangeI32 {
     pub fn new(min: i32, max: i32) -> Self {
-        Self { min: Some(min), max: Some(max) }
+        Self {
+            min: Some(min),
+            max: Some(max),
+        }
     }
 }
 
@@ -381,7 +405,10 @@ pub struct OptionChainRequest {
 
 impl OptionChainRequest {
     pub fn new(items: Vec<OptionChainItem>) -> Self {
-        Self { option_basic: Some(items), ..Default::default() }
+        Self {
+            option_basic: Some(items),
+            ..Default::default()
+        }
     }
 }
 
@@ -400,21 +427,41 @@ pub struct OptionContractItem {
 }
 
 impl OptionContractItem {
-    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into() }
+    pub fn new(
+        symbol: impl Into<String>,
+        expiry: i64,
+        right: impl Into<String>,
+        strike: impl Into<String>,
+    ) -> Self {
+        Self {
+            symbol: symbol.into(),
+            expiry,
+            right: right.into(),
+            strike: strike.into(),
+        }
     }
 
     pub fn from_occ(identifier: &str) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let tz = infer_option_timezone(&c.symbol);
         let expiry = date_to_expiry_ms(&c.expiry_date, tz)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike })
+        Ok(Self {
+            symbol: c.symbol,
+            expiry,
+            right: c.right,
+            strike: c.strike,
+        })
     }
 
     pub fn from_occ_tz(identifier: &str, timezone: &str) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let expiry = date_to_expiry_ms(&c.expiry_date, timezone)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike })
+        Ok(Self {
+            symbol: c.symbol,
+            expiry,
+            right: c.right,
+            strike: c.strike,
+        })
     }
 }
 
@@ -431,7 +478,11 @@ pub struct OptionQuoteRequest {
 
 impl OptionQuoteRequest {
     pub fn new(items: Vec<OptionContractItem>) -> Self {
-        Self { option_basic: Some(items), market: None, lang: None }
+        Self {
+            option_basic: Some(items),
+            market: None,
+            lang: None,
+        }
     }
 }
 
@@ -454,21 +505,61 @@ pub struct OptionKlineItem {
 }
 
 impl OptionKlineItem {
-    pub fn new(symbol: impl Into<String>, expiry: i64, right: impl Into<String>, strike: impl Into<String>, period: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), expiry, right: right.into(), strike: strike.into(), period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None }
+    pub fn new(
+        symbol: impl Into<String>,
+        expiry: i64,
+        right: impl Into<String>,
+        strike: impl Into<String>,
+        period: impl Into<String>,
+    ) -> Self {
+        Self {
+            symbol: symbol.into(),
+            expiry,
+            right: right.into(),
+            strike: strike.into(),
+            period: period.into(),
+            begin_time: None,
+            end_time: None,
+            limit: None,
+            sort_dir: None,
+        }
     }
 
     pub fn from_occ(identifier: &str, period: impl Into<String>) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let tz = infer_option_timezone(&c.symbol);
         let expiry = date_to_expiry_ms(&c.expiry_date, tz)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None })
+        Ok(Self {
+            symbol: c.symbol,
+            expiry,
+            right: c.right,
+            strike: c.strike,
+            period: period.into(),
+            begin_time: None,
+            end_time: None,
+            limit: None,
+            sort_dir: None,
+        })
     }
 
-    pub fn from_occ_tz(identifier: &str, period: impl Into<String>, timezone: &str) -> Result<Self, TigerError> {
+    pub fn from_occ_tz(
+        identifier: &str,
+        period: impl Into<String>,
+        timezone: &str,
+    ) -> Result<Self, TigerError> {
         let c = parse_occ_identifier(identifier)?;
         let expiry = date_to_expiry_ms(&c.expiry_date, timezone)?;
-        Ok(Self { symbol: c.symbol, expiry, right: c.right, strike: c.strike, period: period.into(), begin_time: None, end_time: None, limit: None, sort_dir: None })
+        Ok(Self {
+            symbol: c.symbol,
+            expiry,
+            right: c.right,
+            strike: c.strike,
+            period: period.into(),
+            begin_time: None,
+            end_time: None,
+            limit: None,
+            sort_dir: None,
+        })
     }
 }
 
@@ -492,15 +583,21 @@ pub(crate) fn date_to_expiry_ms(date: &str, timezone: &str) -> Result<i64, Tiger
     use chrono::NaiveDate;
     use chrono_tz::Tz;
 
-    let tz: Tz = timezone.parse().map_err(|_| {
-        TigerError::Config(format!("unknown timezone: {:?}", timezone))
-    })?;
+    let tz: Tz = timezone
+        .parse()
+        .map_err(|_| TigerError::Config(format!("unknown timezone: {:?}", timezone)))?;
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|e| {
-        TigerError::Config(format!("invalid date {:?}: expected YYYY-MM-DD: {}", date, e))
+        TigerError::Config(format!(
+            "invalid date {:?}: expected YYYY-MM-DD: {}",
+            date, e
+        ))
     })?;
     let dt = d.and_hms_opt(0, 0, 0).unwrap();
     let zdt = dt.and_local_timezone(tz).earliest().ok_or_else(|| {
-        TigerError::Config(format!("ambiguous or invalid local time for date {:?} in tz {:?}", date, timezone))
+        TigerError::Config(format!(
+            "ambiguous or invalid local time for date {:?} in tz {:?}",
+            date, timezone
+        ))
     })?;
     Ok(zdt.timestamp_millis())
 }
@@ -523,21 +620,35 @@ fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
     let (symbol, rest) = if trimmed.contains(' ') {
         // Space-delimited: symbol is everything before first space
         let mut parts = trimmed.splitn(2, ' ');
-        let sym = parts.next().filter(|s| !s.is_empty())
+        let sym = parts
+            .next()
+            .filter(|s| !s.is_empty())
             .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier: {:?}", identifier)))?
             .to_string();
-        let rest = parts.next()
-            .ok_or_else(|| TigerError::Config(format!("invalid OCC identifier (missing suffix): {:?}", identifier)))?
+        let rest = parts
+            .next()
+            .ok_or_else(|| {
+                TigerError::Config(format!(
+                    "invalid OCC identifier (missing suffix): {:?}",
+                    identifier
+                ))
+            })?
             .trim_start(); // strip OCC padding spaces between symbol and date
         (sym, rest.to_string())
     } else {
         // No space: find where the suffix starts — suffix is always 15 ASCII chars: YYMMDD + C/P + 8 digits
         // Require ASCII so byte-offset slicing is safe (non-ASCII symbols are not valid OCC identifiers)
         if !trimmed.is_ascii() {
-            return Err(TigerError::Config(format!("invalid OCC identifier (non-ASCII characters not supported): {:?}", identifier)));
+            return Err(TigerError::Config(format!(
+                "invalid OCC identifier (non-ASCII characters not supported): {:?}",
+                identifier
+            )));
         }
         if trimmed.len() < 15 {
-            return Err(TigerError::Config(format!("invalid OCC identifier (too short): {:?}", identifier)));
+            return Err(TigerError::Config(format!(
+                "invalid OCC identifier (too short): {:?}",
+                identifier
+            )));
         }
         let suffix_start = trimmed.len() - 15;
         let sym = trimmed[..suffix_start].to_string();
@@ -546,27 +657,52 @@ fn parse_occ_identifier(identifier: &str) -> Result<OccContract, TigerError> {
     };
 
     if symbol.is_empty() {
-        return Err(TigerError::Config(format!("invalid OCC identifier (empty symbol): {:?}", identifier)));
+        return Err(TigerError::Config(format!(
+            "invalid OCC identifier (empty symbol): {:?}",
+            identifier
+        )));
     }
     if rest.len() < 15 {
-        return Err(TigerError::Config(format!("invalid OCC identifier (suffix too short): {:?}", identifier)));
+        return Err(TigerError::Config(format!(
+            "invalid OCC identifier (suffix too short): {:?}",
+            identifier
+        )));
     }
     // YYMMDD + C/P + 8-digit strike (5 integer + 3 decimal, no dot)
     let date_part = &rest[..6];
     let right_char = &rest[6..7];
     let strike_raw = &rest[7..];
-    let year = 2000 + date_part[..2].parse::<i32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
-    let month = date_part[2..4].parse::<u32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
-    let day = date_part[4..6].parse::<u32>().map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
+    let year = 2000
+        + date_part[..2]
+            .parse::<i32>()
+            .map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
+    let month = date_part[2..4]
+        .parse::<u32>()
+        .map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
+    let day = date_part[4..6]
+        .parse::<u32>()
+        .map_err(|_| TigerError::Config(format!("invalid OCC date: {:?}", identifier)))?;
     let expiry_date = format!("{:04}-{:02}-{:02}", year, month, day);
     let right = match right_char {
         "C" => "CALL".to_string(),
         "P" => "PUT".to_string(),
-        _ => return Err(TigerError::Config(format!("invalid OCC right {:?}: {:?}", right_char, identifier))),
+        _ => {
+            return Err(TigerError::Config(format!(
+                "invalid OCC right {:?}: {:?}",
+                right_char, identifier
+            )))
+        }
     };
-    let strike_int: u64 = strike_raw.parse().map_err(|_| TigerError::Config(format!("invalid OCC strike: {:?}", identifier)))?;
+    let strike_int: u64 = strike_raw
+        .parse()
+        .map_err(|_| TigerError::Config(format!("invalid OCC strike: {:?}", identifier)))?;
     let strike = occ_strike_to_string(strike_int);
-    Ok(OccContract { symbol, expiry_date, right, strike })
+    Ok(OccContract {
+        symbol,
+        expiry_date,
+        right,
+        strike,
+    })
 }
 
 // OCC 8位整数 strike（5整数位 + 3小数位，无小数点）→ 最短精确字符串。
@@ -597,12 +733,33 @@ pub struct OptionKlineRequest {
 }
 
 /// 期权逐笔请求。wire: option_trade_tick
-#[derive(Debug, Clone, Serialize, Default)]
+///
+/// **Wire contract**: 服务端要求的 `biz_content` 是**顶层数组**
+/// (`[{symbol, expiry, ...}, ...]`),而不是 `{"contracts": [...]}` object 形式。
+/// 这与 Java `BatchApiModel` (`items` 直接 JSON 序列化为顶层数组) 及 Python
+/// `MultipleContractParams.to_openapi_dict` 一致。
+///
+/// 早期版本按 object 形式发送导致
+/// `biz param error(failed to parse parameters in 'biz_content')`,
+/// 现通过自定义 `Serialize` 让 `biz_content` 直接是 `contracts` 数组的 JSON。
+/// `lang` 字段在此路径下被 SDK 忽略 —— 网关本方法无 lang 入参。
+#[derive(Debug, Clone, Default)]
 pub struct OptionTradeTicksRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub contracts: Option<Vec<OptionQueryItem>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// 保留字段:此接口 biz_content 是顶层数组,lang 无处安放,序列化时会被忽略。
+    /// 保留字段让 API 与其他 request 结构体一致,方便调用方使用。
     pub lang: Option<String>,
+}
+
+impl Serialize for OptionTradeTicksRequest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Emit the contracts vector as the top-level JSON value.
+        // Empty / missing contracts serializes as `[]` so the server sees a
+        // well-formed request even if the caller left it out.
+        let empty: Vec<OptionQueryItem> = Vec::new();
+        let contracts = self.contracts.as_ref().unwrap_or(&empty);
+        contracts.serialize(serializer)
+    }
 }
 
 /// 期权分时请求。wire: option_timeline
@@ -648,10 +805,18 @@ pub struct OptionAnalysisSymbol {
 
 impl OptionAnalysisSymbol {
     pub fn new(symbol: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), period: None, require_volatility_list: None }
+        Self {
+            symbol: symbol.into(),
+            period: None,
+            require_volatility_list: None,
+        }
     }
     pub fn with_period(symbol: impl Into<String>, period: impl Into<String>) -> Self {
-        Self { symbol: symbol.into(), period: Some(period.into()), require_volatility_list: None }
+        Self {
+            symbol: symbol.into(),
+            period: Some(period.into()),
+            require_volatility_list: None,
+        }
     }
 }
 
@@ -679,10 +844,18 @@ impl serde::Serialize for OptionAnalysisRequest {
         } else if let Some(ref syms) = self.symbols {
             map.serialize_entry("symbols", syms)?;
         }
-        if let Some(ref v) = self.market { map.serialize_entry("market", v)?; }
-        if let Some(ref v) = self.period { map.serialize_entry("period", v)?; }
-        if let Some(v) = self.require_volatility_list { map.serialize_entry("require_volatility_list", &v)?; }
-        if let Some(ref v) = self.lang { map.serialize_entry("lang", v)?; }
+        if let Some(ref v) = self.market {
+            map.serialize_entry("market", v)?;
+        }
+        if let Some(ref v) = self.period {
+            map.serialize_entry("period", v)?;
+        }
+        if let Some(v) = self.require_volatility_list {
+            map.serialize_entry("require_volatility_list", &v)?;
+        }
+        if let Some(ref v) = self.lang {
+            map.serialize_entry("lang", v)?;
+        }
         map.end()
     }
 }
@@ -962,7 +1135,10 @@ pub struct TradingCalendarRequest {
 pub struct MarketScannerTagsRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub market: Option<String>,
-    #[serde(rename = "multi_tag_field_list", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "multi_tag_field_list",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub multi_tags_fields: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
@@ -975,4 +1151,318 @@ pub struct QuoteOvernightRequest {
     pub symbols: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn to_json<T: Serialize>(v: &T) -> serde_json::Value {
+        serde_json::to_value(v).unwrap()
+    }
+
+    // ── Default serialization: all-None fields must be skipped → "{}" ──
+
+    #[test]
+    fn test_default_requests_serialize_to_empty_object() {
+        assert_eq!(to_json(&BriefRequest::default()), serde_json::json!({}));
+        assert_eq!(to_json(&SymbolsRequest::default()), serde_json::json!({}));
+        assert_eq!(to_json(&KlineRequest::default()), serde_json::json!({}));
+        assert_eq!(
+            to_json(&QuoteDepthRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionChainRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionQuoteRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&OptionKlineRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&FutureKlineRequest::default()),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            to_json(&QuoteOvernightRequest::default()),
+            serde_json::json!({})
+        );
+    }
+
+    // ── Field name assertions (snake_case wire format) ──
+
+    #[test]
+    fn test_brief_request_field_names() {
+        let req = BriefRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            include_hour_trading: Some(true),
+            sec_type: Some("STK".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["symbols"][0], "AAPL");
+        assert_eq!(j["include_hour_trading"], true);
+        assert_eq!(j["sec_type"], "STK");
+        assert_eq!(j["lang"], "en_US");
+    }
+
+    #[test]
+    fn test_kline_request_field_names() {
+        let req = KlineRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            period: Some("day".into()),
+            right: Some("br".into()),
+            begin_time: Some(1000),
+            end_time: Some(2000),
+            limit: Some(100),
+            begin_index: Some(0),
+            end_index: Some(10),
+            with_fundamental: Some(true),
+            sec_type: Some("STK".into()),
+            ..Default::default()
+        };
+        let j = to_json(&req);
+        assert_eq!(j["period"], "day");
+        assert_eq!(j["right"], "br");
+        assert_eq!(j["begin_time"], 1000);
+        assert_eq!(j["end_time"], 2000);
+        assert_eq!(j["limit"], 100);
+        assert_eq!(j["begin_index"], 0);
+        assert_eq!(j["end_index"], 10);
+        assert_eq!(j["with_fundamental"], true);
+        assert_eq!(j["sec_type"], "STK");
+    }
+
+    #[test]
+    fn test_quote_depth_request_field_names() {
+        let req = QuoteDepthRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            market: Some("US".into()),
+            trade_session: Some("regular".into()),
+            lang: Some("en_US".into()),
+        };
+        let j = to_json(&req);
+        assert_eq!(j["market"], "US");
+        assert_eq!(j["trade_session"], "regular");
+    }
+
+    // ── Nested constructors ──
+
+    #[test]
+    fn test_option_chain_request_new() {
+        let item = OptionChainItem::new("AAPL", 1705622400000);
+        let req = OptionChainRequest::new(vec![item]);
+        let j = to_json(&req);
+        assert_eq!(j["option_basic"][0]["symbol"], "AAPL");
+        assert_eq!(j["option_basic"][0]["expiry"], 1705622400000i64);
+    }
+
+    #[test]
+    fn test_option_quote_request_new() {
+        let item = OptionContractItem::new("AAPL", 1705622400000, "CALL", "150.0");
+        let req = OptionQuoteRequest::new(vec![item]);
+        let j = to_json(&req);
+        assert_eq!(j["option_basic"][0]["symbol"], "AAPL");
+        assert_eq!(j["option_basic"][0]["right"], "CALL");
+        assert_eq!(j["option_basic"][0]["strike"], "150.0");
+    }
+
+    #[test]
+    fn test_option_kline_item_new() {
+        let item = OptionKlineItem::new("AAPL", 1705622400000, "CALL", "150.0", "day");
+        let j = to_json(&item);
+        assert_eq!(j["symbol"], "AAPL");
+        assert_eq!(j["right"], "CALL");
+        assert_eq!(j["strike"], "150.0");
+        assert_eq!(j["period"], "day");
+        // optional fields are absent
+        assert!(j.get("begin_time").is_none());
+        assert!(j.get("sort_dir").is_none());
+    }
+
+    // ── Range helpers ──
+
+    #[test]
+    fn test_range_f64_new() {
+        let r = RangeF64::new(0.5, 1.5);
+        let j = to_json(&r);
+        assert_eq!(j["min"], 0.5);
+        assert_eq!(j["max"], 1.5);
+    }
+
+    #[test]
+    fn test_range_i32_new() {
+        let r = RangeI32::new(10, 100);
+        let j = to_json(&r);
+        assert_eq!(j["min"], 10);
+        assert_eq!(j["max"], 100);
+    }
+
+    #[test]
+    fn test_range_f64_default_empty() {
+        assert_eq!(to_json(&RangeF64::default()), serde_json::json!({}));
+    }
+
+    // ── OptionAnalysisSymbol ──
+
+    #[test]
+    fn test_option_analysis_symbol_new() {
+        let s = OptionAnalysisSymbol::new("AAPL");
+        assert_eq!(s.symbol, "AAPL");
+        assert!(s.period.is_none());
+    }
+
+    #[test]
+    fn test_option_analysis_symbol_with_period() {
+        let s = OptionAnalysisSymbol::with_period("AAPL", "52week");
+        assert_eq!(s.symbol, "AAPL");
+        assert_eq!(s.period, Some("52week".to_string()));
+    }
+
+    // ── OptionAnalysisRequest custom Serialize ──
+
+    #[test]
+    fn test_option_analysis_request_with_symbols() {
+        let req = OptionAnalysisRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            period: Some("52week".into()),
+            market: Some("US".into()),
+            ..Default::default()
+        };
+        let j = to_json(&req);
+        assert_eq!(j["symbols"][0], "AAPL");
+        assert_eq!(j["period"], "52week");
+        assert_eq!(j["market"], "US");
+    }
+
+    #[test]
+    fn test_option_analysis_request_with_symbol_items_prefers_items() {
+        // When symbol_items is set, it takes precedence over symbols (object array).
+        let req = OptionAnalysisRequest {
+            symbols: Some(vec!["IGNORED".into()]),
+            symbol_items: Some(vec![OptionAnalysisSymbol::with_period("AAPL", "52week")]),
+            ..Default::default()
+        };
+        let j = to_json(&req);
+        // symbol_items wins → "symbols" is an array of objects
+        assert_eq!(j["symbols"][0]["symbol"], "AAPL");
+        assert_eq!(j["symbols"][0]["period"], "52week");
+    }
+
+    #[test]
+    fn test_option_analysis_request_require_volatility_list() {
+        let req = OptionAnalysisRequest {
+            symbols: Some(vec!["AAPL".into()]),
+            require_volatility_list: Some(true),
+            ..Default::default()
+        };
+        let j = to_json(&req);
+        assert_eq!(j["require_volatility_list"], true);
+    }
+
+    #[test]
+    fn test_option_analysis_request_empty_no_fields() {
+        let req = OptionAnalysisRequest::default();
+        let j = to_json(&req);
+        // No symbols, no symbol_items → "symbols" key absent
+        assert!(j.get("symbols").is_none());
+        assert!(j.get("market").is_none());
+    }
+
+    // ── OCC identifier parsing ──
+
+    #[test]
+    fn test_option_chain_item_from_date_us() {
+        // AAPL 240119C00150000 → AAPL, 2024-01-19 (US/Eastern inferred)
+        let item = OptionChainItem::from_date("AAPL", "2024-01-19").unwrap();
+        assert_eq!(item.symbol, "AAPL");
+        assert!(item.expiry > 0);
+    }
+
+    #[test]
+    fn test_option_chain_item_from_date_tz() {
+        let item = OptionChainItem::from_date_tz("AAPL", "2024-01-19", "America/New_York").unwrap();
+        assert_eq!(item.symbol, "AAPL");
+        assert!(item.expiry > 0);
+    }
+
+    #[test]
+    fn test_option_chain_item_from_date_invalid() {
+        assert!(OptionChainItem::from_date("AAPL", "not-a-date").is_err());
+    }
+
+    #[test]
+    fn test_option_chain_item_from_date_unknown_tz() {
+        assert!(OptionChainItem::from_date_tz("AAPL", "2024-01-19", "Mars/Olympus").is_err());
+    }
+
+    #[test]
+    fn test_option_contract_item_from_occ() {
+        let item = OptionContractItem::from_occ("AAPL 240119C00150000").unwrap();
+        assert_eq!(item.symbol, "AAPL");
+        assert_eq!(item.right, "CALL");
+        assert_eq!(item.strike, "150.0");
+    }
+
+    #[test]
+    fn test_option_contract_item_from_occ_put() {
+        let item = OptionContractItem::from_occ("AAPL 240119P00022500").unwrap();
+        assert_eq!(item.right, "PUT");
+        assert_eq!(item.strike, "22.5");
+    }
+
+    #[test]
+    fn test_option_kline_item_from_occ() {
+        let item = OptionKlineItem::from_occ("AAPL 240119C00150000", "day").unwrap();
+        assert_eq!(item.symbol, "AAPL");
+        assert_eq!(item.right, "CALL");
+        assert_eq!(item.period, "day");
+    }
+
+    // ── infer_option_timezone ──
+
+    #[test]
+    fn test_infer_option_timezone_us() {
+        assert_eq!(infer_option_timezone("AAPL"), "America/New_York");
+    }
+
+    #[test]
+    fn test_infer_option_timezone_hk_digits() {
+        assert_eq!(infer_option_timezone("700"), "Asia/Hong_Kong");
+    }
+
+    #[test]
+    fn test_infer_option_timezone_hk_suffix() {
+        assert_eq!(infer_option_timezone("TCH.HK"), "Asia/Hong_Kong");
+    }
+
+    #[test]
+    fn test_infer_option_timezone_fallback() {
+        // Symbol with mixed alpha+digits (not pure digit, not pure alpha, not .HK)
+        // → default Shanghai
+        assert_eq!(infer_option_timezone("ABC123"), "Asia/Shanghai");
+    }
+
+    // ── date_to_expiry_ms ──
+
+    #[test]
+    fn test_date_to_expiry_ms_valid() {
+        let ms = date_to_expiry_ms("2024-01-19", "America/New_York").unwrap();
+        assert!(ms > 0);
+    }
+
+    #[test]
+    fn test_date_to_expiry_ms_invalid_date() {
+        assert!(date_to_expiry_ms("not-a-date", "America/New_York").is_err());
+    }
+
+    #[test]
+    fn test_date_to_expiry_ms_unknown_timezone() {
+        assert!(date_to_expiry_ms("2024-01-19", "Mars/Olympus").is_err());
+    }
 }

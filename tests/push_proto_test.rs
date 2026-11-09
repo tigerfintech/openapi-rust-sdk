@@ -1,14 +1,17 @@
 //! 独立的推送模块 Protobuf 协议测试
-//! 
+//!
 //! 验证 push_client 的 Protobuf 消息处理逻辑。
 
-use std::sync::{Arc, atomic::{AtomicI32, Ordering}};
 use prost::Message;
+use std::sync::{
+    atomic::{AtomicI32, Ordering},
+    Arc,
+};
 
-use tigeropen::push::*;
 use tigeropen::push::pb;
 use tigeropen::push::pb::socket_common::{Command, DataType};
 use tigeropen::push::varint::encode_varint32;
+use tigeropen::push::*;
 
 fn test_config() -> tigeropen::config::ClientConfig {
     tigeropen::config::ClientConfig {
@@ -437,11 +440,13 @@ fn test_transaction_callback() {
         msg: None,
         body: Some(pb::PushData {
             data_type: DataType::OrderTransaction as i32,
-            body: Some(pb::push_data::Body::OrderTransactionData(pb::OrderTransactionData {
-                account: "acc".into(),
-                symbol: "AAPL".into(),
-                ..Default::default()
-            })),
+            body: Some(pb::push_data::Body::OrderTransactionData(
+                pb::OrderTransactionData {
+                    account: "acc".into(),
+                    symbol: "AAPL".into(),
+                    ..Default::default()
+                },
+            )),
         }),
     };
     client.handle_message(&encode_response(&response));
@@ -450,9 +455,13 @@ fn test_transaction_callback() {
 
 #[test]
 fn test_subscription_state_management() {
-    let client = PushClient::new(test_config(), Some(PushClientOptions {
-        auto_reconnect: Some(false), ..Default::default()
-    }));
+    let client = PushClient::new(
+        test_config(),
+        Some(PushClientOptions {
+            auto_reconnect: Some(false),
+            ..Default::default()
+        }),
+    );
     assert_eq!(client.state(), ConnectionState::Disconnected);
 
     client.add_subscription(SubjectType::Quote, &["AAPL".into(), "TSLA".into()]);
@@ -495,7 +504,7 @@ fn test_tick_callback() {
     let count = Arc::new(AtomicI32::new(0));
     let count_clone = count.clone();
     client.set_callbacks(Callbacks {
-        on_tick: Some(Arc::new(move |data: pb::TradeTickData| {
+        on_tick: Some(Arc::new(move |data: tigeropen::push::PushTradeTick| {
             assert_eq!(data.symbol, "TSLA");
             count_clone.fetch_add(1, Ordering::SeqCst);
         })),
@@ -522,12 +531,17 @@ fn test_tick_callback() {
 #[test]
 fn test_full_tick_callback() {
     let client = PushClient::new(test_config(), None);
-    let count = Arc::new(AtomicI32::new(0));
-    let count_clone = count.clone();
+    let full_tick_count = Arc::new(AtomicI32::new(0));
+    let full_tick_count_clone = full_tick_count.clone();
+    let tick_count = Arc::new(AtomicI32::new(0));
+    let tick_count_clone = tick_count.clone();
     client.set_callbacks(Callbacks {
         on_full_tick: Some(Arc::new(move |data: pb::TickData| {
             assert_eq!(data.symbol, "AAPL");
-            count_clone.fetch_add(1, Ordering::SeqCst);
+            full_tick_count_clone.fetch_add(1, Ordering::SeqCst);
+        })),
+        on_tick: Some(Arc::new(move |_| {
+            tick_count_clone.fetch_add(1, Ordering::SeqCst);
         })),
         ..Default::default()
     });
@@ -546,7 +560,33 @@ fn test_full_tick_callback() {
         }),
     };
     client.handle_message(&encode_response(&response));
-    assert_eq!(count.load(Ordering::SeqCst), 1);
+    assert_eq!(full_tick_count.load(Ordering::SeqCst), 1);
+    assert_eq!(tick_count.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn test_empty_push_payload_is_ignored() {
+    let client = PushClient::new(test_config(), None);
+    let error_count = Arc::new(AtomicI32::new(0));
+    let error_count_clone = error_count.clone();
+    client.set_callbacks(Callbacks {
+        on_error: Some(Arc::new(move |_| {
+            error_count_clone.fetch_add(1, Ordering::SeqCst);
+        })),
+        ..Default::default()
+    });
+
+    let response = pb::Response {
+        command: pb::socket_common::Command::Message as i32,
+        body: Some(pb::PushData {
+            data_type: pb::socket_common::DataType::TradeTick as i32,
+            body: None,
+        }),
+        ..Default::default()
+    };
+    client.handle_message(&encode_response(&response));
+
+    assert_eq!(error_count.load(Ordering::SeqCst), 0);
 }
 
 #[test]

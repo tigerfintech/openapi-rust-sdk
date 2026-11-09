@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
     use crate::signer::{load_private_key, sign_with_rsa};
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64;
-    use rsa::RsaPrivateKey;
+    use base64::Engine;
     use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
     use rsa::pkcs8::EncodePrivateKey;
+    use rsa::RsaPrivateKey;
 
     /// 生成测试用 RSA 密钥对（PKCS#1 PEM 格式）
     fn generate_pkcs1_pem() -> (String, RsaPrivateKey) {
@@ -31,9 +31,7 @@ mod tests {
     fn generate_raw_base64() -> (String, RsaPrivateKey) {
         let mut rng = rand::thread_rng();
         let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("生成密钥失败");
-        let der = private_key
-            .to_pkcs1_der()
-            .expect("编码 PKCS#1 DER 失败");
+        let der = private_key.to_pkcs1_der().expect("编码 PKCS#1 DER 失败");
         let raw_base64 = BASE64.encode(der.as_bytes());
         (raw_base64, private_key)
     }
@@ -84,7 +82,9 @@ mod tests {
         assert!(!signature.is_empty(), "签名结果不应为空");
 
         // 验证签名是有效的 Base64
-        let sig_bytes = BASE64.decode(&signature).expect("签名结果不是有效的 Base64");
+        let sig_bytes = BASE64
+            .decode(&signature)
+            .expect("签名结果不是有效的 Base64");
 
         // 使用公钥验签
         use rsa::pkcs1v15::VerifyingKey;
@@ -132,17 +132,102 @@ mod tests {
         let result = sign_with_rsa("invalid-key", "test content");
         assert!(result.is_err(), "使用无效私钥签名应返回错误");
     }
+
+    // ========== verify_with_rsa 单元测试 ==========
+
+    fn generate_key_pair_with_public_key_der() -> (String, String, RsaPrivateKey) {
+        use rsa::pkcs1::EncodeRsaPrivateKey;
+        use rsa::pkcs8::EncodePublicKey;
+        let mut rng = rand::thread_rng();
+        let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("生成密钥失败");
+        let pem = private_key
+            .to_pkcs1_pem(LineEnding::LF)
+            .expect("编码 PEM 失败")
+            .to_string();
+        let public_key_der = private_key
+            .to_public_key()
+            .to_public_key_der()
+            .expect("编码公钥 DER 失败");
+        let public_key_b64 = BASE64.encode(public_key_der.as_bytes());
+        (pem, public_key_b64, private_key)
+    }
+
+    #[test]
+    fn test_verify_with_rsa_success() {
+        use crate::signer::verify_with_rsa;
+        let (pem, pub_key, _) = generate_key_pair_with_public_key_der();
+        let content = "tiger_id=test&timestamp=2024-01-01";
+        let signature = sign_with_rsa(&pem, content).unwrap();
+        let result = verify_with_rsa(&pub_key, content, &signature);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), true);
+    }
+
+    #[test]
+    fn test_verify_with_rsa_wrong_content_fails() {
+        use crate::signer::verify_with_rsa;
+        let (pem, pub_key, _) = generate_key_pair_with_public_key_der();
+        let signature = sign_with_rsa(&pem, "original content").unwrap();
+        let result = verify_with_rsa(&pub_key, "different content", &signature);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_with_rsa_empty_public_key() {
+        use crate::signer::verify_with_rsa;
+        let result = verify_with_rsa("", "content", "signature");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_with_rsa_empty_signature() {
+        use crate::signer::verify_with_rsa;
+        let result = verify_with_rsa("somekey", "content", "");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_with_rsa_invalid_public_key_base64() {
+        use crate::signer::verify_with_rsa;
+        let result = verify_with_rsa("!!!not-base64!!!", "content", "sig");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_with_rsa_invalid_signature_base64() {
+        use crate::signer::verify_with_rsa;
+        let (_, pub_key, _) = generate_key_pair_with_public_key_der();
+        let result = verify_with_rsa(&pub_key, "content", "!!!not-base64!!!");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_with_rsa_tampered_signature_fails() {
+        use crate::signer::verify_with_rsa;
+        let (pem, pub_key, _) = generate_key_pair_with_public_key_der();
+        let content = "test content";
+        let mut sig_bytes = BASE64
+            .decode(&sign_with_rsa(&pem, content).unwrap())
+            .unwrap();
+        // Tamper with the signature bytes
+        if !sig_bytes.is_empty() {
+            sig_bytes[0] ^= 0xFF;
+        }
+        let tampered_sig = BASE64.encode(&sig_bytes);
+        let result = verify_with_rsa(&pub_key, content, &tampered_sig);
+        assert!(result.is_err());
+    }
 }
 
 // ========== Property 4 属性测试：RSA 签名-验签 round-trip ==========
 #[cfg(test)]
 mod property_tests {
     use crate::signer::sign_with_rsa;
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
     use proptest::prelude::*;
-    use rsa::RsaPrivateKey;
     use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
+    use rsa::RsaPrivateKey;
 
     /// 生成一个固定的测试密钥对（属性测试中避免每次都生成密钥，太慢）
     fn test_key_pair() -> (String, RsaPrivateKey) {

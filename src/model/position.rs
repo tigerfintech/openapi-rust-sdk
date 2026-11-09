@@ -37,7 +37,10 @@ pub struct Position {
     #[serde(rename = "unrealizedPnl", skip_serializing_if = "Option::is_none")]
     pub unrealized_pnl: Option<f64>,
     /// 未实现盈亏百分比
-    #[serde(rename = "unrealizedPnlPercent", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "unrealizedPnlPercent",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub unrealized_pnl_percent: Option<f64>,
     /// 合约 ID
     #[serde(rename = "contractId", skip_serializing_if = "Option::is_none")]
@@ -126,7 +129,10 @@ mod tests {
         assert!(obj.contains_key("averageCost"), "应映射为 averageCost");
         assert!(obj.contains_key("marketValue"), "应映射为 marketValue");
         assert!(obj.contains_key("unrealizedPnl"), "应映射为 unrealizedPnl");
-        assert!(obj.contains_key("unrealizedPnlPercent"), "应映射为 unrealizedPnlPercent");
+        assert!(
+            obj.contains_key("unrealizedPnlPercent"),
+            "应映射为 unrealizedPnlPercent"
+        );
         assert!(obj.contains_key("contractId"), "应映射为 contractId");
         assert!(obj.contains_key("latestPrice"), "应映射为 latestPrice");
         assert!(obj.contains_key("position"), "应包含 position 字段");

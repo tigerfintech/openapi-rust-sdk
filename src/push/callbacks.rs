@@ -1,9 +1,10 @@
 //! 推送回调函数类型定义
 //!
 //! 每种推送类型独立回调，连接状态回调独立管理。
-//! 回调参数使用 Protobuf 生成的 `pb::*` 类型。
+//! on_tick 回调参数已解码为 PushTradeTick，其余行情回调仍使用 Protobuf pb::* 类型。
 
 use super::pb;
+use super::tick_util::PushTradeTick;
 use std::sync::Arc;
 
 /// 所有回调函数的集合
@@ -11,7 +12,7 @@ use std::sync::Arc;
 pub struct Callbacks {
     // 行情推送回调
     pub on_quote: Option<Arc<dyn Fn(pb::QuoteData) + Send + Sync>>,
-    pub on_tick: Option<Arc<dyn Fn(pb::TradeTickData) + Send + Sync>>,
+    pub on_tick: Option<Arc<dyn Fn(PushTradeTick) + Send + Sync>>,
     pub on_depth: Option<Arc<dyn Fn(pb::QuoteDepthData) + Send + Sync>>,
     pub on_option: Option<Arc<dyn Fn(pb::QuoteData) + Send + Sync>>,
     pub on_future: Option<Arc<dyn Fn(pb::QuoteData) + Send + Sync>>,

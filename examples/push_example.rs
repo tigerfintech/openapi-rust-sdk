@@ -23,7 +23,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("tiger_id: {}, account: {}", config.tiger_id, config.account);
 
     let account = config.account.clone();
-    let pc = Arc::new(PushClient::new(config, None));
+    let pc = Arc::new(PushClient::new(
+        config,
+        Some(PushClientOptions {
+            use_full_tick: Some(true),
+            ..Default::default()
+        }),
+    ));
 
     // Register callbacks for all supported push data types
     pc.set_callbacks(Callbacks {
@@ -34,11 +40,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 data.symbol, data.latest_price, data.volume
             );
         })),
-        on_tick: Some(Arc::new(|data| {
-            println!(
-                "[Tick] {} sn={} prices={} volumes={}",
-                data.symbol, data.sn, data.price.len(), data.volume.len()
-            );
+        // use_full_tick selects the full-tick payload and on_full_tick callback
+        // for ordinary SubjectType::Tick subscriptions, so on_tick is unused here.
+        on_full_tick: Some(Arc::new(|data| {
+            println!("[FullTick] {}", data.symbol);
         })),
         on_depth: Some(Arc::new(|data| {
             let ask_levels = data.ask.as_ref().map_or(0, |a| a.price.len());
@@ -111,7 +116,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // --- Connection lifecycle callbacks ---
         on_connect: Some(Arc::new(|| println!("[Connected] push server connected"))),
-        on_disconnect: Some(Arc::new(|| println!("[Disconnected] push server disconnected"))),
+        on_disconnect: Some(Arc::new(|| {
+            println!("[Disconnected] push server disconnected")
+        })),
         on_error: Some(Arc::new(|msg| println!("[Error] {}", msg))),
         on_kickout: Some(Arc::new(|msg| println!("[Kickout] {}", msg))),
 
@@ -140,6 +147,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pc.subscribe(&SubjectType::Position, None, Some(&account), None);
     pc.subscribe(&SubjectType::Order, None, Some(&account), None);
     pc.subscribe(&SubjectType::Transaction, None, Some(&account), None);
+
+    // Asset / Position push can carry a quote type ("ETH" / "RTH" / "OVERNIGHT").
+    // Use the *_with_asset_quote_type overload; the plain subscribe() stays unchanged.
+    //
+    // pc.subscribe_with_asset_quote_type(
+    //     &SubjectType::Asset, None, Some(&account), None, Some("OVERNIGHT"),
+    // );
 
     println!("All subscriptions active. Press Ctrl+C to exit.\n");
     tokio::signal::ctrl_c().await?;

@@ -197,24 +197,30 @@ mod tests {
         prop_oneof![
             // CONNECT
             (
-                ".*", ".*", ".*", ".*",
-                any::<u32>(), any::<u32>(), any::<bool>()
-            ).prop_map(|(tid, sign, sdk, ver, si, ri, ft)| {
-                pb::Request {
-                    command: Command::Connect as i32,
-                    id: 1,
-                    connect: Some(pb::request::Connect {
-                        tiger_id: tid,
-                        sign,
-                        sdk_version: sdk,
-                        accept_version: Some(ver),
-                        send_interval: Some(si),
-                        receive_interval: Some(ri),
-                        use_full_tick: Some(ft),
-                    }),
-                    subscribe: None,
-                }
-            }),
+                ".*",
+                ".*",
+                ".*",
+                ".*",
+                any::<u32>(),
+                any::<u32>(),
+                any::<bool>()
+            )
+                .prop_map(|(tid, sign, sdk, ver, si, ri, ft)| {
+                    pb::Request {
+                        command: Command::Connect as i32,
+                        id: 1,
+                        connect: Some(pb::request::Connect {
+                            tiger_id: tid,
+                            sign,
+                            sdk_version: sdk,
+                            accept_version: Some(ver),
+                            send_interval: Some(si),
+                            receive_interval: Some(ri),
+                            use_full_tick: Some(ft),
+                        }),
+                        subscribe: None,
+                    }
+                }),
             // HEARTBEAT
             Just(pb::Request {
                 command: Command::Heartbeat as i32,
@@ -223,33 +229,39 @@ mod tests {
                 subscribe: None,
             }),
             // SUBSCRIBE
-            (1..=12i32, ".*", ".*", ".*").prop_map(|(dt, sym, acc, mkt)| {
-                pb::Request {
-                    command: Command::Subscribe as i32,
-                    id: 3,
-                    connect: None,
-                    subscribe: Some(pb::request::Subscribe {
-                        data_type: dt,
-                        symbols: Some(sym),
-                        account: Some(acc),
-                        market: Some(mkt),
-                    }),
+            (1..=12i32, ".*", ".*", ".*", proptest::option::of(".*")).prop_map(
+                |(dt, sym, acc, mkt, aqt)| {
+                    pb::Request {
+                        command: Command::Subscribe as i32,
+                        id: 3,
+                        connect: None,
+                        subscribe: Some(pb::request::Subscribe {
+                            data_type: dt,
+                            symbols: Some(sym),
+                            account: Some(acc),
+                            market: Some(mkt),
+                            asset_quote_type: aqt,
+                        }),
+                    }
                 }
-            }),
+            ),
             // UNSUBSCRIBE
-            (1..=12i32, ".*", ".*", ".*").prop_map(|(dt, sym, acc, mkt)| {
-                pb::Request {
-                    command: Command::Unsubscribe as i32,
-                    id: 4,
-                    connect: None,
-                    subscribe: Some(pb::request::Subscribe {
-                        data_type: dt,
-                        symbols: Some(sym),
-                        account: Some(acc),
-                        market: Some(mkt),
-                    }),
+            (1..=12i32, ".*", ".*", ".*", proptest::option::of(".*")).prop_map(
+                |(dt, sym, acc, mkt, aqt)| {
+                    pb::Request {
+                        command: Command::Unsubscribe as i32,
+                        id: 4,
+                        connect: None,
+                        subscribe: Some(pb::request::Subscribe {
+                            data_type: dt,
+                            symbols: Some(sym),
+                            account: Some(acc),
+                            market: Some(mkt),
+                            asset_quote_type: aqt,
+                        }),
+                    }
                 }
-            }),
+            ),
             // DISCONNECT
             Just(pb::Request {
                 command: Command::Disconnect as i32,

@@ -1,12 +1,15 @@
 //! PushClient tests
 
 use super::*;
-use std::sync::{Arc, atomic::{AtomicI32, Ordering}};
+use std::sync::{
+    atomic::{AtomicI32, Ordering},
+    Arc,
+};
 
-use prost::Message;
 use super::pb;
 use super::pb::socket_common::{Command, DataType};
 use super::varint::encode_varint32;
+use prost::Message;
 
 fn test_config() -> crate::config::ClientConfig {
     crate::config::ClientConfig {
@@ -40,9 +43,13 @@ fn encode_response(response: &pb::Response) -> Vec<u8> {
 
 #[test]
 fn test_subscription_state_management() {
-    let client = PushClient::new(test_config(), Some(PushClientOptions {
-        auto_reconnect: Some(false), ..Default::default()
-    }));
+    let client = PushClient::new(
+        test_config(),
+        Some(PushClientOptions {
+            auto_reconnect: Some(false),
+            ..Default::default()
+        }),
+    );
     assert_eq!(client.state(), ConnectionState::Disconnected);
 
     // 添加订阅
@@ -81,6 +88,80 @@ fn test_account_subscription_management() {
     client.remove_account_sub(&SubjectType::Asset);
     client.remove_account_sub(&SubjectType::Position);
     assert_eq!(client.get_account_subscriptions().len(), 2);
+}
+
+#[test]
+fn test_account_subscription_asset_quote_type_bookkeeping() {
+    let client = PushClient::new(test_config(), None);
+
+    // 未记录行情口径时返回 None（老行为）
+    client.add_account_sub(SubjectType::Order);
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Order)
+        .is_none());
+
+    // 记录后重连恢复订阅时会带上该口径
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT"));
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Position, "RTH"));
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Asset),
+        Some("OVERNIGHT".to_string())
+    );
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Position),
+        Some("RTH".to_string())
+    );
+    assert_eq!(client.get_account_subscriptions().len(), 3);
+
+    // 大小写不敏感，落库统一成大写枚举名
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Asset, " overnight "));
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Asset),
+        Some("OVERNIGHT".to_string())
+    );
+
+    // 拼错的口径整条拒绝：返回 false，且已有记录原样保留（不降级成默认 ETH 重放）
+    assert!(!client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNGHT"));
+    assert_eq!(
+        client.get_account_sub_asset_quote_type(&SubjectType::Asset),
+        Some("OVERNIGHT".to_string())
+    );
+
+    // 首次就传错口径时连 subject 都不记，避免重连重放一条从没订上的订阅
+    assert!(!client.add_account_sub_with_asset_quote_type(SubjectType::Transaction, "OVERNGHT"));
+    assert!(!client
+        .get_account_subscriptions()
+        .contains(&SubjectType::Transaction));
+
+    // 改回不带口径订阅时要把旧口径清掉，否则重连会静默按 OVERNIGHT 恢复
+    client.add_account_sub(SubjectType::Asset);
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Asset)
+        .is_none());
+    assert!(client
+        .get_account_subscriptions()
+        .contains(&SubjectType::Asset));
+
+    // 退订同时清掉口径记录
+    assert!(client.add_account_sub_with_asset_quote_type(SubjectType::Asset, "OVERNIGHT"));
+    client.remove_account_sub(&SubjectType::Asset);
+    assert!(client
+        .get_account_sub_asset_quote_type(&SubjectType::Asset)
+        .is_none());
+}
+
+#[test]
+fn test_normalize_asset_quote_type() {
+    use crate::push::proto_message::normalize_asset_quote_type;
+
+    assert_eq!(
+        normalize_asset_quote_type("overnight"),
+        Some("OVERNIGHT".to_string())
+    );
+    assert_eq!(normalize_asset_quote_type("  RTH "), Some("RTH".to_string()));
+    // 拼错、空串都不放行，避免静默发到服务端后按默认 ETH 处理
+    assert_eq!(normalize_asset_quote_type("OVERNGHT"), None);
+    assert_eq!(normalize_asset_quote_type(""), None);
 }
 
 // ===== 消息处理回调测试 =====
@@ -502,13 +583,120 @@ fn test_transaction_callback() {
         msg: None,
         body: Some(pb::PushData {
             data_type: DataType::OrderTransaction as i32,
-            body: Some(pb::push_data::Body::OrderTransactionData(pb::OrderTransactionData {
-                account: "acc".into(),
-                symbol: "AAPL".into(),
-                ..Default::default()
-            })),
+            body: Some(pb::push_data::Body::OrderTransactionData(
+                pb::OrderTransactionData {
+                    account: "acc".into(),
+                    symbol: "AAPL".into(),
+                    ..Default::default()
+                },
+            )),
         }),
     };
     client.handle_message(&encode_response(&response));
     assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+// ===== subscribe_cc / unsubscribe_cc / subscribe_market / unsubscribe_market =====
+
+#[test]
+fn test_subscribe_cc_adds_subscription() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_cc(&["BTC", "ETH"]).unwrap();
+    let subs = client.get_subscriptions();
+    assert!(subs.contains_key(&SubjectType::Cc));
+    assert_eq!(subs[&SubjectType::Cc].len(), 2);
+}
+
+#[test]
+fn test_unsubscribe_cc_removes_symbols() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_cc(&["BTC", "ETH"]).unwrap();
+    client.unsubscribe_cc(Some(&["BTC"])).unwrap();
+    let subs = client.get_subscriptions();
+    assert_eq!(subs[&SubjectType::Cc].len(), 1);
+    assert_eq!(subs[&SubjectType::Cc][0], "ETH");
+}
+
+#[test]
+fn test_unsubscribe_cc_all() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_cc(&["BTC", "ETH"]).unwrap();
+    client.unsubscribe_cc(None).unwrap();
+    let subs = client.get_subscriptions();
+    assert!(!subs.contains_key(&SubjectType::Cc));
+}
+
+#[test]
+fn test_subscribe_market_adds_subscription() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_market("US").unwrap();
+    let subs = client.get_subscriptions();
+    assert!(subs.contains_key(&SubjectType::Market));
+}
+
+#[test]
+fn test_unsubscribe_market_removes() {
+    let client = PushClient::new(test_config(), None);
+    client.subscribe_market("US").unwrap();
+    client.unsubscribe_market("US").unwrap();
+    let subs = client.get_subscriptions();
+    assert!(!subs.contains_key(&SubjectType::Market));
+}
+
+#[test]
+fn test_send_heartbeat_without_connection_returns_false() {
+    let client = PushClient::new(test_config(), None);
+    assert!(!client.send_heartbeat());
+}
+
+#[test]
+fn test_disconnect_without_connection() {
+    let client = PushClient::new(test_config(), None);
+    client.disconnect();
+    assert_eq!(client.state(), ConnectionState::Disconnected);
+}
+
+#[test]
+fn test_set_callbacks() {
+    let client = PushClient::new(test_config(), None);
+    client.set_callbacks(Callbacks {
+        on_connect: Some(Arc::new(|| {})),
+        ..Default::default()
+    });
+    assert_eq!(client.state(), ConnectionState::Disconnected);
+}
+
+#[test]
+fn test_push_client_new_with_options() {
+    let client = PushClient::new(
+        test_config(),
+        Some(PushClientOptions {
+            auto_reconnect: Some(true),
+            ..Default::default()
+        }),
+    );
+    assert_eq!(client.state(), ConnectionState::Disconnected);
+}
+
+#[test]
+fn test_add_remove_account_subscriptions() {
+    let client = PushClient::new(test_config(), None);
+    client.add_account_sub(SubjectType::Order);
+    client.add_account_sub(SubjectType::Asset);
+    let subs = client.get_account_subscriptions();
+    assert_eq!(subs.len(), 2);
+
+    client.remove_account_sub(&SubjectType::Order);
+    let subs = client.get_account_subscriptions();
+    assert_eq!(subs.len(), 1);
+    assert!(subs.contains(&SubjectType::Asset));
+}
+
+#[test]
+fn test_add_account_sub_dedup() {
+    let client = PushClient::new(test_config(), None);
+    client.add_account_sub(SubjectType::Order);
+    client.add_account_sub(SubjectType::Order);
+    let subs = client.get_account_subscriptions();
+    assert_eq!(subs.len(), 1);
 }

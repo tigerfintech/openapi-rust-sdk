@@ -14,15 +14,16 @@ use prost::Message;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{mpsc, Notify};
 
-use crate::config::ClientConfig;
-use crate::signer::sign_with_rsa;
 use super::callbacks::Callbacks;
 use super::pb;
-use super::pb::socket_common::{Command, DataType};
 use super::pb::push_data::Body;
+use super::pb::socket_common::{Command, DataType};
 use super::proto_message;
 use super::push_message::SubjectType;
-use super::varint::{encode_varint32, decode_varint32};
+use super::tick_util::convert_trade_tick;
+use super::varint::{decode_varint32, encode_varint32};
+use crate::config::ClientConfig;
+use crate::signer::sign_with_rsa;
 
 /// Default push server address (raw TCP + TLS)
 const DEFAULT_PUSH_URL: &str = "openapi.tigerfintech.com:9883";
@@ -59,6 +60,9 @@ pub struct PushClientOptions {
     pub reconnect_interval_secs: Option<u64>,
     pub auto_reconnect: Option<bool>,
     pub connect_timeout_secs: Option<u64>,
+    /// Request full-tick (逐笔成交完整数据) payload for tick subscriptions.
+    /// Defaults to `false` when not set.
+    pub use_full_tick: Option<bool>,
 }
 
 /// TCP+TLS push client
@@ -73,12 +77,16 @@ pub struct PushClient {
     reconnect_interval: Duration,
     connect_timeout: Duration,
     auto_reconnect: bool,
+    use_full_tick: bool,
     state: Arc<RwLock<ConnectionState>>,
     callbacks: Arc<RwLock<Callbacks>>,
     /// Market data subscriptions: subject -> symbols set
     subscriptions: Arc<RwLock<HashMap<SubjectType, HashSet<String>>>>,
     /// Account-level subscriptions
     account_subs: Arc<RwLock<HashSet<SubjectType>>>,
+    /// Asset quote type used per account-level subscription (Asset / Position),
+    /// replayed on reconnection
+    account_sub_quote_types: Arc<RwLock<HashMap<SubjectType, String>>>,
     /// Channel sender for writing framed messages to the TLS stream
     write_tx: Arc<RwLock<Option<mpsc::UnboundedSender<Vec<u8>>>>>,
     /// Notification for CONNECTED response received
@@ -88,26 +96,40 @@ pub struct PushClient {
 }
 
 impl PushClient {
-    /// Create a new push client
+    /// Create a new push client.
+    ///
+    /// To enable full-tick mode, set `options.use_full_tick = Some(true)`:
+    /// ```rust,ignore
+    /// PushClient::new(config, Some(PushClientOptions {
+    ///     use_full_tick: Some(true),
+    ///     ..Default::default()
+    /// }))
+    /// ```
     pub fn new(config: ClientConfig, options: Option<PushClientOptions>) -> Self {
         let opts = options.unwrap_or_default();
+        let use_full_tick = opts.use_full_tick.unwrap_or(false);
         Self {
             config,
             push_url: opts.push_url.unwrap_or_else(|| DEFAULT_PUSH_URL.into()),
             heartbeat_interval: Duration::from_secs(
-                opts.heartbeat_interval_secs.unwrap_or(DEFAULT_HEARTBEAT_INTERVAL_SECS),
+                opts.heartbeat_interval_secs
+                    .unwrap_or(DEFAULT_HEARTBEAT_INTERVAL_SECS),
             ),
             reconnect_interval: Duration::from_secs(
-                opts.reconnect_interval_secs.unwrap_or(DEFAULT_RECONNECT_INTERVAL_SECS),
+                opts.reconnect_interval_secs
+                    .unwrap_or(DEFAULT_RECONNECT_INTERVAL_SECS),
             ),
             connect_timeout: Duration::from_secs(
-                opts.connect_timeout_secs.unwrap_or(DEFAULT_CONNECT_TIMEOUT_SECS),
+                opts.connect_timeout_secs
+                    .unwrap_or(DEFAULT_CONNECT_TIMEOUT_SECS),
             ),
             auto_reconnect: opts.auto_reconnect.unwrap_or(true),
+            use_full_tick,
             state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
             callbacks: Arc::new(RwLock::new(Callbacks::default())),
             subscriptions: Arc::new(RwLock::new(HashMap::new())),
             account_subs: Arc::new(RwLock::new(HashSet::new())),
+            account_sub_quote_types: Arc::new(RwLock::new(HashMap::new())),
             write_tx: Arc::new(RwLock::new(None)),
             connected_notify: Arc::new(Notify::new()),
             stop_tx: Arc::new(RwLock::new(None)),
@@ -179,8 +201,37 @@ impl PushClient {
         account: Option<&str>,
         market: Option<&str>,
     ) -> bool {
+        self.subscribe_with_asset_quote_type(subject, symbols, account, market, None)
+    }
+
+    /// Send a subscribe request carrying the asset quote type.
+    ///
+    /// `asset_quote_type` takes the enum name (`"ETH"` / `"RTH"` / `"OVERNIGHT"`,
+    /// case-insensitive) and is only meaningful for [`SubjectType::Asset`] and
+    /// [`SubjectType::Position`]; the server ignores it for other subjects.
+    /// Passing `None` behaves exactly like [`PushClient::subscribe`].
+    /// An unknown enum name is rejected locally: nothing is sent and `false`
+    /// is returned, rather than letting the server silently fall back to ETH.
+    pub fn subscribe_with_asset_quote_type(
+        &self,
+        subject: &SubjectType,
+        symbols: Option<&str>,
+        account: Option<&str>,
+        market: Option<&str>,
+        asset_quote_type: Option<&str>,
+    ) -> bool {
+        let quote_type = match normalize_or_warn(asset_quote_type) {
+            Ok(quote_type) => quote_type,
+            Err(()) => return false,
+        };
         let data_type = proto_message::subject_to_data_type(subject);
-        let request = proto_message::build_subscribe_message(data_type, symbols, account, market);
+        let request = proto_message::build_subscribe_message_with_asset_quote_type(
+            data_type,
+            symbols,
+            account,
+            market,
+            quote_type.as_deref(),
+        );
         self.send_request(&request)
     }
 
@@ -192,9 +243,32 @@ impl PushClient {
         account: Option<&str>,
         market: Option<&str>,
     ) -> bool {
+        self.unsubscribe_with_asset_quote_type(subject, symbols, account, market, None)
+    }
+
+    /// Send an unsubscribe request carrying the asset quote type.
+    ///
+    /// Same semantics as [`PushClient::subscribe_with_asset_quote_type`].
+    pub fn unsubscribe_with_asset_quote_type(
+        &self,
+        subject: &SubjectType,
+        symbols: Option<&str>,
+        account: Option<&str>,
+        market: Option<&str>,
+        asset_quote_type: Option<&str>,
+    ) -> bool {
+        let quote_type = match normalize_or_warn(asset_quote_type) {
+            Ok(quote_type) => quote_type,
+            Err(()) => return false,
+        };
         let data_type = proto_message::subject_to_data_type(subject);
-        let request =
-            proto_message::build_unsubscribe_message(data_type, symbols, account, market);
+        let request = proto_message::build_unsubscribe_message_with_asset_quote_type(
+            data_type,
+            symbols,
+            account,
+            market,
+            quote_type.as_deref(),
+        );
         self.send_request(&request)
     }
 
@@ -282,10 +356,17 @@ impl PushClient {
         let data_type = push_data.data_type;
         let body = match push_data.body {
             Some(b) => b,
+            // Subscription acknowledgements arrive as Command::Message frames with
+            // PushData metadata but no market-data payload; this is normal protocol
+            // behaviour and must NOT trigger on_error.  For any other data_type an
+            // empty body is unexpected, so emit a debug log to aid diagnosis without
+            // surfacing a false-positive error to the caller.
             None => {
-                if let Some(cb) = &cbs.on_error {
-                    cb("PushData body is empty".to_string());
-                }
+                tracing::debug!(
+                    data_type,
+                    "push: received PushData with no body; \
+                     treating as subscription acknowledgement and skipping dispatch"
+                );
                 return;
             }
         };
@@ -323,7 +404,7 @@ impl PushClient {
             }
             Body::TradeTickData(d) => {
                 if let Some(cb) = &cbs.on_tick {
-                    cb(d);
+                    cb(convert_trade_tick(d));
                 }
             }
             Body::PositionData(d) => {
@@ -408,19 +489,77 @@ impl PushClient {
             .collect()
     }
 
-    /// Add account subscription
+    /// Add account subscription.
+    ///
+    /// Any quote type previously recorded for this subject is dropped, mirroring
+    /// [`PushClient::remove_account_sub`]. Without this, re-subscribing through
+    /// the plain entry point after
+    /// [`PushClient::add_account_sub_with_asset_quote_type`] would leave the old
+    /// quote type behind and a reconnect would silently replay it.
     pub fn add_account_sub(&self, subject: SubjectType) {
-        self.account_subs.write().unwrap().insert(subject);
+        self.account_subs.write().unwrap().insert(subject.clone());
+        self.account_sub_quote_types
+            .write()
+            .unwrap()
+            .remove(&subject);
+    }
+
+    /// Add account subscription together with the asset quote type used when
+    /// subscribing (`"ETH"` / `"RTH"` / `"OVERNIGHT"`).
+    ///
+    /// The recorded value is replayed on automatic reconnection, so
+    /// Asset / Position subscriptions keep the same quote type after a
+    /// reconnect. `add_account_sub` keeps the previous behaviour (no quote
+    /// type sent).
+    ///
+    /// An unknown enum name is rejected the same way
+    /// [`PushClient::subscribe_with_asset_quote_type`] rejects it: `false` is
+    /// returned and the call is a no-op — neither the subject nor the quote
+    /// type is recorded, and any previous registration is left untouched.
+    pub fn add_account_sub_with_asset_quote_type(
+        &self,
+        subject: SubjectType,
+        asset_quote_type: &str,
+    ) -> bool {
+        let normalized = match normalize_or_warn(Some(asset_quote_type)) {
+            Ok(Some(normalized)) => normalized,
+            // 拼错的口径整条拒绝，而不是「丢掉口径、照样记 subject」：
+            // 后者会让重连按默认 ETH 重放一条用户从没成功订上的夜盘订阅，
+            // 调用方还以为夜盘口径生效了。输入非法时不写任何状态，返回 false。
+            // Some(_) 输入不会走到 Ok(None)，与 Err 合并处理。
+            Ok(None) | Err(()) => return false,
+        };
+        self.account_subs.write().unwrap().insert(subject.clone());
+        // 记归一化后的值：重连重放时发出去的就是它
+        self.account_sub_quote_types
+            .write()
+            .unwrap()
+            .insert(subject, normalized);
+        true
     }
 
     /// Remove account subscription
     pub fn remove_account_sub(&self, subject: &SubjectType) {
         self.account_subs.write().unwrap().remove(subject);
+        self.account_sub_quote_types
+            .write()
+            .unwrap()
+            .remove(subject);
     }
 
     /// Get account-level subscriptions
     pub fn get_account_subscriptions(&self) -> Vec<SubjectType> {
         self.account_subs.read().unwrap().iter().cloned().collect()
+    }
+
+    /// Get the asset quote type recorded for an account-level subscription,
+    /// if one was registered via [`PushClient::add_account_sub_with_asset_quote_type`].
+    pub fn get_account_sub_asset_quote_type(&self, subject: &SubjectType) -> Option<String> {
+        self.account_sub_quote_types
+            .read()
+            .unwrap()
+            .get(subject)
+            .cloned()
     }
 
     // ===== Cc / Market 订阅方法 =====
@@ -431,7 +570,10 @@ impl PushClient {
     pub fn subscribe_cc(&self, symbols: &[&str]) -> Result<(), crate::error::TigerError> {
         let symbols_str = symbols.join(",");
         self.subscribe(&SubjectType::Cc, Some(&symbols_str), None, None);
-        self.add_subscription(SubjectType::Cc, &symbols.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        self.add_subscription(
+            SubjectType::Cc,
+            &symbols.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+        );
         Ok(())
     }
 
@@ -517,8 +659,8 @@ pub async fn connect(client: &Arc<PushClient>) -> Result<(), String> {
         .split(':')
         .next()
         .unwrap_or("openapi.tigerfintech.com");
-    let server_name = rustls::ServerName::try_from(host)
-        .map_err(|e| format!("invalid server name: {}", e))?;
+    let server_name =
+        rustls::ServerName::try_from(host).map_err(|e| format!("invalid server name: {}", e))?;
 
     let tls_stream = match tls_connector.connect(server_name, tcp_stream).await {
         Ok(stream) => stream,
@@ -559,7 +701,7 @@ pub async fn connect(client: &Arc<PushClient>) -> Result<(), String> {
         ACCEPT_VERSION,
         DEFAULT_SEND_INTERVAL,
         DEFAULT_RECEIVE_INTERVAL,
-        false,
+        client.use_full_tick,
     );
     if !client.send_request(&connect_req) {
         *client.state.write().unwrap() = ConnectionState::Disconnected;
@@ -737,10 +879,32 @@ fn reconnect_loop(
     })
 }
 
+/// 校验调用方传来的行情口径：合法返回归一化后的值，拼错则记一条 warn 并返回 `Err`。
+///
+/// 不在客户端拦的话，拼错的值会被服务端静默按默认 ETH 处理，调用方看到的是「订阅成功」
+/// 却拿不到夜盘数据，排查成本很高。
+fn normalize_or_warn(asset_quote_type: Option<&str>) -> Result<Option<String>, ()> {
+    match asset_quote_type {
+        None => Ok(None),
+        Some(value) => match proto_message::normalize_asset_quote_type(value) {
+            Some(normalized) => Ok(Some(normalized)),
+            None => {
+                tracing::warn!(
+                    "invalid asset quote type: {}, expected one of {:?}",
+                    value,
+                    proto_message::ASSET_QUOTE_TYPES
+                );
+                Err(())
+            }
+        },
+    }
+}
+
 /// Restore subscriptions after reconnection
 fn resubscribe(client: &Arc<PushClient>) {
     let subs = client.subscriptions.read().unwrap().clone();
     let acct_subs = client.account_subs.read().unwrap().clone();
+    let acct_quote_types = client.account_sub_quote_types.read().unwrap().clone();
 
     for (subject, symbols) in &subs {
         let symbols_str = symbols.iter().cloned().collect::<Vec<_>>().join(",");
@@ -748,7 +912,15 @@ fn resubscribe(client: &Arc<PushClient>) {
     }
 
     for subject in &acct_subs {
-        client.subscribe(subject, None, Some(&client.config.account), None);
+        // Asset / Position 订阅若记录过行情口径，重连时按原口径恢复
+        let quote_type = acct_quote_types.get(subject);
+        client.subscribe_with_asset_quote_type(
+            subject,
+            None,
+            Some(&client.config.account),
+            None,
+            quote_type.map(|s| s.as_str()),
+        );
     }
 }
 

@@ -1,8 +1,8 @@
 //! API 响应解析模块。
 //! 解析 API 返回的 JSON 响应，code=0 时返回成功，否则返回错误。
 
-use serde::{Deserialize, Serialize};
 use crate::error::TigerError;
+use serde::{Deserialize, Serialize};
 
 /// API 响应结构体
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,7 +21,7 @@ pub struct ApiResponse {
 /// 当 code 为 0 时返回 ApiResponse；当 code 不为 0 时返回 TigerError::Api
 pub fn parse_api_response(body: &[u8]) -> Result<ApiResponse, TigerError> {
     let resp: ApiResponse = serde_json::from_slice(body)
-        .map_err(|e| TigerError::Config(format!("解析响应 JSON 失败: {}", e)))?;
+        .map_err(|e| TigerError::Parse(format!("解析响应 JSON 失败: {}", e)))?;
     if resp.code != 0 {
         return Err(TigerError::Api {
             code: resp.code,

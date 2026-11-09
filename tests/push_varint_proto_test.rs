@@ -1,8 +1,8 @@
 //! Integration tests for varint32 and proto_message modules
 
-use tigeropen::push::varint::{decode_varint32, encode_varint32};
-use tigeropen::push::proto_message::*;
 use tigeropen::push::pb::socket_common::{Command, DataType};
+use tigeropen::push::proto_message::*;
+use tigeropen::push::varint::{decode_varint32, encode_varint32};
 use tigeropen::push::SubjectType;
 
 // ===== varint32 tests =====
@@ -84,7 +84,13 @@ fn test_varint_roundtrip_large() {
 #[test]
 fn test_build_connect_message() {
     let msg = build_connect_message(
-        "test_tiger_id", "test_sign", "rust-sdk-1.0", "1.0", 10000, 30000, false,
+        "test_tiger_id",
+        "test_sign",
+        "rust-sdk-1.0",
+        "1.0",
+        10000,
+        30000,
+        false,
     );
     assert_eq!(msg.command, Command::Connect as i32);
     assert!(msg.id > 0);
@@ -133,7 +139,10 @@ fn test_build_subscribe_with_account() {
 #[test]
 fn test_build_subscribe_with_market() {
     let msg = build_subscribe_message(
-        DataType::StockTop as i32, Some("changeRate"), None, Some("US"),
+        DataType::StockTop as i32,
+        Some("changeRate"),
+        None,
+        Some("US"),
     );
     assert_eq!(msg.command, Command::Subscribe as i32);
     let sub = msg.subscribe.unwrap();
@@ -149,6 +158,89 @@ fn test_build_unsubscribe_message() {
     let sub = msg.subscribe.unwrap();
     assert_eq!(sub.data_type, DataType::Asset as i32);
     assert_eq!(sub.account, Some("test_account".to_string()));
+}
+
+// ===== assetQuoteType (protobuf field 5) =====
+
+#[test]
+fn test_build_subscribe_message_with_asset_quote_type() {
+    let msg = build_subscribe_message_with_asset_quote_type(
+        DataType::Asset as i32,
+        None,
+        Some("DU123"),
+        None,
+        Some("OVERNIGHT"),
+    );
+    assert_eq!(msg.command, Command::Subscribe as i32);
+    let sub = msg.subscribe.unwrap();
+    assert_eq!(sub.data_type, DataType::Asset as i32);
+    assert_eq!(sub.account, Some("DU123".to_string()));
+    // 传枚举名，不是 code
+    assert_eq!(sub.asset_quote_type, Some("OVERNIGHT".to_string()));
+}
+
+#[test]
+fn test_build_unsubscribe_message_with_asset_quote_type() {
+    let msg = build_unsubscribe_message_with_asset_quote_type(
+        DataType::Position as i32,
+        None,
+        Some("DU123"),
+        None,
+        Some("RTH"),
+    );
+    assert_eq!(msg.command, Command::Unsubscribe as i32);
+    let sub = msg.subscribe.unwrap();
+    assert_eq!(sub.data_type, DataType::Position as i32);
+    assert_eq!(sub.asset_quote_type, Some("RTH".to_string()));
+}
+
+/// 老签名保持不传该字段，wire 上不出现 field 5。
+#[test]
+fn test_build_subscribe_message_without_asset_quote_type_omits_field() {
+    let msg = build_subscribe_message(DataType::Asset as i32, None, Some("DU123"), None);
+    let sub = msg.subscribe.unwrap();
+    assert!(sub.asset_quote_type.is_none());
+
+    use prost::Message;
+    let bytes = sub.encode_to_vec();
+    // field 5 (LEN) 的 tag 字节为 0x2A，未设置时不应出现
+    assert!(
+        !bytes.contains(&0x2Au8),
+        "asset_quote_type 未设置时不应写入 field 5, bytes={:?}",
+        bytes
+    );
+}
+
+/// wire 格式断言：assetQuoteType 必须编码在字段号 5、wire type 2（LEN）。
+#[test]
+fn test_subscribe_asset_quote_type_wire_format() {
+    use prost::Message;
+
+    let msg = build_subscribe_message_with_asset_quote_type(
+        DataType::Asset as i32,
+        None,
+        Some("DU123"),
+        None,
+        Some("OVERNIGHT"),
+    );
+    let sub = msg.subscribe.unwrap();
+    let bytes = sub.encode_to_vec();
+
+    let mut expected = Vec::new();
+    // field 1 (dataType, varint) = Asset(6)
+    expected.extend_from_slice(&[0x08, DataType::Asset as u8]);
+    // field 3 (account, LEN) = "DU123"
+    expected.extend_from_slice(&[0x1A, 0x05]);
+    expected.extend_from_slice(b"DU123");
+    // field 5 (assetQuoteType, LEN) = "OVERNIGHT"
+    expected.extend_from_slice(&[0x2A, 0x09]);
+    expected.extend_from_slice(b"OVERNIGHT");
+
+    assert_eq!(bytes, expected, "assetQuoteType 必须是 field 5 的 string");
+
+    // 解码回来字段值不变
+    let decoded = tigeropen::push::pb::request::Subscribe::decode(bytes.as_slice()).unwrap();
+    assert_eq!(decoded.asset_quote_type, Some("OVERNIGHT".to_string()));
 }
 
 #[test]
@@ -171,17 +263,56 @@ fn test_request_id_increments() {
 
 #[test]
 fn test_subject_to_data_type_mapping() {
-    assert_eq!(subject_to_data_type(&SubjectType::Quote), DataType::Quote as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Option), DataType::Option as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Future), DataType::Future as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Depth), DataType::QuoteDepth as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Tick), DataType::TradeTick as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::FullTick), DataType::TradeTick as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Asset), DataType::Asset as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Position), DataType::Position as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Order), DataType::OrderStatus as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Transaction), DataType::OrderTransaction as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::StockTop), DataType::StockTop as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::OptionTop), DataType::OptionTop as i32);
-    assert_eq!(subject_to_data_type(&SubjectType::Kline), DataType::Kline as i32);
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Quote),
+        DataType::Quote as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Option),
+        DataType::Option as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Future),
+        DataType::Future as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Depth),
+        DataType::QuoteDepth as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Tick),
+        DataType::TradeTick as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::FullTick),
+        DataType::TradeTick as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Asset),
+        DataType::Asset as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Position),
+        DataType::Position as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Order),
+        DataType::OrderStatus as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Transaction),
+        DataType::OrderTransaction as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::StockTop),
+        DataType::StockTop as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::OptionTop),
+        DataType::OptionTop as i32
+    );
+    assert_eq!(
+        subject_to_data_type(&SubjectType::Kline),
+        DataType::Kline as i32
+    );
 }

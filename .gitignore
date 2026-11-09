@@ -24,3 +24,6 @@ Cargo.lock
 # 临时文件
 *.log
 *.tmp
+
+# local memory / ephemeral data (not for version control)
+.data/

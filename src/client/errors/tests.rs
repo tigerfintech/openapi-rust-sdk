@@ -33,7 +33,10 @@ fn test_classify_biz_param_error() {
 fn test_classify_trade_errors() {
     assert_eq!(classify_error_code(1100), ErrorCategory::TradeGlobalError);
     assert_eq!(classify_error_code(1200), ErrorCategory::TradePrimeError);
-    assert_eq!(classify_error_code(1300), ErrorCategory::TradeSimulationError);
+    assert_eq!(
+        classify_error_code(1300),
+        ErrorCategory::TradeSimulationError
+    );
 }
 
 #[test]

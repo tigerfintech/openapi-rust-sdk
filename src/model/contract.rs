@@ -75,13 +75,19 @@ pub struct Contract {
     #[serde(rename = "shortInitialMargin", skip_serializing_if = "Option::is_none")]
     pub short_initial_margin: Option<f64>,
     /// 做空维持保证金比例
-    #[serde(rename = "shortMaintenanceMargin", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "shortMaintenanceMargin",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub short_maintenace_margin: Option<f64>,
     /// 做多初始保证金
     #[serde(rename = "longInitialMargin", skip_serializing_if = "Option::is_none")]
     pub long_initial_margin: Option<f64>,
     /// 做多维持保证金
-    #[serde(rename = "longMaintenanceMargin", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "longMaintenanceMargin",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub long_maintenace_margin: Option<f64>,
     /// 最小报价单位价格区间
     #[serde(rename = "tickSizes", skip_serializing_if = "Option::is_none")]
@@ -98,7 +104,8 @@ pub fn stock_contract(symbol: &str, currency: &str) -> Contract {
         symbol: symbol.to_string(),
         sec_type: "STK".to_string(),
         currency: Some(currency.to_string()),
-        exchange: None, primary_exchange: None,
+        exchange: None,
+        primary_exchange: None,
         expiry: None,
         strike: None,
         right: None,
@@ -125,7 +132,8 @@ pub fn option_contract(identifier: &str) -> Contract {
         symbol: String::new(),
         sec_type: "OPT".to_string(),
         currency: None,
-        exchange: None, primary_exchange: None,
+        exchange: None,
+        primary_exchange: None,
         expiry: None,
         strike: None,
         right: None,
@@ -158,7 +166,8 @@ pub fn option_contract_by_symbol(
         symbol: symbol.to_string(),
         sec_type: "OPT".to_string(),
         currency: Some(currency.to_string()),
-        exchange: None, primary_exchange: None,
+        exchange: None,
+        primary_exchange: None,
         expiry: Some(expiry.to_string()),
         strike: Some(strike),
         right: Some(right.to_string()),
@@ -185,7 +194,8 @@ pub fn future_contract(symbol: &str, currency: &str, expiry: &str) -> Contract {
         symbol: symbol.to_string(),
         sec_type: "FUT".to_string(),
         currency: Some(currency.to_string()),
-        exchange: None, primary_exchange: None,
+        exchange: None,
+        primary_exchange: None,
         expiry: Some(expiry.to_string()),
         strike: None,
         right: None,
@@ -212,7 +222,8 @@ pub fn cash_contract(symbol: &str) -> Contract {
         symbol: symbol.to_string(),
         sec_type: "CASH".to_string(),
         currency: None,
-        exchange: None, primary_exchange: None,
+        exchange: None,
+        primary_exchange: None,
         expiry: None,
         strike: None,
         right: None,
@@ -239,7 +250,8 @@ pub fn fund_contract(symbol: &str, currency: &str) -> Contract {
         symbol: symbol.to_string(),
         sec_type: "FUND".to_string(),
         currency: Some(currency.to_string()),
-        exchange: None, primary_exchange: None,
+        exchange: None,
+        primary_exchange: None,
         expiry: None,
         strike: None,
         right: None,
@@ -272,7 +284,8 @@ pub fn warrant_contract(
         symbol: symbol.to_string(),
         sec_type: "WAR".to_string(),
         currency: Some(currency.to_string()),
-        exchange: None, primary_exchange: None,
+        exchange: None,
+        primary_exchange: None,
         expiry: Some(expiry.to_string()),
         strike: Some(strike),
         right: Some(right.to_string()),
@@ -331,7 +344,8 @@ mod tests {
             symbol: "AAPL".to_string(),
             sec_type: "STK".to_string(),
             currency: Some("USD".to_string()),
-            exchange: None, primary_exchange: None,
+            exchange: None,
+            primary_exchange: None,
             expiry: None,
             strike: None,
             right: Some("CALL".to_string()),
@@ -368,8 +382,14 @@ mod tests {
         assert!(!obj.contains_key("putCall"), "不应出现 putCall");
         assert!(!obj.contains_key("put_call"), "不应出现 put_call");
         assert!(!obj.contains_key("trade"), "不应出现 trade");
-        assert!(!obj.contains_key("contract_id"), "不应出现 snake_case 的 contract_id");
-        assert!(!obj.contains_key("sec_type"), "不应出现 snake_case 的 sec_type");
+        assert!(
+            !obj.contains_key("contract_id"),
+            "不应出现 snake_case 的 contract_id"
+        );
+        assert!(
+            !obj.contains_key("sec_type"),
+            "不应出现 snake_case 的 sec_type"
+        );
     }
 
     /// 验证从 API JSON 反序列化
@@ -496,27 +516,28 @@ mod tests {
         // 分两组生成，避免超过 proptest 元组 12 元素限制
         // 浮点数限制为 2 位小数，避免 JSON round-trip 精度损失
         let group1 = (
-            prop::option::of(any::<i64>()),                          // contract_id
-            "[A-Z]{1,5}",                                            // symbol
+            prop::option::of(any::<i64>()), // contract_id
+            "[A-Z]{1,5}",                   // symbol
             prop::sample::select(vec!["STK", "OPT", "FUT", "WAR", "CASH", "FUND"]),
-            prop::option::of("[A-Z]{3}"),                            // currency
-            prop::option::of("[0-9]{8}"),                             // expiry
+            prop::option::of("[A-Z]{3}"), // currency
+            prop::option::of("[0-9]{8}"), // expiry
             prop::option::of((1i64..1000000i64).prop_map(|v| v as f64 / 100.0)), // strike
         );
         let group2 = (
             prop::option::of(prop::sample::select(vec!["PUT", "CALL"])),
-            prop::option::of("[A-Za-z ]{1,20}"),                     // name
+            prop::option::of("[A-Za-z ]{1,20}"), // name
             prop::option::of(prop::sample::select(vec!["US", "HK", "CN", "SG"])),
-            prop::option::of(any::<bool>()),                         // tradeable
-            prop::option::of(any::<i64>()),                          // conid
+            prop::option::of(any::<bool>()), // tradeable
+            prop::option::of(any::<i64>()),  // conid
         );
-        (group1, group2).prop_map(|((cid, sym, st, cur, exp, strike), (right, name, mkt, trd, conid))| {
-            Contract {
+        (group1, group2).prop_map(
+            |((cid, sym, st, cur, exp, strike), (right, name, mkt, trd, conid))| Contract {
                 contract_id: cid,
                 symbol: sym,
                 sec_type: st.to_string(),
                 currency: cur,
-                exchange: None, primary_exchange: None,
+                exchange: None,
+                primary_exchange: None,
                 expiry: exp,
                 strike,
                 right: right.map(|s| s.to_string()),
@@ -533,8 +554,8 @@ mod tests {
                 long_maintenace_margin: None,
                 tick_sizes: None,
                 lot_size: None,
-            }
-        })
+            },
+        )
     }
 
     proptest! {

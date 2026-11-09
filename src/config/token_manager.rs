@@ -3,10 +3,10 @@
 //! 从 tiger_openapi_token.properties 文件加载 Token，
 //! 支持后台定期刷新，更新内存和文件中的 Token。
 
+use super::config_parser;
+use crate::error::TigerError;
 use std::sync::{Arc, RwLock};
 use tokio::sync::oneshot;
-use crate::error::TigerError;
-use super::config_parser;
 
 /// 默认 Token 文件名
 const DEFAULT_TOKEN_FILE: &str = "tiger_openapi_token.properties";
@@ -95,7 +95,11 @@ impl TokenManager {
 
     /// 设置后台检查间隔（秒）
     pub fn set_check_interval(&mut self, secs: u64) {
-        self.check_interval_secs = if secs == 0 { DEFAULT_CHECK_INTERVAL_SECS } else { secs };
+        self.check_interval_secs = if secs == 0 {
+            DEFAULT_CHECK_INTERVAL_SECS
+        } else {
+            secs
+        };
     }
 
     /// 注册 token 刷新写入后的回调
@@ -119,9 +123,8 @@ impl TokenManager {
     /// 从 properties 文件（或自定义 loader）加载 Token
     pub fn load_token(&self) -> Result<String, TigerError> {
         if let Some(ref loader) = self.token_loader {
-            let token = loader().map_err(|e| {
-                TigerError::Config(format!("自定义 token 加载失败: {}", e))
-            })?;
+            let token = loader()
+                .map_err(|e| TigerError::Config(format!("自定义 token 加载失败: {}", e)))?;
             if token.is_empty() {
                 return Err(TigerError::Config("自定义 token 加载返回空值".to_string()));
             }
@@ -334,15 +337,13 @@ fn write_token_to_file(file_path: &str, token: &str) -> Result<(), TigerError> {
     let path = std::path::Path::new(file_path);
     if let Some(dir) = path.parent() {
         if !dir.as_os_str().is_empty() {
-            std::fs::create_dir_all(dir).map_err(|e| {
-                TigerError::Config(format!("创建目录失败: {}", e))
-            })?;
+            std::fs::create_dir_all(dir)
+                .map_err(|e| TigerError::Config(format!("创建目录失败: {}", e)))?;
         }
     }
     let content = format!("token={}\n", token);
-    std::fs::write(file_path, content).map_err(|e| {
-        TigerError::Config(format!("写入 Token 文件失败: {}", e))
-    })
+    std::fs::write(file_path, content)
+        .map_err(|e| TigerError::Config(format!("写入 Token 文件失败: {}", e)))
 }
 
 #[cfg(test)]
@@ -528,7 +529,7 @@ mod tests {
 
         let mut m = TokenManager::with_refresh_duration(None, 30);
         m.set_check_interval(0); // will be forced to default, use a short one
-        // Override to 50ms for test speed
+                                 // Override to 50ms for test speed
         m.check_interval_secs = 0; // we'll set it properly below
         m.check_interval_secs = 1; // 1 second interval for test
         m.set_token(&expired_token).unwrap();
@@ -550,7 +551,10 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
         m.stop_auto_refresh();
 
-        assert!(*call_count.lock().unwrap() > 0, "refresh should have been called");
+        assert!(
+            *call_count.lock().unwrap() > 0,
+            "refresh should have been called"
+        );
         assert_eq!(m.get_token(), "refreshed_token");
         assert_eq!(*updated_token.lock().unwrap(), "refreshed_token");
     }
@@ -586,6 +590,117 @@ mod tests {
         // Wait more time; count should not increase after stop
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
         let count_final = *call_count.lock().unwrap();
-        assert_eq!(count_after_stop, count_final, "no more refreshes after stop");
+        assert_eq!(
+            count_after_stop, count_final,
+            "no more refreshes after stop"
+        );
+    }
+
+    // ========== Free helper function tests ==========
+
+    #[test]
+    fn test_should_refresh_token_empty() {
+        assert!(!should_refresh_token("", 30));
+    }
+
+    #[test]
+    fn test_should_refresh_token_zero_duration_always_true() {
+        // The free function should_refresh_token does not short-circuit on
+        // refresh_duration==0 (the caller checks that before calling).
+        // With gen_ts=0, the token is ancient → any refresh_duration (incl 0)
+        // returns true because (now - 0) > 0.
+        let token = make_test_token(0, 3600000);
+        assert!(should_refresh_token(&token, 0));
+    }
+
+    #[test]
+    fn test_should_refresh_token_invalid_base64() {
+        assert!(!should_refresh_token("!!!not_base64!!!", 30));
+    }
+
+    #[test]
+    fn test_should_refresh_token_short_decoded() {
+        // Decoded payload is too short (< 27 bytes)
+        use base64::Engine;
+        let short = base64::engine::general_purpose::STANDARD.encode(b"short");
+        assert!(!should_refresh_token(&short, 30));
+    }
+
+    #[test]
+    fn test_should_refresh_token_no_comma_in_header() {
+        // Decoded header doesn't contain a comma → parts < 2 → false
+        use base64::Engine;
+        let no_comma = "0123456789ABCDE_some_extra_payload_here";
+        let token = base64::engine::general_purpose::STANDARD.encode(no_comma.as_bytes());
+        assert!(!should_refresh_token(&token, 30));
+    }
+
+    #[test]
+    fn test_should_refresh_token_non_numeric_gen_ts() {
+        use base64::Engine;
+        let payload = "abcdefghij012,some_extra";
+        let token = base64::engine::general_purpose::STANDARD.encode(payload.as_bytes());
+        assert!(!should_refresh_token(&token, 30));
+    }
+
+    #[test]
+    fn test_should_refresh_token_expired() {
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let old_gen_ts = (now_secs - 100) * 1000;
+        let token = make_test_token(old_gen_ts, old_gen_ts + 3600000);
+        assert!(should_refresh_token(&token, 30));
+    }
+
+    #[test]
+    fn test_should_refresh_token_not_expired() {
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let fresh_gen_ts = now_secs * 1000;
+        let token = make_test_token(fresh_gen_ts, fresh_gen_ts + 7200000);
+        assert!(!should_refresh_token(&token, 3600));
+    }
+
+    #[test]
+    fn test_write_token_to_file_creates_parent_dirs() {
+        let dir = std::env::temp_dir();
+        let nested = dir.join("rust_token_test_nested/sub");
+        let path = nested.join("token.properties");
+        // Remove if exists from previous run
+        let _ = std::fs::remove_dir_all(&nested);
+
+        write_token_to_file(path.to_str().unwrap(), "test_value").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "token=test_value\n"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&nested);
+    }
+
+    #[test]
+    fn test_write_token_to_file_invalid_path() {
+        let result = write_token_to_file("/dev/null/tok.properties", "val");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_token_to_file_empty_parent_ignored() {
+        // Path with empty parent segment (no directory to create)
+        let dir = std::env::temp_dir();
+        let path = dir.join("rust_token_test_flat.properties");
+        let _ = std::fs::remove_file(&path);
+
+        write_token_to_file(path.to_str().unwrap(), "flat_token").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "token=flat_token\n"
+        );
+        let _ = std::fs::remove_file(&path);
     }
 }
