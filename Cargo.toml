@@ -11,7 +11,7 @@ homepage = "https://github.com/tigerfintech/openapi-rust-sdk"
 documentation = "https://docs.rs/tigeropen"
 keywords = ["tiger", "openapi", "sdk", "trading", "stock"]
 categories = ["api-bindings", "finance"]
-exclude = ["tests/", "examples/", "*.properties"]
+exclude = ["tests/", "examples/", "*.properties", ".data/"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
