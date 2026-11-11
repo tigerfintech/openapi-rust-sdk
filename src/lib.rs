@@ -9,7 +9,7 @@
 //! - **配置层**（config）：ClientConfig、ConfigParser
 //! - **认证层**（signer）：RSA 签名
 //! - **传输层**（client）：HttpClient、重试策略
-//! - **业务层**（quote/trade）：QuoteClient、TradeClient
+//! - **业务层**（quote/trade/news）：QuoteClient、TradeClient、NewsClient
 //! - **推送层**（push）：PushClient
 
 pub mod client;
@@ -17,6 +17,7 @@ pub mod config;
 pub mod error;
 pub mod logger;
 pub mod model;
+pub mod news;
 pub mod push;
 pub mod quote;
 pub mod signer;

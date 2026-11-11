@@ -1,8 +1,8 @@
 [package]
 name = "tigeropen"
-version = "0.5.12"
+version = "0.5.13"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.88"
 description = "老虎证券 OpenAPI Rust SDK"
 license = "MIT"
 readme = "README.md"

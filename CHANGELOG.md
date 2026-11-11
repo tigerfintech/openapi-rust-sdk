@@ -5,13 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.12] - 2026-11-09
+## [0.5.13] - 2026-11-11
+
+### Added
+
+- News query client `NewsClient` with `get_stock_news` (per-symbol stock news, page-number pagination) and `get_market_news` (market highlights, `last_id` cursor pagination).
+
+## [0.5.12] - 2026-11-10
 
 ### Added
 
 - 资产查询新增行情口径参数：`AssetsRequest.asset_quote_type`（`assets` / `prime_assets`）与 `AggregateAssetsRequest.asset_quote_type`（`aggregate_assets`），传枚举名字符串 `"ETH"` / `"RTH"` / `"OVERNIGHT"`，wire 字段名 `asset_quote_type`。持仓 `PositionsRequest.asset_quote_type` 保持不变。
 - Protobuf 订阅新增 `Subscribe.assetQuoteType`（字段号 5，`optional string`）。新增重载 `PushClient::subscribe_with_asset_quote_type` / `unsubscribe_with_asset_quote_type` 与 `proto_message::build_subscribe_message_with_asset_quote_type` / `build_unsubscribe_message_with_asset_quote_type`，仅对 Asset / Position 订阅有意义；原有 `subscribe` / `unsubscribe` 签名与行为不变。
 - `PushClient::add_account_sub_with_asset_quote_type` / `get_account_sub_asset_quote_type`：记录账户级订阅使用的行情口径，自动重连时按原口径恢复订阅。
+
+### Changed
+
+- 最低支持 Rust 1.88。
 
 ## [0.5.11] - 2026-08-27
 
