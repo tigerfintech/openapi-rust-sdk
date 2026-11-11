@@ -2,12 +2,15 @@
 
 pub mod contract;
 pub mod enums;
+pub mod news;
+pub mod news_requests;
 pub mod order;
 pub mod position;
 pub mod quote;
 pub mod quote_requests;
 pub mod trade;
 pub mod trade_requests;
+pub use news_requests::*;
 pub use quote_requests::*;
 pub use trade_requests::*;
 
@@ -16,6 +19,7 @@ pub use contract::{
     cash_contract, fund_contract, future_contract, option_contract, option_contract_by_symbol,
     stock_contract, warrant_contract, Contract, TickSize,
 };
+pub use news::{NewsItem, NewsPage};
 pub use order::{
     algo_order, auction_limit_order, auction_market_order, limit_order, market_order,
     new_order_leg, stop_limit_order, stop_order, trail_order, AlgoParams, AlgoParamsRequest, Order,
