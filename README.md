@@ -11,7 +11,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tigeropen = "0.5.12"
+tigeropen = "0.5.13"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -394,7 +394,7 @@ openapi-rust-sdk/
 
 ```toml
 [dependencies]
-tigeropen = "0.5.12"
+tigeropen = "0.5.13"
 tokio = { version = "1", features = ["full"] }
 ```
 
