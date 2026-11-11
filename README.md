@@ -11,17 +11,16 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tigeropen = "0.1.0"
+tigeropen = "0.5.12"
 tokio = { version = "1", features = ["full"] }
 ```
 
-Requires Rust 1.70 or later.
+Requires Rust 1.88 or later. Building the SDK also requires the Protocol Buffers compiler (`protoc`) on your `PATH`.
 
 ## Quick Start
 
 ```rust
 use tigeropen::config::ClientConfig;
-use tigeropen::client::http_client::HttpClient;
 use tigeropen::quote::QuoteClient;
 
 #[tokio::main]
@@ -31,12 +30,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .properties_file("tiger_openapi_config.properties")
         .build()?;
 
-    // 2. Create HTTP client
-    let http = HttpClient::new(config);
-
-    // 3. Query market data
-    let qc = QuoteClient::new(&http);
-    let states = qc.market_state("US").await?;
+    // 2. Create a quote client and query market data
+    let qc = QuoteClient::from_config(config);
+    let states = qc.get_market_state("US").await?;
     println!("US market state: {:?}", states);
 
     Ok(())
@@ -115,35 +111,49 @@ Environment variables have the highest priority and override all other methods.
 ## Market Data
 
 ```rust
-use tigeropen::client::http_client::HttpClient;
+use tigeropen::model::{BriefRequest, KlineRequest, OptionChainItem, OptionChainRequest, QuoteDepthRequest, TradeTickRequest};
 use tigeropen::quote::QuoteClient;
 
-let http = HttpClient::new(config);
-let qc = QuoteClient::new(&http);
+let qc = QuoteClient::from_config(config);
 
 // Market state
-let states = qc.market_state("US").await?;
+let states = qc.get_market_state("US").await?;
 
 // Real-time quotes
-let quotes = qc.quote_real_time(&["AAPL", "TSLA"]).await?;
+let quotes = qc.get_real_time_quote(BriefRequest {
+    symbols: Some(vec!["AAPL".into(), "TSLA".into()]),
+    ..Default::default()
+}).await?;
 
 // K-line data
-let klines = qc.kline("AAPL", "day").await?;
+let klines = qc.get_kline(KlineRequest {
+    symbols: Some(vec!["AAPL".into()]),
+    period: Some("day".into()),
+    ..Default::default()
+}).await?;
 
 // Timeline
-let timeline = qc.timeline(&["AAPL"]).await?;
+let timeline = qc.get_timeline(&["AAPL"]).await?;
 
 // Depth quotes
-let depth = qc.quote_depth("AAPL").await?;
+let depth = qc.get_quote_depth(QuoteDepthRequest {
+    symbols: Some(vec!["AAPL".into()]),
+    market: Some("US".into()),
+    ..Default::default()
+}).await?;
 
 // Option expiration dates
-let expiry = qc.option_expiration("AAPL").await?;
+let expirations = qc.get_option_expiration(&["AAPL"], Some("US")).await?;
 
 // Option chain
-let chain = qc.option_chain("AAPL", "2024-01-19").await?;
+if let Some(expiry) = expirations.first().and_then(|item| item.timestamps.first()) {
+    let chain = qc.get_option_chain(OptionChainRequest::new(vec![
+        OptionChainItem::new("AAPL", *expiry),
+    ])).await?;
+}
 
 // Futures exchange list
-let exchanges = qc.future_exchange().await?;
+let exchanges = qc.get_future_exchange().await?;
 ```
 
 ## News
@@ -239,38 +249,28 @@ Each `NewsItem`:
 ## Trading
 
 ```rust
-use tigeropen::client::http_client::HttpClient;
+use tigeropen::model::{limit_order, AssetsRequest, OrdersRequest, PositionsRequest};
 use tigeropen::trade::TradeClient;
-use serde_json::json;
 
-let http = HttpClient::new(config);
-let tc = TradeClient::new(&http, "your_account");
+let account = config.account.clone();
+let tc = TradeClient::from_config(config);
+let order = limit_order(&account, "AAPL", "STK", "BUY", 1, 150.0);
 
-// Place a limit order
-let order = json!({
-    "symbol": "AAPL",
-    "secType": "STK",
-    "action": "BUY",
-    "orderType": "LMT",
-    "totalQuantity": 100,
-    "limitPrice": 150.0,
-    "timeInForce": "DAY",
-});
-let result = tc.place_order(order).await?;
+// Preview the order without placing it
+let preview = tc.preview_order(order.clone()).await?;
 
-// Preview order (no actual execution)
-let preview = tc.preview_order(order).await?;
+// Place a limit order, then use its global ID to modify and cancel it
+if let Some(placed) = tc.place_order(order.clone()).await? {
+    let mut modified = order;
+    modified.limit_price = Some(155.0);
+    tc.modify_order(placed.id, modified).await?;
+    tc.cancel_order(placed.id).await?;
+}
 
-// Modify order
-tc.modify_order(order_id, json!({"limitPrice": 155.0})).await?;
-
-// Cancel order
-tc.cancel_order(order_id).await?;
-
-// Query orders, positions, assets
-let orders = tc.orders().await?;
-let positions = tc.positions().await?;
-let assets = tc.assets().await?;
+// Query orders, positions, and assets
+let orders = tc.get_orders(OrdersRequest::default()).await?;
+let positions = tc.get_positions(PositionsRequest::default()).await?;
+let assets = tc.get_assets(AssetsRequest::default()).await?;
 ```
 
 ## Generic API Call (execute)
@@ -278,7 +278,9 @@ let assets = tc.assets().await?;
 When the SDK hasn't wrapped a specific API yet, use `HttpClient::execute` directly:
 
 ```rust
-let http = HttpClient::new(config);
+use tigeropen::client::http_client::HttpClient;
+
+let http = HttpClient::with_quote_server(config);
 let resp = http.execute("market_state", r#"{"market":"US"}"#).await?;
 println!("Raw response: {}", resp);
 ```
@@ -392,17 +394,16 @@ openapi-rust-sdk/
 
 ```toml
 [dependencies]
-tigeropen = "0.1.0"
+tigeropen = "0.5.12"
 tokio = { version = "1", features = ["full"] }
 ```
 
-要求 Rust 1.70 或更高版本。
+要求 Rust 1.88 或更高版本。构建 SDK 时还需要安装 Protocol Buffers 编译器（`protoc`），并将其加入 `PATH`。
 
 ## 快速开始
 
 ```rust
 use tigeropen::config::ClientConfig;
-use tigeropen::client::http_client::HttpClient;
 use tigeropen::quote::QuoteClient;
 
 #[tokio::main]
@@ -412,12 +413,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .properties_file("tiger_openapi_config.properties")
         .build()?;
 
-    // 2. 创建 HTTP 客户端
-    let http = HttpClient::new(config);
-
-    // 3. 查询行情
-    let qc = QuoteClient::new(&http);
-    let states = qc.market_state("US").await?;
+    // 2. 创建行情客户端并查询市场状态
+    let qc = QuoteClient::from_config(config);
+    let states = qc.get_market_state("US").await?;
     println!("美股市场状态: {:?}", states);
 
     Ok(())
@@ -496,35 +494,49 @@ export TIGEROPEN_ACCOUNT=你的交易账户
 ## 行情查询
 
 ```rust
-use tigeropen::client::http_client::HttpClient;
+use tigeropen::model::{BriefRequest, KlineRequest, OptionChainItem, OptionChainRequest, QuoteDepthRequest, TradeTickRequest};
 use tigeropen::quote::QuoteClient;
 
-let http = HttpClient::new(config);
-let qc = QuoteClient::new(&http);
+let qc = QuoteClient::from_config(config);
 
 // 市场状态
-let states = qc.market_state("US").await?;
+let states = qc.get_market_state("US").await?;
 
 // 实时报价
-let quotes = qc.quote_real_time(&["AAPL", "TSLA"]).await?;
+let quotes = qc.get_real_time_quote(BriefRequest {
+    symbols: Some(vec!["AAPL".into(), "TSLA".into()]),
+    ..Default::default()
+}).await?;
 
 // K 线数据
-let klines = qc.kline("AAPL", "day").await?;
+let klines = qc.get_kline(KlineRequest {
+    symbols: Some(vec!["AAPL".into()]),
+    period: Some("day".into()),
+    ..Default::default()
+}).await?;
 
 // 分时数据
-let timeline = qc.timeline(&["AAPL"]).await?;
+let timeline = qc.get_timeline(&["AAPL"]).await?;
 
 // 深度行情
-let depth = qc.quote_depth("AAPL").await?;
+let depth = qc.get_quote_depth(QuoteDepthRequest {
+    symbols: Some(vec!["AAPL".into()]),
+    market: Some("US".into()),
+    ..Default::default()
+}).await?;
 
 // 期权到期日
-let expiry = qc.option_expiration("AAPL").await?;
+let expirations = qc.get_option_expiration(&["AAPL"], Some("US")).await?;
 
 // 期权链
-let chain = qc.option_chain("AAPL", "2024-01-19").await?;
+if let Some(expiry) = expirations.first().and_then(|item| item.timestamps.first()) {
+    let chain = qc.get_option_chain(OptionChainRequest::new(vec![
+        OptionChainItem::new("AAPL", *expiry),
+    ])).await?;
+}
 
 // 期货交易所列表
-let exchanges = qc.future_exchange().await?;
+let exchanges = qc.get_future_exchange().await?;
 
 // 逐笔成交
 let ticks = qc.get_trade_tick(TradeTickRequest { symbols: Some(vec!["AAPL".into()]), ..Default::default() }).await?;
@@ -673,38 +685,28 @@ let next_page = nc
 ## 交易操作
 
 ```rust
-use tigeropen::client::http_client::HttpClient;
+use tigeropen::model::{limit_order, AssetsRequest, OrdersRequest, PositionsRequest};
 use tigeropen::trade::TradeClient;
-use serde_json::json;
 
-let http = HttpClient::new(config);
-let tc = TradeClient::new(&http, "你的账户");
-
-// 下限价单
-let order = json!({
-    "symbol": "AAPL",
-    "secType": "STK",
-    "action": "BUY",
-    "orderType": "LMT",
-    "totalQuantity": 100,
-    "limitPrice": 150.0,
-    "timeInForce": "DAY",
-});
-let result = tc.place_order(order).await?;
+let account = config.account.clone();
+let tc = TradeClient::from_config(config);
+let order = limit_order(&account, "AAPL", "STK", "BUY", 1, 150.0);
 
 // 预览订单（不实际下单）
-let preview = tc.preview_order(order).await?;
+let preview = tc.preview_order(order.clone()).await?;
 
-// 修改订单
-tc.modify_order(order_id, json!({"limitPrice": 155.0})).await?;
-
-// 取消订单
-tc.cancel_order(order_id).await?;
+// 下限价单，使用返回的全局订单 ID 修改和取消
+if let Some(placed) = tc.place_order(order.clone()).await? {
+    let mut modified = order;
+    modified.limit_price = Some(155.0);
+    tc.modify_order(placed.id, modified).await?;
+    tc.cancel_order(placed.id).await?;
+}
 
 // 查询订单、持仓、资产
-let orders = tc.orders().await?;
-let positions = tc.positions().await?;
-let assets = tc.assets().await?;
+let orders = tc.get_orders(OrdersRequest::default()).await?;
+let positions = tc.get_positions(PositionsRequest::default()).await?;
+let assets = tc.get_assets(AssetsRequest::default()).await?;
 ```
 
 ## 通用方法（execute）
@@ -712,7 +714,9 @@ let assets = tc.assets().await?;
 当 SDK 尚未封装某个 API 时，可以使用 `HttpClient::execute` 直接调用：
 
 ```rust
-let http = HttpClient::new(config);
+use tigeropen::client::http_client::HttpClient;
+
+let http = HttpClient::with_quote_server(config);
 let resp = http.execute("market_state", r#"{"market":"US"}"#).await?;
 println!("原始响应: {}", resp);
 ```
