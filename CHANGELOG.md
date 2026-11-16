@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-11-16
+
+### Added
+
+- US option snapshots and option chains support GTH/CURB extended-session quotes and independent cumulative volume and turnover.
+- Protobuf option callbacks provide current-session prices, volume, and turnover through existing fields, with GTH/CURB session tags and cumulative totals.
+- Option minute-bar requests support the `with_hour_trading` parameter to include or exclude extended-session data.
+
+### Breaking
+
+- `OptionKlineItem` struct literals must include `with_hour_trading`; set it to `None` to retain the server default, or use the existing constructors.
+- Exhaustive struct literals for option quote models and Protobuf quote messages must include the new fields; use `..Default::default()` when appropriate.
+
 ## [0.5.13] - 2026-11-11
 
 ### Added

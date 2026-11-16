@@ -11,7 +11,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tigeropen = "0.5.13"
+tigeropen = "0.6.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -154,6 +154,23 @@ if let Some(expiry) = expirations.first().and_then(|item| item.timestamps.first(
 
 // Futures exchange list
 let exchanges = qc.get_future_exchange().await?;
+```
+
+### Option GTH/CURB Quotes
+
+Option snapshots and option-chain legs expose extended-session data in `hour_trading`, with independent cumulative totals in `cum_volume` / `cum_amount`. Protobuf option callbacks use the existing price and volume/turnover fields; `hour_trading_tag` is `PreMarket` for GTH and `AfterHours` for CURB.
+
+To include extended-session minute bars:
+
+```rust
+use tigeropen::model::quote_requests::{OptionKlineItem, OptionKlineRequest};
+
+let mut item = OptionKlineItem::from_occ("SPXW 261218C06000000", "1min")?;
+item.with_hour_trading = Some(true);
+let bars = qc.get_option_kline(OptionKlineRequest {
+    option_query: Some(vec![item]),
+    ..Default::default()
+}).await?;
 ```
 
 ## News
@@ -394,7 +411,7 @@ openapi-rust-sdk/
 
 ```toml
 [dependencies]
-tigeropen = "0.5.13"
+tigeropen = "0.6.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -591,6 +608,23 @@ let ticks = qc.get_trade_tick(TradeTickRequest { symbols: Some(vec!["AAPL".into(
 | `Y` | 同券商非自动对盘（Automatic Internalized） |
 
 如上表所示，`cond` 值因市场（美股/港股）不同而有所区别。
+
+### 期权 GTH/CURB 行情
+
+期权快照和期权链通过 `hour_trading` 返回延长时段行情，累计成交量额通过 `cum_volume` / `cum_amount` 独立返回。Protobuf 期权回调沿用现有价格及成交量额字段，GTH 的 `hour_trading_tag` 为 `PreMarket`，CURB 为 `AfterHours`。
+
+查询包含延长时段的分钟 K 线：
+
+```rust
+use tigeropen::model::quote_requests::{OptionKlineItem, OptionKlineRequest};
+
+let mut item = OptionKlineItem::from_occ("SPXW 261218C06000000", "1min")?;
+item.with_hour_trading = Some(true);
+let bars = qc.get_option_kline(OptionKlineRequest {
+    option_query: Some(vec![item]),
+    ..Default::default()
+}).await?;
+```
 
 ## 资讯查询
 

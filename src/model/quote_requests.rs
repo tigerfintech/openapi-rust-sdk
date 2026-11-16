@@ -502,6 +502,9 @@ pub struct OptionKlineItem {
     pub limit: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sort_dir: Option<String>,
+    /// Include GTH/CURB minute bars; None preserves the server default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with_hour_trading: Option<bool>,
 }
 
 impl OptionKlineItem {
@@ -522,6 +525,7 @@ impl OptionKlineItem {
             end_time: None,
             limit: None,
             sort_dir: None,
+            with_hour_trading: None,
         }
     }
 
@@ -539,6 +543,7 @@ impl OptionKlineItem {
             end_time: None,
             limit: None,
             sort_dir: None,
+            with_hour_trading: None,
         })
     }
 
@@ -559,6 +564,7 @@ impl OptionKlineItem {
             end_time: None,
             limit: None,
             sort_dir: None,
+            with_hour_trading: None,
         })
     }
 }

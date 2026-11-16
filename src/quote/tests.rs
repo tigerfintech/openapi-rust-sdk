@@ -1771,3 +1771,98 @@ async fn test_get_quote_overnight_wire_method() {
     let req: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
     assert_eq!(req["method"].as_str().unwrap(), "quote_overnight");
 }
+
+#[tokio::test]
+async fn test_option_gth_snapshot_and_json_serialization() {
+    let server = mock_success_server(
+        r#"[{"symbol":"SPXW","latestPrice":3.0,"cumVolume":3000000000,"cumAmount":12345.6,"hourTrading":{"session":"GTH","latestPrice":3.1,"latestTimestamp":1784796380425,"volume":7,"amount":2170.0}}]"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let quotes = qc
+        .get_option_quote(OptionQuoteRequest::new(vec![OptionContractItem::new(
+            "SPXW",
+            1797566400000,
+            "CALL",
+            "6000.0",
+        )]))
+        .await
+        .unwrap();
+    let quote = &quotes[0];
+    assert_eq!(quote.latest_price, 3.0);
+    assert_eq!(quote.cum_volume, Some(3_000_000_000));
+    assert_eq!(quote.cum_amount, Some(12345.6));
+    let hour = quote.hour_trading.as_ref().unwrap();
+    assert_eq!(hour.session.as_deref(), Some("GTH"));
+    assert_eq!(hour.latest_price, Some(3.1));
+    assert_eq!(hour.volume, Some(7));
+    assert_eq!(hour.amount, Some(2170.0));
+    let serialized = serde_json::to_value(quote).unwrap();
+    assert_eq!(serialized["cumVolume"], 3_000_000_000_i64);
+    assert_eq!(
+        serialized["hourTrading"]["latestTimestamp"],
+        1784796380425_i64
+    );
+}
+
+#[tokio::test]
+async fn test_option_chain_preserves_gth_and_curb_quotes() {
+    let server = mock_success_server(
+        r#"[{"symbol":"SPXW","items":[{"call":{"cumVolume":1000,"cumAmount":30000.0,"hourTrading":{"session":"GTH","latestPrice":3.1,"volume":7}},"put":{"cumVolume":2000,"cumAmount":40000.0,"hourTrading":{"session":"CURB","latestPrice":2.2,"volume":9}}}]}]"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let chains = qc
+        .get_option_chain(OptionChainRequest::new(vec![OptionChainItem::new(
+            "SPXW",
+            1797566400000,
+        )]))
+        .await
+        .unwrap();
+    let call = chains[0].items[0].call.as_ref().unwrap();
+    let put = chains[0].items[0].put.as_ref().unwrap();
+    assert_eq!(call.cum_volume, Some(1000));
+    assert_eq!(put.cum_amount, Some(40000.0));
+    assert_eq!(
+        call.hour_trading.as_ref().unwrap().session.as_deref(),
+        Some("GTH")
+    );
+    assert_eq!(
+        put.hour_trading.as_ref().unwrap().session.as_deref(),
+        Some("CURB")
+    );
+    assert_eq!(put.hour_trading.as_ref().unwrap().latest_price, Some(2.2));
+    let serialized = serde_json::to_value(&chains).unwrap();
+    assert_eq!(serialized[0]["items"][0]["put"]["hourTrading"]["volume"], 9);
+}
+
+#[tokio::test]
+async fn test_option_kline_hour_trading_flag_is_per_item() {
+    let server = mock_success_server(
+        r#"[{"symbol":"SPXW","period":"1min","items":[{"time":1784796380000,"close":3.2,"volume":7}]}]"#,
+    )
+    .await;
+    let qc = QuoteClient::new(HttpClient::new(test_config(&server.uri())));
+    let items = [None, Some(true), Some(false)]
+        .into_iter()
+        .map(|flag| {
+            let mut item = OptionKlineItem::new("SPXW", 1797566400000, "CALL", "6000.0", "1min");
+            item.with_hour_trading = flag;
+            item
+        })
+        .collect();
+    let bars = qc
+        .get_option_kline(OptionKlineRequest {
+            option_query: Some(items),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(bars[0].items[0].close, 3.2);
+    let received = server.received_requests().await.unwrap();
+    let biz = biz_of(&received[0]);
+    assert!(biz.get("with_hour_trading").is_none());
+    assert!(biz["option_query"][0].get("with_hour_trading").is_none());
+    assert_eq!(biz["option_query"][1]["with_hour_trading"], true);
+    assert_eq!(biz["option_query"][2]["with_hour_trading"], false);
+}
