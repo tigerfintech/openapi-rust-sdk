@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2026-11-18
 
-### 新增
+### New
 
 - 合约查询新增订单能力信息，可查看支持的订单类型、订单有效期和交易时段组合。
 - 新增 `get_contract_v3`，支持查询单个交易合约及期权订单能力。
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-11-16
 
-### 新增
+### New
 
 - 美股期权快照和期权链支持 GTH/CURB 延长时段行情，并独立提供累计成交量和累计成交额。
 - Protobuf 期权回调通过既有字段提供当前时段价格、成交量和成交额，并返回 GTH/CURB 时段标记及累计量额。
@@ -31,13 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.13] - 2026-11-11
 
-### 新增
+### New
 
 - 新增资讯查询客户端 `NewsClient`：`get_stock_news` 按单只标的查询股票新闻，支持页码分页；`get_market_news` 查询市场要闻，支持 `last_id` 游标分页。
 
 ## [0.5.12] - 2026-11-10
 
-### 新增
+### New
 
 - 资产查询新增行情口径参数：`AssetsRequest.asset_quote_type`（`assets` / `prime_assets`）与 `AggregateAssetsRequest.asset_quote_type`（`aggregate_assets`），传枚举名字符串 `"ETH"` / `"RTH"` / `"OVERNIGHT"`，wire 字段名 `asset_quote_type`。持仓 `PositionsRequest.asset_quote_type` 保持不变。
 - Protobuf 订阅新增 `Subscribe.assetQuoteType`（字段号 5，`optional string`）。新增重载 `PushClient::subscribe_with_asset_quote_type` / `unsubscribe_with_asset_quote_type` 与 `proto_message::build_subscribe_message_with_asset_quote_type` / `build_unsubscribe_message_with_asset_quote_type`，仅对 Asset / Position 订阅有意义；原有 `subscribe` / `unsubscribe` 签名与行为不变。
