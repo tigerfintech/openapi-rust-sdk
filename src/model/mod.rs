@@ -17,7 +17,7 @@ pub use trade_requests::*;
 // Re-export commonly used types at the model module root.
 pub use contract::{
     cash_contract, fund_contract, future_contract, option_contract, option_contract_by_symbol,
-    stock_contract, warrant_contract, Contract, TickSize,
+    stock_contract, warrant_contract, Contract, OrderCapability, TickSize,
 };
 pub use news::{NewsItem, NewsPage};
 pub use order::{

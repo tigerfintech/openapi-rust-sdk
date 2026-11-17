@@ -7,6 +7,33 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Single-contract query using API version 3.0.
+/// The server requires symbol and sec_type, plus expiry, strike, and right for OPT/WAR/IOPT.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ContractRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    /// Overrides the client's institution secret key when provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sec_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exchange: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expiry: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub right: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+}
+
 /// TransferItem — 内部转股单项（用于 PositionTransferRequest.transfers）。
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TransferItem {

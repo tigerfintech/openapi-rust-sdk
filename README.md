@@ -11,7 +11,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tigeropen = "0.6.0"
+tigeropen = "0.7.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -265,6 +265,26 @@ Each `NewsItem`:
 
 ## Trading
 
+Use `get_contract_v3` to query one trading contract with API version 3.0. Options require the underlying symbol, expiry, strike, and right. The result is `Option<Contract>`, and `order_capabilities` is available when returned by the account's trading service. The legacy `get_contract(symbol, sec_type)` keeps its API 2.0 list response.
+
+```rust
+use tigeropen::model::ContractRequest;
+use tigeropen::trade::TradeClient;
+
+let trade = TradeClient::from_config(config);
+let contract = trade.get_contract_v3(ContractRequest {
+    symbol: Some("AAPL".into()),
+    sec_type: Some("OPT".into()),
+    expiry: Some("20270115".into()),
+    strike: Some(200.0),
+    right: Some("CALL".into()),
+    ..Default::default()
+}).await?;
+if let Some(contract) = contract {
+    println!("{:?}", contract.order_capabilities);
+}
+```
+
 ```rust
 use tigeropen::model::{limit_order, AssetsRequest, OrdersRequest, PositionsRequest};
 use tigeropen::trade::TradeClient;
@@ -411,7 +431,7 @@ openapi-rust-sdk/
 
 ```toml
 [dependencies]
-tigeropen = "0.6.0"
+tigeropen = "0.7.0"
 tokio = { version = "1", features = ["full"] }
 ```
 

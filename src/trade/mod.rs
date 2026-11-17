@@ -22,12 +22,12 @@ use crate::model::trade::{
     SegmentFundHistoryItem, Transaction,
 };
 use crate::model::trade_requests::{
-    AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, DerivativeContractsRequest,
-    EstimateTradableQuantityRequest, ForexOrderRequest, FundDetailsRequest, FundingHistoryRequest,
-    GetOrderRequest, ManagedAccountsRequest, OptionExerciseCancelRequest,
-    OptionExerciseCheckRequest, OptionExercisePositionRequest, OptionExerciseRecordsRequest,
-    OptionExerciseSubmitRequest, OrderTransactionsRequest, OrdersRequest,
-    PositionTransferDetailRequest, PositionTransferExternalRecordsRequest,
+    AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, ContractRequest,
+    DerivativeContractsRequest, EstimateTradableQuantityRequest, ForexOrderRequest,
+    FundDetailsRequest, FundingHistoryRequest, GetOrderRequest, ManagedAccountsRequest,
+    OptionExerciseCancelRequest, OptionExerciseCheckRequest, OptionExercisePositionRequest,
+    OptionExerciseRecordsRequest, OptionExerciseSubmitRequest, OrderTransactionsRequest,
+    OrdersRequest, PositionTransferDetailRequest, PositionTransferExternalRecordsRequest,
     PositionTransferRecordsRequest, PositionTransferRequest, PositionsRequest, SegmentFundRequest,
 };
 
@@ -202,7 +202,7 @@ impl TradeClient {
 
     // ========== 合约查询 ==========
 
-    /// 查询单个合约
+    /// Legacy API 2.0 query. Use get_contract_v3 for account-specific option order capabilities.
     pub async fn get_contract(
         &self,
         symbol: &str,
@@ -217,6 +217,25 @@ impl TradeClient {
             }),
         )
         .await
+    }
+
+    /// Query one trading contract with API version 3.0.
+    /// Returns None when the server returns no contract. Order capabilities are available
+    /// when supplied by the account's trading service.
+    pub async fn get_contract_v3(
+        &self,
+        mut req: ContractRequest,
+    ) -> Result<Option<Contract>, TigerError> {
+        if req.account.as_deref().unwrap_or_default().is_empty() {
+            req.account = Some(self.account.clone());
+        }
+        let biz = self.inject_secret_key_json(req)?;
+        let request = ApiRequest::with_version("contract", biz, "3.0");
+        let response = self.http_client.execute_request(&request).await?;
+        match response.data {
+            None => Ok(None),
+            Some(data) => decode_value::<Option<Contract>>(data),
+        }
     }
 
     /// 批量查询合约
