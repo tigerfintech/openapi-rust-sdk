@@ -7,43 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2026-11-18
 
-### Added
+### 新增
 
 - 合约查询新增订单能力信息，可查看支持的订单类型、订单有效期和交易时段组合。
 - 新增 `get_contract_v3`，支持查询单个交易合约及期权订单能力。
 
-### Breaking
+### 兼容性变更
 
 - 使用结构体字面量构造 `Contract` 时，需要补充 `order_capabilities` 字段；无能力信息时设为 `None`。已有合约构造函数保持兼容。
 
 ## [0.6.0] - 2026-11-16
 
-### Added
+### 新增
 
-- US option snapshots and option chains support GTH/CURB extended-session quotes and independent cumulative volume and turnover.
-- Protobuf option callbacks provide current-session prices, volume, and turnover through existing fields, with GTH/CURB session tags and cumulative totals.
-- Option minute-bar requests support the `with_hour_trading` parameter to include or exclude extended-session data.
+- 美股期权快照和期权链支持 GTH/CURB 延长时段行情，并独立提供累计成交量和累计成交额。
+- Protobuf 期权回调通过既有字段提供当前时段价格、成交量和成交额，并返回 GTH/CURB 时段标记及累计量额。
+- 期权分钟 K 线查询支持通过 `with_hour_trading` 参数包含或排除延长时段数据。
 
-### Breaking
+### 兼容性变更
 
-- `OptionKlineItem` struct literals must include `with_hour_trading`; set it to `None` to retain the server default, or use the existing constructors.
-- Exhaustive struct literals for option quote models and Protobuf quote messages must include the new fields; use `..Default::default()` when appropriate.
+- 使用结构体字面量构造 `OptionKlineItem` 时，需要补充 `with_hour_trading` 字段；设为 `None` 可保留服务端默认行为，也可继续使用已有构造函数。
+- 使用完整结构体字面量构造期权行情模型或 Protobuf 行情消息时，需要补充新增字段；适用时可使用 `..Default::default()` 填充默认值。
 
 ## [0.5.13] - 2026-11-11
 
-### Added
+### 新增
 
-- News query client `NewsClient` with `get_stock_news` (per-symbol stock news, page-number pagination) and `get_market_news` (market highlights, `last_id` cursor pagination).
+- 新增资讯查询客户端 `NewsClient`：`get_stock_news` 按单只标的查询股票新闻，支持页码分页；`get_market_news` 查询市场要闻，支持 `last_id` 游标分页。
 
 ## [0.5.12] - 2026-11-10
 
-### Added
+### 新增
 
 - 资产查询新增行情口径参数：`AssetsRequest.asset_quote_type`（`assets` / `prime_assets`）与 `AggregateAssetsRequest.asset_quote_type`（`aggregate_assets`），传枚举名字符串 `"ETH"` / `"RTH"` / `"OVERNIGHT"`，wire 字段名 `asset_quote_type`。持仓 `PositionsRequest.asset_quote_type` 保持不变。
 - Protobuf 订阅新增 `Subscribe.assetQuoteType`（字段号 5，`optional string`）。新增重载 `PushClient::subscribe_with_asset_quote_type` / `unsubscribe_with_asset_quote_type` 与 `proto_message::build_subscribe_message_with_asset_quote_type` / `build_unsubscribe_message_with_asset_quote_type`，仅对 Asset / Position 订阅有意义；原有 `subscribe` / `unsubscribe` 签名与行为不变。
 - `PushClient::add_account_sub_with_asset_quote_type` / `get_account_sub_asset_quote_type`：记录账户级订阅使用的行情口径，自动重连时按原口径恢复订阅。
 
-### Changed
+### 变更
 
 - 最低支持 Rust 1.88。
 
