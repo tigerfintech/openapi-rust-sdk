@@ -338,7 +338,7 @@ mod tests {
             "symbol": "AAPL", "secType": "OPT",
             "orderCapabilities": [
                 {"orderType": "LMT", "timeInForce": "DAY", "tradingSessionType": "PRE_RTH_POST"},
-                {"orderType": "LMT", "timeInForce": "GTC", "tradingSessionType": "GTH_RTH_CURB"}
+                {"orderType": "LMT", "timeInForce": "GTC", "tradingSessionType": "PRE_RTH_POST"}
             ]
         });
         let contract: Contract = serde_json::from_value(json.clone()).unwrap();
@@ -348,7 +348,7 @@ mod tests {
         assert_eq!(capabilities[0].time_in_force.as_deref(), Some("DAY"));
         assert_eq!(
             capabilities[1].trading_session_type.as_deref(),
-            Some("GTH_RTH_CURB")
+            Some("PRE_RTH_POST")
         );
         assert_eq!(serde_json::to_value(&contract).unwrap(), json);
         let batch: Vec<Contract> = serde_json::from_value(serde_json::json!([json])).unwrap();
