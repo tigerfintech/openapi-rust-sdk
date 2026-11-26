@@ -382,7 +382,7 @@ pub struct OrderRequest {
     /// 订单到期时间（epoch ms），GTD 单必填
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expire_time: Option<i64>,
-    /// 交易时段类型（如 RTH / ETH / ALL）
+    /// 综合/模拟账号交易时段，例如 PRE_RTH / RTH_POST；None 时不发送该字段。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trading_session_type: Option<String>,
     /// 交易所

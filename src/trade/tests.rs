@@ -297,6 +297,53 @@ async fn test_place_order_typed_returns_id_and_order_id() {
 }
 
 #[tokio::test]
+async fn test_extended_trading_sessions_place_and_preview_wire_names() {
+    for account in ["omnibus-account", "paper-account"] {
+        for session in ["PRE_RTH", "RTH_POST"] {
+            let server = mock_success_server(
+                r#"{"id":42,"order_id":143,"isPass":true,"commission":0.5}"#,
+            )
+            .await;
+            let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), account);
+            let mut req = limit_order(account, "AAPL", "STK", "BUY", 1, 150.0);
+            req.outside_rth = Some(true);
+            req.trading_session_type = Some(session.into());
+
+            assert!(tc.preview_order(req.clone()).await.unwrap().unwrap().is_pass);
+            assert_eq!(tc.place_order(req).await.unwrap().unwrap().id, 42);
+
+            let requests = server.received_requests().await.unwrap();
+            assert_eq!(requests.len(), 2);
+            for (request, method) in requests.iter().zip(["preview_order", "place_order"]) {
+                let envelope: Value = serde_json::from_slice(&request.body).unwrap();
+                assert_eq!(envelope["method"], method);
+                let biz = biz_of(request);
+                assert_eq!(biz["account"], account);
+                assert_eq!(biz["trading_session_type"], session);
+                assert_eq!(biz["outside_rth"], true);
+                assert!(biz.get("tradingSessionType").is_none());
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_unset_trading_session_is_omitted_for_place_and_preview() {
+    let server = mock_success_server(r#"{"id":42,"order_id":143,"isPass":true}"#).await;
+    let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
+    let req = limit_order("test_account", "AAPL", "STK", "BUY", 1, 150.0);
+    tc.preview_order(req.clone()).await.unwrap();
+    tc.place_order(req).await.unwrap();
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 2);
+    for request in &requests {
+        let biz = biz_of(request);
+        assert!(biz.get("trading_session_type").is_none());
+        assert!(biz.get("tradingSessionType").is_none());
+    }
+}
+
+#[tokio::test]
 async fn test_cancel_order_typed() {
     let server = mock_success_server(r#"{"id":12345}"#).await;
     let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");

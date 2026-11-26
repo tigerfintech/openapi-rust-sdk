@@ -5,12 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - 2026-11-18
+## [0.7.0] - Unreleased
 
 ### New
 
 - 合约查询新增订单能力信息，可查看支持的订单类型、订单有效期和交易时段组合。
 - 新增 `get_contract_v3`，支持查询单个交易合约及期权订单能力。
+- 综合/模拟账号可通过 `OrderRequest.trading_session_type` 设置 `PRE_RTH`、`RTH_POST`，用于下单和订单预览；未设置时不发送该字段。
 
 ### 兼容性变更
 
