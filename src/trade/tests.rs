@@ -83,6 +83,146 @@ fn biz_of(req: &wiremock::Request) -> serde_json::Value {
     serde_json::from_str(s).unwrap()
 }
 
+#[tokio::test]
+async fn test_get_contract_v3_pins_version_and_returns_option_capabilities() {
+    let server = mock_success_server(
+        r#"{"symbol":"AAPL","secType":"OPT","strike":200,"orderCapabilities":[{"orderType":"LMT","timeInForce":"DAY","tradingSessionType":"PRE_RTH_POST"}]}"#,
+    ).await;
+    let tc = TradeClient::with_secret_key(
+        HttpClient::new(test_config(&server.uri())),
+        "default-account",
+        "default-secret",
+    );
+    let contract = tc
+        .get_contract_v3(crate::model::ContractRequest {
+            symbol: Some("AAPL".into()),
+            sec_type: Some("OPT".into()),
+            currency: Some("USD".into()),
+            exchange: Some("SMART".into()),
+            expiry: Some("20270115".into()),
+            strike: Some(200.0),
+            right: Some("CALL".into()),
+            lang: Some("en_US".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .expect("single contract");
+    assert_eq!(contract.symbol, "AAPL");
+    let capability = &contract.order_capabilities.as_ref().unwrap()[0];
+    assert_eq!(capability.order_type.as_deref(), Some("LMT"));
+    assert_eq!(capability.time_in_force.as_deref(), Some("DAY"));
+    assert_eq!(
+        capability.trading_session_type.as_deref(),
+        Some("PRE_RTH_POST")
+    );
+    let requests = server.received_requests().await.unwrap();
+    let envelope: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert_eq!(envelope["method"], "contract");
+    assert_eq!(envelope["version"], "3.0");
+    assert_eq!(
+        biz_of(&requests[0]),
+        serde_json::json!({
+            "account": "default-account", "secret_key": "default-secret", "symbol": "AAPL", "sec_type": "OPT",
+            "currency": "USD", "exchange": "SMART", "expiry": "20270115", "strike": 200.0, "right": "CALL", "lang": "en_US"
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_get_contract_v3_preserves_explicit_account_secret_and_zero_strike() {
+    let server = mock_success_server(r#"{"symbol":"AAPL","secType":"OPT"}"#).await;
+    let tc = TradeClient::with_secret_key(
+        HttpClient::new(test_config(&server.uri())),
+        "default-account",
+        "default-secret",
+    );
+    tc.get_contract_v3(ContractRequest {
+        account: Some("other-account".into()),
+        secret_key: Some("override-secret".into()),
+        symbol: Some("AAPL".into()),
+        sec_type: Some("OPT".into()),
+        expiry: Some("20270115".into()),
+        strike: Some(0.0),
+        right: Some("PUT".into()),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(
+        biz_of(&requests[0]),
+        serde_json::json!({
+            "account": "other-account", "secret_key": "override-secret", "symbol": "AAPL", "sec_type": "OPT",
+            "expiry": "20270115", "strike": 0.0, "right": "PUT"
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_get_contract_v3_accepts_encoded_object_and_omits_unset_parameters() {
+    let data = serde_json::to_string(r#"{"symbol":"AAPL","secType":"STK","orderCapabilities":[]}"#)
+        .unwrap();
+    let server = mock_success_server(&data).await;
+    let tc = TradeClient::new(
+        HttpClient::new(test_config(&server.uri())),
+        "default-account",
+    );
+    let contract = tc
+        .get_contract_v3(ContractRequest {
+            account: Some(String::new()),
+            symbol: Some("AAPL".into()),
+            sec_type: Some("STK".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(contract.order_capabilities, Some(vec![]));
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(
+        biz_of(&requests[0]),
+        serde_json::json!({"account":"default-account","symbol":"AAPL","sec_type":"STK"})
+    );
+}
+
+#[tokio::test]
+async fn test_get_contract_v3_returns_none_for_null_data() {
+    for data in ["null", "\"null\""] {
+        let server = mock_success_server(data).await;
+        let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
+        assert!(tc
+            .get_contract_v3(ContractRequest {
+                symbol: Some("AAPL".into()),
+                sec_type: Some("STK".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .is_none());
+    }
+}
+
+#[tokio::test]
+async fn test_get_contract_v3_propagates_api_and_decode_errors() {
+    let server = mock_error_server(1200, "missing option parameters").await;
+    let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
+    let err = tc
+        .get_contract_v3(ContractRequest::default())
+        .await
+        .unwrap_err();
+    assert!(matches!(err, TigerError::Api { code: 1200, .. }));
+    let malformed = mock_success_server(r#"{"items":[]}"#).await;
+    let tc = TradeClient::new(
+        HttpClient::new(test_config(&malformed.uri())),
+        "test_account",
+    );
+    assert!(matches!(
+        tc.get_contract_v3(ContractRequest::default()).await,
+        Err(TigerError::Parse(_))
+    ));
+}
+
 // ========== typed response 测试 ==========
 
 #[tokio::test]
@@ -98,6 +238,9 @@ async fn test_get_contract_unwraps_items_typed() {
     assert_eq!(contracts[0].symbol, "AAPL");
     assert_eq!(contracts[0].sec_type, "STK");
     assert_eq!(contracts[0].contract_id, Some(12345));
+    let requests = server.received_requests().await.unwrap();
+    let envelope: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert_eq!(envelope["version"], "2.0");
 }
 
 #[tokio::test]
@@ -151,6 +294,53 @@ async fn test_place_order_typed_returns_id_and_order_id() {
     let r = tc.place_order(req).await.unwrap().expect("placed");
     assert_eq!(r.id, 42519413060422656);
     assert_eq!(r.order_id, 143);
+}
+
+#[tokio::test]
+async fn test_extended_trading_sessions_place_and_preview_wire_names() {
+    for account in ["omnibus-account", "paper-account"] {
+        for session in ["PRE_RTH", "RTH_POST"] {
+            let server = mock_success_server(
+                r#"{"id":42,"order_id":143,"isPass":true,"commission":0.5}"#,
+            )
+            .await;
+            let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), account);
+            let mut req = limit_order(account, "AAPL", "STK", "BUY", 1, 150.0);
+            req.outside_rth = Some(true);
+            req.trading_session_type = Some(session.into());
+
+            assert!(tc.preview_order(req.clone()).await.unwrap().unwrap().is_pass);
+            assert_eq!(tc.place_order(req).await.unwrap().unwrap().id, 42);
+
+            let requests = server.received_requests().await.unwrap();
+            assert_eq!(requests.len(), 2);
+            for (request, method) in requests.iter().zip(["preview_order", "place_order"]) {
+                let envelope: Value = serde_json::from_slice(&request.body).unwrap();
+                assert_eq!(envelope["method"], method);
+                let biz = biz_of(request);
+                assert_eq!(biz["account"], account);
+                assert_eq!(biz["trading_session_type"], session);
+                assert_eq!(biz["outside_rth"], true);
+                assert!(biz.get("tradingSessionType").is_none());
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_unset_trading_session_is_omitted_for_place_and_preview() {
+    let server = mock_success_server(r#"{"id":42,"order_id":143,"isPass":true}"#).await;
+    let tc = TradeClient::new(HttpClient::new(test_config(&server.uri())), "test_account");
+    let req = limit_order("test_account", "AAPL", "STK", "BUY", 1, 150.0);
+    tc.preview_order(req.clone()).await.unwrap();
+    tc.place_order(req).await.unwrap();
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 2);
+    for request in &requests {
+        let biz = biz_of(request);
+        assert!(biz.get("trading_session_type").is_none());
+        assert!(biz.get("tradingSessionType").is_none());
+    }
 }
 
 #[tokio::test]

@@ -3,6 +3,18 @@
 
 use serde::{Deserialize, Serialize};
 
+/// A supported combination of order type, time in force, and trading session.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderCapability {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_in_force: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trading_session_type: Option<String>,
+}
+
 /// 最小报价单位价格区间
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TickSize {
@@ -95,6 +107,9 @@ pub struct Contract {
     /// 每手数量
     #[serde(rename = "lotSize", skip_serializing_if = "Option::is_none")]
     pub lot_size: Option<f64>,
+    /// Supported order combinations; None when the server provides no special capabilities.
+    #[serde(rename = "orderCapabilities", skip_serializing_if = "Option::is_none")]
+    pub order_capabilities: Option<Vec<OrderCapability>>,
 }
 
 /// 构造股票合约
@@ -122,6 +137,7 @@ pub fn stock_contract(symbol: &str, currency: &str) -> Contract {
         long_maintenace_margin: None,
         tick_sizes: None,
         lot_size: None,
+        order_capabilities: None,
     }
 }
 
@@ -150,6 +166,7 @@ pub fn option_contract(identifier: &str) -> Contract {
         long_maintenace_margin: None,
         tick_sizes: None,
         lot_size: None,
+        order_capabilities: None,
     }
 }
 
@@ -184,6 +201,7 @@ pub fn option_contract_by_symbol(
         long_maintenace_margin: None,
         tick_sizes: None,
         lot_size: None,
+        order_capabilities: None,
     }
 }
 
@@ -212,6 +230,7 @@ pub fn future_contract(symbol: &str, currency: &str, expiry: &str) -> Contract {
         long_maintenace_margin: None,
         tick_sizes: None,
         lot_size: None,
+        order_capabilities: None,
     }
 }
 
@@ -240,6 +259,7 @@ pub fn cash_contract(symbol: &str) -> Contract {
         long_maintenace_margin: None,
         tick_sizes: None,
         lot_size: None,
+        order_capabilities: None,
     }
 }
 
@@ -268,6 +288,7 @@ pub fn fund_contract(symbol: &str, currency: &str) -> Contract {
         long_maintenace_margin: None,
         tick_sizes: None,
         lot_size: None,
+        order_capabilities: None,
     }
 }
 
@@ -302,6 +323,7 @@ pub fn warrant_contract(
         long_maintenace_margin: None,
         tick_sizes: None,
         lot_size: None,
+        order_capabilities: None,
     }
 }
 
@@ -309,6 +331,52 @@ pub fn warrant_contract(
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    #[test]
+    fn order_capabilities_preserve_wire_fields_and_session_values() {
+        let json = serde_json::json!({
+            "symbol": "AAPL", "secType": "OPT",
+            "orderCapabilities": [
+                {"orderType": "LMT", "timeInForce": "DAY", "tradingSessionType": "PRE_RTH_POST"},
+                {"orderType": "LMT", "timeInForce": "GTC", "tradingSessionType": "PRE_RTH_POST"}
+            ]
+        });
+        let contract: Contract = serde_json::from_value(json.clone()).unwrap();
+        let capabilities = contract.order_capabilities.as_ref().unwrap();
+        assert_eq!(capabilities.len(), 2);
+        assert_eq!(capabilities[0].order_type.as_deref(), Some("LMT"));
+        assert_eq!(capabilities[0].time_in_force.as_deref(), Some("DAY"));
+        assert_eq!(
+            capabilities[1].trading_session_type.as_deref(),
+            Some("PRE_RTH_POST")
+        );
+        assert_eq!(serde_json::to_value(&contract).unwrap(), json);
+        let batch: Vec<Contract> = serde_json::from_value(serde_json::json!([json])).unwrap();
+        assert_eq!(batch[0], contract);
+    }
+
+    #[test]
+    fn order_capabilities_preserve_absent_null_and_empty_values() {
+        for json in [
+            serde_json::json!({"symbol": "AAPL", "secType": "OPT"}),
+            serde_json::json!({"symbol": "AAPL", "secType": "OPT", "orderCapabilities": null}),
+        ] {
+            let contract: Contract = serde_json::from_value(json).unwrap();
+            assert!(contract.order_capabilities.is_none());
+            assert!(serde_json::to_value(contract)
+                .unwrap()
+                .get("orderCapabilities")
+                .is_none());
+        }
+        let json = serde_json::json!({"symbol": "AAPL", "secType": "OPT", "orderCapabilities": []});
+        let contract: Contract = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(contract.order_capabilities, Some(vec![]));
+        assert_eq!(serde_json::to_value(contract).unwrap(), json);
+        let capability: OrderCapability = serde_json::from_str("{\"orderType\":null}").unwrap();
+        assert!(capability.order_type.is_none());
+        assert!(capability.time_in_force.is_none());
+        assert!(capability.trading_session_type.is_none());
+    }
 
     // ========== Contract JSON 序列化 round-trip 单元测试 ==========
 
@@ -362,6 +430,7 @@ mod tests {
             long_maintenace_margin: None,
             tick_sizes: None,
             lot_size: Some(1.0),
+            order_capabilities: None,
         };
         let json_value: serde_json::Value = serde_json::to_value(&contract).unwrap();
         let obj = json_value.as_object().unwrap();
@@ -554,6 +623,7 @@ mod tests {
                 long_maintenace_margin: None,
                 tick_sizes: None,
                 lot_size: None,
+                order_capabilities: None,
             },
         )
     }

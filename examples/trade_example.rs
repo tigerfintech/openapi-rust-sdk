@@ -17,12 +17,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tigeropen::config::ClientConfig;
 use tigeropen::model::order::limit_order;
 use tigeropen::model::trade_requests::{
-    AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, DerivativeContractsRequest,
-    EstimateTradableQuantityRequest, FundDetailsRequest, FundingHistoryRequest, GetOrderRequest,
-    ManagedAccountsRequest, OptionExerciseCheckRequest, OptionExercisePositionRequest,
-    OptionExerciseRecordsRequest, OrderTransactionsRequest, OrdersRequest,
-    PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest, PositionsRequest,
-    SegmentFundRequest,
+    AggregateAssetsRequest, AnalyticsAssetRequest, AssetsRequest, ContractRequest,
+    DerivativeContractsRequest, EstimateTradableQuantityRequest, FundDetailsRequest,
+    FundingHistoryRequest, GetOrderRequest, ManagedAccountsRequest, OptionExerciseCheckRequest,
+    OptionExercisePositionRequest, OptionExerciseRecordsRequest, OrderTransactionsRequest,
+    OrdersRequest, PositionTransferExternalRecordsRequest, PositionTransferRecordsRequest,
+    PositionsRequest, SegmentFundRequest,
 };
 use tigeropen::trade::TradeClient;
 
@@ -116,6 +116,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tc = TradeClient::from_config(config);
 
     let mut results: Vec<RunResult> = Vec::new();
+
+    match tc
+        .get_contract_v3(ContractRequest {
+            symbol: Some("AAPL".into()),
+            sec_type: Some("STK".into()),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(Some(contract)) => ok(
+            &mut results,
+            "ContractV3(AAPL, STK)",
+            format!(
+                "{} order_capabilities={:?}",
+                contract.symbol, contract.order_capabilities
+            ),
+        ),
+        Ok(None) => ok(&mut results, "ContractV3(AAPL, STK)", "(no contract)"),
+        Err(e) => fail(&mut results, "ContractV3(AAPL, STK)", e),
+    }
 
     println!("=== Contract 查询 ===");
     match tc.get_contract("AAPL", "STK").await {
